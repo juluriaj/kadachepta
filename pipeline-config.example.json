@@ -1,0 +1,20 @@
+{
+  "language": "te",
+  "transcription": {
+    "provider": "set-me",
+    "model": "set-me",
+    "endpoint": "",
+    "apiKeyEnv": "SARVAM_API_KEY"
+  },
+  "teaserGeneration": {
+    "provider": "set-me",
+    "model": "set-me",
+    "endpoint": "",
+    "apiKeyEnv": "KADACHEPTA_TEASER_API_KEY",
+    "promptVersion": "teaser-v1"
+  },
+  "review": {
+    "autoPublish": false,
+    "required": true
+  }
+}

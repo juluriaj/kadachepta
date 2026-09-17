@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KathaChepta Narrator Studio</title>
+  <link rel="stylesheet" href="/narrator/narrator.css?v=20260917-1045">
+</head>
+<body>
+  <header class="topbar"><div><span class="brand-mark">క</span><strong>KathaChepta</strong><span class="label">Narrator studio</span></div><div><span id="username"></span><button id="logout">Log out</button></div></header>
+  <main>
+    <p class="eyebrow">Your creator workspace</p>
+    <h1>Bring your stories to families.</h1>
+    <p class="intro">Upload a narration, follow its review pipeline, and see your published work. Any change to a published audio starts a new review.</p>
+    <section class="stats" id="stats"></section>
+    <section class="panel"><h2>My narrator profile</h2><form id="profile-form"><input name="displayName" placeholder="Display name"><textarea name="biography" rows="3" placeholder="Short narrator biography"></textarea><button type="submit">Save profile</button><small id="profile-message"></small></form></section>
+    <section class="panel">
+      <h2>Upload narration</h2>
+      <form id="upload-form" class="metadata-form">
+        <input name="audio" type="file" accept="audio/*" required>
+        <label>Story title<input name="title" required placeholder="Title of this story"></label>
+        <label>Genres <span class="hint">Choose all that apply</span>
+          <select name="genres" multiple required>
+            <option>Fantasy</option><option>Folklore</option><option>Bedtime</option><option>Moral</option>
+            <option>Devotional</option><option>Inspiration</option><option>Mythology</option><option>Adventure</option>
+            <option>Mystery</option><option>History</option><option>Children's</option><option>Comedy</option>
+            <option>Educational</option>
+          </select>
+        </label>
+        <label>Album<input name="album" placeholder="Example: Chandamama Kathalu"></label>
+        <label>Collection / series<input name="collection" placeholder="Example: Ramayana"></label>
+        <label>Episode / chapter number<input name="episodeNumber" inputmode="numeric" placeholder="Optional"></label>
+        <label>Language<select name="language"><option value="te-IN">Telugu</option><option value="en-IN">English</option></select></label>
+        <label>Audience<select name="audience"><option>All ages</option><option>Kids</option><option>Families</option><option>Teens</option><option>Adults</option></select></label>
+        <label>Age range<input name="audienceAgeRange" placeholder="Example: 7-12" required></label>
+        <label>Mood<input name="mood" placeholder="Calm, inspiring, adventurous"></label>
+        <label>Listening contexts<input name="listeningContexts" placeholder="Bedtime, family listening"></label>
+        <label>Content warnings<input name="contentWarnings" placeholder="Optional"></label>
+        <label>Story takeaway<textarea name="moralTakeaway" rows="2" placeholder="Moral or takeaway" required></textarea></label>
+        <label>Source / adaptation<input name="sourceAdaptation" placeholder="Original, folklore, or source work" required></label>
+        <label>Search keywords<input name="keywords" placeholder="Comma-separated keywords"></label>
+        <button type="submit">Submit for review</button><small id="upload-message"></small>
+      </form>
+    </section>
+    <section class="panel">
+      <h2>Published audio</h2>
+      <div id="published"></div>
+    </section>
+    <section class="panel">
+      <h2>My pipeline</h2>
+      <div id="pipeline"></div>
+    </section>
+    <section class="panel"><h2>Credit history</h2><div id="credit-history"></div></section>
+  </main>
+  <script src="/narrator/narrator.js?v=20260917-1045"></script>
+</body>
+</html>

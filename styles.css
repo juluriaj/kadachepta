@@ -1,0 +1,92 @@
+:root {
+  --ink: #243028;
+  --muted: #738078;
+  --cream: #f7f6f1;
+  --paper: #fffefa;
+  --sage: #dfe9df;
+  --green: #315747;
+  --orange: #dc7452;
+  --line: #e7e9e2;
+  font-family: "DM Sans", "Noto Sans Telugu", sans-serif;
+  color: var(--ink);
+  background: var(--cream);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--cream); }
+button, input { font: inherit; }
+button { cursor: pointer; }
+
+body:not(.authenticated) > *:not(#login-view) { display: none; }
+.login-view { display: grid; min-height: 100vh; place-items: center; padding: 24px; background: radial-gradient(circle at 10% 10%, #e8efe7, transparent 45%), var(--cream); }
+.login-view[hidden] { display: none; }
+.login-card { width: min(430px, 100%); padding: 38px; border: 1px solid var(--line); border-radius: 18px; background: var(--paper); box-shadow: 0 20px 50px #24302812; }
+.login-brand { display: flex; align-items: center; gap: 11px; margin-bottom: 34px; color: var(--ink); text-decoration: none; }
+.login-brand strong, .login-brand small { display: block; }.login-brand strong { font-size: 17px; }.login-brand small { margin-top: 2px; color: var(--muted); font-size: 9px; letter-spacing: .07em; text-transform: uppercase; }
+.login-card h1 { font-size: clamp(38px, 8vw, 56px); }.login-card h1 em { color: var(--orange); font-style: normal; }
+.login-description { margin: 18px 0 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+.login-card form { display: grid; gap: 14px; margin-top: 25px; }.login-card label { display: grid; gap: 6px; color: var(--green); font-size: 12px; font-weight: 700; }.login-card input { padding: 12px; border: 1px solid var(--line); border-radius: 7px; outline: none; background: white; }.login-card input:focus { border-color: var(--green); }.login-card .primary-button { padding: 13px; }.login-card #login-error { min-height: 16px; color: #b14b3a; font-size: 12px; }.login-hint { margin: 22px 0 0; color: var(--muted); font-size: 11px; }
+
+.topbar { height: 86px; display: flex; align-items: center; justify-content: space-between; padding: 0 6vw; background: var(--paper); border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 11px; color: var(--ink); text-decoration: none; }
+.brand-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; color: white; background: var(--green); font-family: "Noto Sans Telugu", sans-serif; font-size: 23px; font-weight: 700; }
+.brand strong, .brand small { display: block; }
+.brand strong { font-size: 17px; letter-spacing: -.02em; }
+.brand small { margin-top: 2px; color: var(--muted); font-size: 9px; letter-spacing: .07em; text-transform: uppercase; }
+.topnav { display: flex; align-items: center; gap: 34px; }
+.topnav { position: relative; }
+.topnav a { color: var(--muted); font-size: 13px; text-decoration: none; }
+.topnav a.active { color: var(--green); font-weight: 700; }
+.profile-button { display: flex; align-items: center; gap: 9px; border: 0; background: none; color: var(--ink); font-size: 13px; }
+.profile-button > span:first-child { display: grid; place-items: center; width: 29px; height: 29px; border-radius: 50%; color: white; background: var(--orange); font-family: "Noto Sans Telugu", sans-serif; font-size: 12px; }
+.chevron { color: var(--muted); font-size: 18px; }
+.profile-menu { position: absolute; z-index: 20; top: 44px; right: 0; width: 190px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); box-shadow: 0 12px 28px #2430281a; }
+.profile-menu-heading { padding: 9px 10px 11px; border-bottom: 1px solid var(--line); }
+.profile-menu-heading strong, .profile-menu-heading small { display: block; }
+.profile-menu-heading strong { color: var(--green); font-size: 12px; }
+.profile-menu-heading small { margin-top: 3px; color: var(--muted); font-size: 10px; text-transform: capitalize; }
+.profile-menu a, .profile-menu button { display: block; width: 100%; padding: 10px; border: 0; border-radius: 6px; color: var(--green); background: transparent; font-size: 11px; text-align: left; text-decoration: none; }
+.profile-menu a:hover, .profile-menu button:hover { background: var(--sage); }
+
+.hero { display: flex; min-height: 440px; padding: 74px 10vw 58px; overflow: hidden; background: #edf1e8; }
+.hero-copy { position: relative; z-index: 2; width: 53%; }
+.eyebrow { margin: 0 0 13px; color: var(--orange); font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+h1, h2 { margin: 0; letter-spacing: -.045em; }
+h1 { color: var(--green); font-family: "Noto Sans Telugu", sans-serif; font-size: clamp(38px, 5vw, 61px); line-height: 1.12; }
+h1 em { color: var(--orange); font-style: normal; }
+.hero-description { max-width: 420px; margin: 21px 0 28px; color: #66736a; font-size: 15px; line-height: 1.7; }
+.hero-actions { display: flex; align-items: center; gap: 24px; }
+.primary-button, .secondary-button { border: 0; border-radius: 8px; color: white; background: var(--green); font-weight: 700; }
+.primary-button { padding: 13px 19px; box-shadow: 0 8px 18px #31574724; font-size: 12px; }
+.primary-button span { margin-right: 7px; font-size: 10px; }
+.text-button { border: 0; background: none; color: var(--green); font-size: 12px; font-weight: 700; }
+.text-button span { margin-left: 5px; font-size: 16px; }
+.hero-art { position: relative; width: 47%; min-height: 305px; }
+.moon { position: absolute; top: 6px; right: 12%; width: 120px; height: 120px; border-radius: 50%; background: #f4ca86; box-shadow: 0 0 0 19px #f4ca862e; }
+.hero-star { position: absolute; color: #dfa760; }
+.star-one { top: 14px; right: 48%; font-size: 20px; }.star-two { top: 95px; right: 3%; font-size: 11px; }.star-three { top: 149px; right: 40%; font-size: 26px; }
+.hill { position: absolute; bottom: 0; border-radius: 50% 50% 0 0; }
+.hill-back { right: -15%; width: 92%; height: 135px; background: #cbdac9; }.hill-front { right: -20%; width: 92%; height: 95px; background: #89ab91; }
+.hero-tree { position: absolute; bottom: 49px; left: 15%; color: #315747; font-size: 97px; transform: rotate(90deg); }
+.hero-card { position: absolute; right: 20%; bottom: 33px; width: 170px; padding: 14px; border: 1px solid #ffffff77; border-radius: 9px; color: white; background: #315747e8; box-shadow: 0 12px 25px #31574731; }
+.hero-card span, .hero-card small { display: block; font-size: 8px; letter-spacing: .12em; }.hero-card span { color: #f5c47d; font-weight: 700; }.hero-card strong { display: block; margin: 8px 0; font-family: "Noto Sans Telugu", sans-serif; font-size: 17px; }
+
+.content-section { max-width: 1050px; margin: 0 auto; padding: 58px 24px 120px; }
+.section-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; }
+h2 { color: var(--green); font-size: 31px; }
+.search-wrap { display: flex; align-items: center; gap: 10px; width: 250px; padding: 9px 13px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--muted); }
+.search-wrap input { width: 100%; border: 0; outline: none; background: transparent; color: var(--ink); font-size: 11px; }
+.filters { display: flex; gap: 9px; margin: 30px 0 24px; overflow-x: auto; }
+.filter { padding: 9px 15px; border: 1px solid #dfe3da; border-radius: 20px; color: var(--muted); background: transparent; font-size: 11px; white-space: nowrap; }.filter.active { border-color: var(--green); color: white; background: var(--green); }
+.story-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+.story-card { position: relative; min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); transition: transform .2s, box-shadow .2s; }.story-card:hover { transform: translateY(-3px); box-shadow: 0 10px 24px #24302812; }
+.cover { display: flex; align-items: end; height: 152px; padding: 15px; color: white; background: var(--cover, #759a80); font-family: "Noto Sans Telugu", sans-serif; font-size: 19px; font-weight: 600; line-height: 1.2; }
+.cover::before { content: "✦"; position: absolute; top: 13px; right: 16px; color: #ffffffa8; font-family: sans-serif; font-size: 17px; }.cover-orange { --cover: #c76d4b; }.cover-blue { --cover: #6e8ea1; }.cover-purple { --cover: #827294; }
+.card-body { padding: 13px 14px 15px; }.card-body h3 { margin: 0 0 5px; font-family: "Noto Sans Telugu", sans-serif; font-size: 15px; }.card-body p { margin: 0 0 13px; color: var(--muted); font-size: 10px; }.card-meta { display: flex; align-items: center; justify-content: space-between; color: #9aa39c; font-size: 10px; }.card-play { border: 0; color: var(--green); background: none; font-size: 18px; }.card-save { position: absolute; top: 10px; left: 10px; border: 0; color: #fff; background: #00000020; font-size: 17px; }.card-save.saved { color: #f4ca86; }
+.empty-state { padding: 38px 0; color: var(--muted); text-align: center; }
+.feature-strip { display: flex; align-items: center; gap: 17px; max-width: 1050px; margin: -75px auto 100px; padding: 19px 24px; border: 1px solid #dce6dc; border-radius: 11px; background: #e8efe7; }.feature-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; color: #bd753f; background: #f7dcac; font-size: 22px; }.feature-strip strong { color: var(--green); font-size: 13px; }.feature-strip p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }.feature-strip .secondary-button { margin-left: auto; padding: 10px 14px; font-size: 10px; }
+
+.player { position: fixed; z-index: 10; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 24px; min-height: 72px; padding: 11px 6vw; border-top: 1px solid #dfe4dc; background: #fffefaF2; box-shadow: 0 -8px 28px #2430280d; backdrop-filter: blur(10px); }.now-playing { display: flex; align-items: center; gap: 11px; min-width: 0; }.mini-cover { display: grid; place-items: center; flex: 0 0 auto; width: 44px; height: 44px; border-radius: 6px; color: white; background: var(--green); }.now-playing strong, .now-playing small, .player-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.player-label { margin-bottom: 3px; color: var(--orange); font-size: 8px; font-weight: 700; letter-spacing: .12em; }.now-playing strong { font-family: "Noto Sans Telugu", sans-serif; font-size: 13px; }.now-playing small { margin-top: 2px; color: var(--muted); font-size: 10px; }.player-controls { display: flex; align-items: center; gap: 19px; }.icon-button, .player-action { border: 0; color: var(--muted); background: none; }.icon-button { font-size: 19px; }.play-button { display: grid; place-items: center; width: 38px; height: 38px; border: 0; border-radius: 50%; color: white; background: var(--orange); font-size: 12px; }.progress-wrap { position: absolute; right: 6vw; bottom: 3px; left: 6vw; display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 8px; }.progress-wrap input { width: 100%; height: 3px; accent-color: var(--orange); }.player-actions { display: flex; justify-content: end; gap: 18px; }.player-action { font-size: 11px; }.player-action span { margin-left: 4px; color: var(--muted); font-size: 10px; }
+.toast { position: fixed; z-index: 20; right: 24px; bottom: 92px; padding: 11px 15px; border-radius: 7px; color: white; background: var(--green); box-shadow: 0 7px 20px #24302833; font-size: 11px; opacity: 0; pointer-events: none; transform: translateY(8px); transition: .25s; }.toast.show { opacity: 1; transform: translateY(0); }
+@media (max-width: 760px) { .topbar { height: 70px; padding: 0 20px; }.topnav { gap: 14px; }.topnav a { display: none; }.profile-button b { display: none; }.hero { display: block; min-height: 650px; padding: 50px 25px 0; }.hero-copy { width: 100%; }.hero-art { width: 100%; height: 290px; margin-top: 28px; }.hero-card { right: 11%; }.content-section { padding: 45px 20px 120px; }.section-heading { align-items: start; flex-direction: column; }.search-wrap { width: 100%; }.story-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }.cover { height: 135px; font-size: 16px; }.feature-strip { margin: -62px 20px 90px; align-items: start; flex-wrap: wrap; }.feature-strip .secondary-button { margin-left: 59px; }.player { grid-template-columns: 1fr auto; gap: 10px; padding: 10px 15px 15px; }.player-actions { display: none; }.player-controls { gap: 11px; }.progress-wrap { right: 15px; bottom: 5px; left: 15px; } }

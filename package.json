@@ -1,0 +1,17 @@
+{
+  "name": "kadachepta",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Telugu-first story listening MVP",
+  "scripts": {
+    "start": "python scripts/editor_server.py",
+    "listener:static": "python -m http.server 4173",
+    "editor": "python scripts/editor_server.py",
+    "catalog:ingest": "python scripts/ingest_catalog.py",
+    "store:init": "python scripts/init_local_store.py",
+    "users:demo": "python scripts/create_demo_users.py",
+    "transcribe:benchmark": "python scripts/transcribe_sarvam.py --limit 3",
+    "transcript:approve": "python scripts/review_transcript.py",
+    "teaser:review": "python scripts/review_teaser.py"
+  }
+}

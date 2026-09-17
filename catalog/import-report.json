@@ -1,0 +1,18 @@
+{
+  "generatedAt": "2026-09-17T02:25:39.738238+00:00",
+  "input": "C:\\Users\\julur\\dev\\kadachepta\\audio",
+  "totalFilesSeen": 588,
+  "recordsCreated": 588,
+  "errors": 0,
+  "duplicates": 0,
+  "extensions": {
+    ".mp3": 588
+  },
+  "durationHours": 83.7,
+  "transcription": {
+    "status": "not-configured",
+    "reason": "No Telugu speech-to-text provider is configured.",
+    "nextStep": "Configure a provider adapter before transcription and teaser generation."
+  },
+  "errorsDetail": []
+}
