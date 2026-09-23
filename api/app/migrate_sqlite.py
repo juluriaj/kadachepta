@@ -27,15 +27,15 @@ from sqlalchemy.orm import Session
 
 from .db import get_sessionmaker
 from .models import (
-    AssetRights, AudioAsset, EditorialEvent, Job, ListenerFavorite, ListeningDaily, ListeningProgress,
-    NarratorCredit, NarratorProfile, TeaserDraft, Transcript, User,
+    AssetRights, AudioAsset, EditorialEvent, Household, Job, ListenerFavorite, ListeningDaily, ListeningProgress,
+    NarratorCredit, NarratorProfile, Profile, TeaserDraft, Transcript, User,
 )
 from .services.assets import as_list, normalize_language
 from .storage import get_storage
 
 OWNER_ATTESTATION = "Owner confirmed KathaChepta holds rights to all prototype stories (2026-09-23)."
 JOB_STATUS = {"completed": "succeeded", "approved": "succeeded", "needs-review": "succeeded", "failed": "dead"}
-TABLES = [User, NarratorProfile, AudioAsset, AssetRights, Transcript, TeaserDraft, Job, NarratorCredit,
+TABLES = [User, Household, Profile, NarratorProfile, AudioAsset, AssetRights, Transcript, TeaserDraft, Job, NarratorCredit,
           ListenerFavorite, ListeningProgress, ListeningDaily, EditorialEvent]
 
 
@@ -85,12 +85,20 @@ def copy_file(src: Path, key: str, report: dict) -> str | None:
 def migrate(db: Session, source: sqlite3.Connection, catalog_dir: Path, report: dict) -> None:
     storage = get_storage()
     users: dict[str, int] = {}
+    profiles: dict[str, int] = {}
     for row in rows(source, "editor_users"):
         user = User(username=row["username"], role=row["role"] or "editor", display_name=row["username"],
-                    password_hash=row["password_hash"], created_at=when(row["created_at"]) or datetime.now(timezone.utc))
+                    password_hash=row["password_hash"], created_at=when(row["created_at"]))
         db.add(user)
         db.flush()
         users[row["username"]] = user.id
+        household = Household(owner_user_id=user.id, name=row["username"])
+        db.add(household)
+        db.flush()
+        profile = Profile(household_id=household.id, name=row["username"], kind="adult")
+        db.add(profile)
+        db.flush()
+        profiles[row["username"]] = profile.id
     for row in rows(source, "narrator_profiles"):
         if row["username"] in users:
             db.add(NarratorProfile(user_id=users[row["username"]], display_name=row["display_name"],
@@ -206,18 +214,20 @@ def migrate(db: Session, source: sqlite3.Connection, catalog_dir: Path, report: 
                                   awarded_at=when(row["awarded_at"]), reason=row["reason"]))
     for row in rows(source, "listener_favorites"):
         if row["username"] in users:
-            db.add(ListenerFavorite(user_id=users[row["username"]], audio_asset_id=row["audio_asset_id"],
+            db.add(ListenerFavorite(user_id=users[row["username"]], profile_id=profiles[row["username"]],
+                                    audio_asset_id=row["audio_asset_id"],
                                     created_at=when(row["created_at"])))
     for row in rows(source, "listening_progress"):
         if row["username"] in users:
             db.add(ListeningProgress(
-                user_id=users[row["username"]], audio_asset_id=row["audio_asset_id"],
-                seconds_listened=row["seconds_listened"], last_position=row["last_position"],
+                user_id=users[row["username"]], profile_id=profiles[row["username"]],
+                audio_asset_id=row["audio_asset_id"], seconds_listened=row["seconds_listened"], last_position=row["last_position"],
                 play_count=row["play_count"], completed=bool(row["completed"]),
                 first_listened_at=when(row["first_listened_at"]), last_listened_at=when(row["last_listened_at"])))
     for row in rows(source, "listening_daily"):
         if row["username"] in users:
-            db.add(ListeningDaily(user_id=users[row["username"]], day=day(row["day"]), seconds=row["seconds"]))
+            db.add(ListeningDaily(user_id=users[row["username"]], profile_id=profiles[row["username"]],
+                                  day=day(row["day"]), seconds=row["seconds"]))
     for row in rows(source, "editorial_events"):
         db.add(EditorialEvent(entity_type=row["entity_type"], entity_id=row["entity_id"], action=row["action"],
                               actor=row["reviewer"], notes=row["notes"], created_at=when(row["created_at"])))

@@ -23,7 +23,7 @@ from .auth import SESSION_COOKIE, Identity, optional_identity
 from .config import get_settings
 from .db import get_db, get_sessionmaker
 from .models import Worker
-from .routers import admin, auth, editorial, listener, narrator, worker
+from .routers import admin, auth, editorial, household, listener, media, narrator, worker
 from .security import STAFF_ROLES, token_hash
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -83,7 +83,7 @@ async def validation_error(request: Request, error: RequestValidationError):
                                                   "problems": problems})
 
 
-for module in (auth, listener, narrator, editorial, worker, admin):
+for module in (auth, listener, household, media, narrator, editorial, worker, admin):
     app.include_router(module.router)
 
 
@@ -105,7 +105,13 @@ def home(identity: Identity | None = Depends(optional_identity)):
         return RedirectResponse("/editor/", status_code=302)
     if identity and identity.role == "narrator":
         return RedirectResponse("/narrator/", status_code=302)
-    return _page(get_settings().web_root / "index.html")
+    return _app_index()
+
+
+def _app_index() -> FileResponse:
+    settings = get_settings()
+    app_index = settings.app_root / "index.html"
+    return _page(app_index if app_index.is_file() else settings.web_root / "index.html")
 
 
 @app.get("/editor", include_in_schema=False)
@@ -125,17 +131,25 @@ def narrator_page(identity: Identity | None = Depends(optional_identity)):
 
 
 STATIC_TYPES = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
-                ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".webmanifest": "application/manifest+json"}
+                ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".ico": "image/x-icon",
+                ".webmanifest": "application/manifest+json", ".json": "application/json", ".ttf": "font/ttf",
+                ".woff2": "font/woff2", ".html": "text/html; charset=utf-8", ".map": "application/json"}
 
 
 @app.get("/{path:path}", include_in_schema=False)
 def static_file(path: str):
-    root = get_settings().web_root.resolve()
-    candidate = (root / path).resolve()
-    if root not in candidate.parents or not candidate.is_file() or candidate.suffix not in STATIC_TYPES \
-            or path.startswith("api/"):
+    if path.startswith(("api/", "media/")):
         return JSONResponse(status_code=404, content={"error": "Not found.", "detail": "Not found."})
-    return FileResponse(candidate, media_type=STATIC_TYPES[candidate.suffix], headers={"Cache-Control": "no-cache"})
+    settings = get_settings()
+    for root in (settings.app_root.resolve(), settings.web_root.resolve()):
+        candidate = (root / path).resolve()
+        if root in candidate.parents and candidate.is_file() and candidate.suffix in STATIC_TYPES:
+            # Hashed bundles never change; everything else revalidates.
+            cache = "public, max-age=31536000, immutable" if "/_expo/static/" in f"/{path}" else "no-cache"
+            return FileResponse(candidate, media_type=STATIC_TYPES[candidate.suffix], headers={"Cache-Control": cache})
+    if "." not in path.rsplit("/", 1)[-1] and not path.startswith(("editor", "narrator")):
+        return _app_index()  # a client-side route of the listener app
+    return JSONResponse(status_code=404, content={"error": "Not found.", "detail": "Not found."})
 
 
 @app.on_event("startup")

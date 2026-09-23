@@ -23,6 +23,12 @@ docker compose up -d --build       # PostgreSQL, API, media workers, Caddy, Mail
 Development accounts (created by the prototype migration or `npm run users:demo`) all use the password
 `change-me`: `listener`, `parent`, `narrator`, `editor`, `admin`. Never use these in production.
 
+### Listener app (Expo: iOS, Android, web)
+
+The app in `app/` is served at http://localhost:8080 once exported (`npm run app:web`). For live
+development run `npm run app:dev`. The Android review build is `npm run app:apk` (needs
+`npx eas-cli login` once). Checks: `npm run app:test`.
+
 ### AI worker on the GPU
 
 Teasers (LLM) and artwork run on the desktop, next to LM Studio, through the same pull-based worker a
@@ -50,7 +56,8 @@ npm run stop
 |---|---|
 | `api/` | FastAPI service, SQLAlchemy models, Alembic migrations, tests |
 | `worker/` | Pull-based job worker: audio processing (ffmpeg), transcription (Sarvam), teasers (LM Studio), artwork |
-| `web/` | Current web pages (listener, narrator, editor); replaced by the Phase 1 app and Phase 2 studio |
+| `app/` | Listener app (Expo, TypeScript): iOS, Android, and the web app at `/` |
+| `web/` | Prototype editor and narrator pages (replaced by the Phase 2 studio) |
 | `infra/` | Caddy config, backup script, Lightsail provisioning (Phase 6) |
 | `scripts/` | Local setup and the GPU worker launcher |
 | `legacy/` | Retired prototype code, kept until Phase 0 sign-off |

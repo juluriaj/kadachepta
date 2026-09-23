@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "KathaChepta",
+    "slug": "kathachepta",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "kathachepta",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F7F6F1",
+    "ios": {
+      "bundleIdentifier": "com.kathachepta.app",
+      "supportsTablet": true,
+      "icon": "./assets/expo.icon",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.kathachepta.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#315747",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/favicon.png",
+      "name": "KathaChepta",
+      "shortName": "KathaChepta",
+      "themeColor": "#315747",
+      "backgroundColor": "#F7F6F1",
+      "lang": "te"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#315747",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 76
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true
+        }
+      ],
+      "expo-secure-store",
+      "expo-localization"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

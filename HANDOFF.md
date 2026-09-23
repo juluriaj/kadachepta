@@ -1,7 +1,7 @@
 # KathaChepta Engineering Handoff
 
 Operational guide for continuing work in another session. Read [ARCHITECTURE.md](ARCHITECTURE.md) for the
-design and [BACKLOG.md](BACKLOG.md) for the phase plan. Current state: **Phase 0 complete, awaiting review.**
+design and [BACKLOG.md](BACKLOG.md) for the phase plan. Current state: **Phase 1 (listener app) complete, awaiting review.** Phase 0 on branch `phase-0-foundation`, Phase 1 on `phase-1-listener-app`.
 
 ## Runtime
 
@@ -66,6 +66,21 @@ Operator CLI: `docker compose exec api python -m app.cli create-user|set-passwor
 - Audio processing normalizes to −16 LUFS / −1.5 dBTP, writes a 64 kbps and a 32 kbps mono AAC version, a
   200-point waveform, and QC checks (quiet, clipping, background sound, long pauses, too short, low sample
   rate) with plain-language tips shown to narrators.
+
+## Listener app (`app/`)
+
+- Expo SDK 57, Expo Router, TypeScript. Read `app/AGENTS.md` before touching Expo APIs: fetch the
+  versioned docs, don't rely on memory.
+- Web is exported to `app/dist` and served by the API at `/` (same origin, so it uses the httpOnly
+  session cookie). Native apps use bearer tokens in SecureStore with refresh rotation.
+- Every listener request carries `X-Profile-Id`; the API filters stories for child profiles
+  (`services/households.py: suitable_for`: stories without a parseable age range are hidden from children).
+- Parent PIN: sent as `X-Parent-Pin` for five minutes after entry; required for profile changes, family
+  stats, export, and deletion once set.
+- Playback runs in `app/src/lib/player/engine.ts` outside React (one expo-audio player, driven by native
+  status events so background listening is counted). Pure rules are in `logic.ts` with node tests.
+- Listening reports include screen-off seconds (app backgrounded or tab hidden), which power the
+  "screen off" share parents see.
 
 ## Engineering rules learned the hard way
 

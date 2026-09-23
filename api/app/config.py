@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 500 * 1024 * 1024
 
     web_root: Path = Path(__file__).resolve().parents[2] / "web"
+    # Expo web export of the listener app (app/dist). When present it is served at "/".
+    app_root: Path = Path(__file__).resolve().parents[2] / "app" / "dist"
 
     session_ttl_hours: int = 12
     access_token_minutes: int = 15

@@ -10,6 +10,7 @@ x-api-env: &api-env
   KC_PUBLIC_BASE_URL: ${KC_PUBLIC_BASE_URL:-http://localhost:8080}
   KC_MEDIA_ROOT: /data/media
   KC_LEGACY_AUDIO_ROOT: /data/legacy-audio
+  KC_APP_ROOT: /srv/app
   KC_BOOTSTRAP_WORKERS: ${KC_BOOTSTRAP_WORKERS}
   KC_SMTP_HOST: ${KC_SMTP_HOST:-mailpit}
   KC_SMTP_PORT: ${KC_SMTP_PORT:-1025}
@@ -45,6 +46,7 @@ services:
       - ./audio:/data/legacy-audio:ro
       - ./catalog:/data/legacy-catalog:ro   # read by the one-time SQLite migration
       - ./web:/srv/web:ro                     # live-edit web pages locally (baked into the image for production)
+      - ./app/dist:/srv/app:ro                # listener app web export (npm run app:web)
     depends_on:
       postgres: { condition: service_healthy }
 

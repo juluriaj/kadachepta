@@ -269,20 +269,60 @@ class Worker(Base):
     disabled_at: Mapped[datetime | None] = mapped_column(Timestamp)
 
 
+class Household(Base):
+    """A billing account holder plus the people who listen under it."""
+
+    __tablename__ = "households"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    owner_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    name: Mapped[str | None] = mapped_column(String(120))
+    parental_pin_hash: Mapped[str | None] = mapped_column(Text)
+    onboarded_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    moments: Mapped[list[str]] = mapped_column(ARRAY(String(16)), nullable=False, server_default="{}")
+    created_at: Mapped[datetime] = now_column()
+
+    profiles: Mapped[list[Profile]] = relationship(back_populates="household", order_by="Profile.id",
+                                                   cascade="all, delete-orphan", passive_deletes=True)
+
+
+class Profile(Base):
+    """A listener inside a household. Child profiles have no credentials and see age-filtered stories."""
+
+    __tablename__ = "profiles"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    household_id: Mapped[int] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(60), nullable=False)
+    kind: Mapped[str] = mapped_column(String(8), nullable=False, server_default="adult")  # adult | child
+    age_band: Mapped[str | None] = mapped_column(String(8))  # 3-5 | 6-8 | 9-12 (child profiles)
+    avatar: Mapped[str] = mapped_column(String(24), nullable=False, server_default="peacock")
+    listening_languages: Mapped[list[str]] = mapped_column(
+        ARRAY(String(16)), nullable=False, server_default=text("ARRAY['te-IN']::varchar[]"))
+    queue: Mapped[list[str]] = mapped_column(ARRAY(String(32)), nullable=False, server_default="{}")
+    created_at: Mapped[datetime] = now_column()
+    deleted_at: Mapped[datetime | None] = mapped_column(Timestamp)
+
+    household: Mapped[Household] = relationship(back_populates="profiles")
+
+
 class ListenerFavorite(Base):
     __tablename__ = "listener_favorites"
 
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), primary_key=True)
     audio_asset_id: Mapped[str] = mapped_column(ForeignKey("audio_assets.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at: Mapped[datetime] = now_column()
 
 
 class ListeningProgress(Base):
     __tablename__ = "listening_progress"
 
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), primary_key=True)
     audio_asset_id: Mapped[str] = mapped_column(ForeignKey("audio_assets.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     seconds_listened: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    screen_off_seconds: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
     last_position: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
     play_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     completed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
@@ -293,9 +333,11 @@ class ListeningProgress(Base):
 class ListeningDaily(Base):
     __tablename__ = "listening_daily"
 
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), primary_key=True)
     day: Mapped[date] = mapped_column(Date, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     seconds: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    screen_off_seconds: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
 
 
 class EditorialEvent(Base):
