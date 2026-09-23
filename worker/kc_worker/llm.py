@@ -56,6 +56,9 @@ def chat_json(messages: list[dict[str, str]], schema: dict[str, Any], *, model: 
             payload = json.loads(response.read())
     except urllib.error.HTTPError as error:
         raise LlmError(f"LLM server returned HTTP {error.code}: {error.read().decode('utf-8', 'replace')[:500]}") from None
+    except TimeoutError:
+        raise LlmError(f"Model {model} did not finish within {os.environ.get('KC_LLM_TIMEOUT', '900')} s. "
+                       "It is probably too large for this GPU (check LM Studio's GPU offload).") from None
     except OSError as error:
         raise LlmError(f"Could not reach the LLM server at {base_url()}: {error}. "
                        "Is LM Studio's server running with the model available?") from None

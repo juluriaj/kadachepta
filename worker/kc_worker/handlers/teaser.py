@@ -8,7 +8,7 @@ from typing import Any
 from .. import llm
 from . import JobContext, PermanentError
 
-PROMPT_VERSION = "teaser-v2"
+PROMPT_VERSION = "teaser-v3"
 LANGUAGE_NAMES = {
     "te-IN": "Telugu", "hi-IN": "Hindi", "en-IN": "English", "ta-IN": "Tamil", "kn-IN": "Kannada",
     "ml-IN": "Malayalam", "mr-IN": "Marathi", "bn-IN": "Bengali", "gu-IN": "Gujarati", "pa-IN": "Punjabi",
@@ -55,7 +55,10 @@ def build_messages(title: str, transcript: str, languages: list[str]) -> list[di
     system = (
         "You are a careful children's audio-story editor. You write teasers that make families want to listen, "
         "without spoilers. Use only facts present in the transcript; never invent names, places, or events. "
-        "Do not reveal the ending or the twist. Keep language warm, simple, and suitable for children. /no_think"
+        "Do not reveal the ending or the twist. Keep language warm, simple, and suitable for children. "
+        "Ignore channel intros, website names, sponsor messages, and greetings at the start or end of the "
+        "recording; never mention them. Translate animal and character names exactly (for example కాకి is "
+        "a crow, హంస is a swan). /no_think"
     )
     user = (
         f"Story title: {title}\n"
