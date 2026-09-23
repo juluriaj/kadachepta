@@ -2,7 +2,13 @@ config/secrets.local.json
 catalog/*.db
 catalog/transcripts/
 catalog/teasers/
+catalog/artworks/
 catalog/previews/
 __pycache__/
 *.pyc
 audio/*
+catalog/logs/
+.env
+data/
+.pytest_cache/
+.ruff_cache/

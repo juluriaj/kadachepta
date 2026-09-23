@@ -1,0 +1,25 @@
+# Production overrides on Lightsail (Phase 6):
+#   docker compose -f docker-compose.yml -f infra/lightsail/docker-compose.prod.yml up -d --build
+services:
+  postgres:
+    ports: !reset []            # never expose PostgreSQL on the VM
+  api:
+    environment:
+      KC_ENVIRONMENT: production
+      KC_COOKIE_SECURE: "true"
+      KC_STAFF_MFA_REQUIRED: "true"
+      KC_API_WORKERS: "3"
+    volumes: !override
+      - ./data/media:/data/media
+  worker-media:
+    deploy:
+      replicas: 2
+  caddy:
+    ports: !override
+      - "80:80"
+      - "443:443"
+    volumes: !override
+      - ./infra/lightsail/Caddyfile.production:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+  mailpit:
+    profiles: ["never"]         # production mail goes through Amazon SES (KC_SMTP_* settings)

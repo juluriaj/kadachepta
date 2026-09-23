@@ -1,0 +1,109 @@
+# KathaChepta local stack. Start with:  python scripts/setup_local.py && docker compose up -d --build
+# The same services run on Lightsail in Phase 6 (with the bucket storage backend and TLS on real domains).
+
+name: kathachepta
+
+x-api-env: &api-env
+  KC_ENVIRONMENT: ${KC_ENVIRONMENT:-development}
+  KC_DATABASE_URL: postgresql+psycopg://kathachepta:${POSTGRES_PASSWORD}@postgres:5432/kathachepta
+  KC_SECRET_KEY: ${KC_SECRET_KEY}
+  KC_PUBLIC_BASE_URL: ${KC_PUBLIC_BASE_URL:-http://localhost:8080}
+  KC_MEDIA_ROOT: /data/media
+  KC_LEGACY_AUDIO_ROOT: /data/legacy-audio
+  KC_BOOTSTRAP_WORKERS: ${KC_BOOTSTRAP_WORKERS}
+  KC_SMTP_HOST: ${KC_SMTP_HOST:-mailpit}
+  KC_SMTP_PORT: ${KC_SMTP_PORT:-1025}
+  KC_STAFF_MFA_REQUIRED: ${KC_STAFF_MFA_REQUIRED:-false}
+  KC_COOKIE_SECURE: ${KC_COOKIE_SECURE:-false}
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kathachepta
+      POSTGRES_USER: kathachepta
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"   # host access for tests and admin tools only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kathachepta -d kathachepta"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: { context: ., dockerfile: api/Dockerfile }
+    restart: unless-stopped
+    environment:
+      <<: *api-env
+      KC_API_WORKERS: ${KC_API_WORKERS:-2}
+    volumes:
+      - ./data/media:/data/media
+      - ./audio:/data/legacy-audio:ro
+      - ./catalog:/data/legacy-catalog:ro   # read by the one-time SQLite migration
+      - ./web:/srv/web:ro                     # live-edit web pages locally (baked into the image for production)
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api-test:
+    profiles: ["test"]
+    build: { context: ., dockerfile: api/Dockerfile, args: { INSTALL_DEV: "true" } }
+    environment:
+      KC_DATABASE_URL: postgresql+psycopg://kathachepta:${POSTGRES_PASSWORD}@postgres:5432/kathachepta
+    volumes:
+      - ./api:/srv/api
+    user: root
+    command: ["sh", "-c", "ruff check app tests && pytest"]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  worker-media:
+    build: { context: ., dockerfile: worker/Dockerfile }
+    restart: unless-stopped
+    environment:
+      KC_API_URL: http://api:8000
+      KC_WORKER_TOKEN: ${KC_MEDIA_WORKER_TOKEN}
+      KC_WORKER_CAPABILITIES: media,stt
+      SARVAM_API_KEY: ${SARVAM_API_KEY:-}
+      KC_WORKDIR: /tmp
+    depends_on:
+      api: { condition: service_healthy }
+    deploy:
+      replicas: ${KC_MEDIA_WORKERS:-4}
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "${KC_HTTP_BIND:-0.0.0.0}:8080:8080"   # phones on the home network use http://<desktop-ip>:8080
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - api
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"   # sign-in codes in development: http://localhost:8025
+
+  backup:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      KEEP_DAYS: ${KC_BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./data/backups:/backups
+      - ./infra/backup.sh:/backup.sh:ro
+    entrypoint: ["sh", "/backup.sh"]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  caddy_data:

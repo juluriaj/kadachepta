@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KathaChepta Editorial Workspace</title>
+  <link rel="stylesheet" href="/editor/editor.css?v=20260922-2">
+</head>
+<body>
+  <div id="app-view" hidden>
+    <header class="topbar"><div><span class="brand-mark small">క</span><strong>KathaChepta</strong><span class="workspace-label">Editorial workspace</span></div><div class="top-actions"><span id="username"></span><button id="logout" class="ghost">Log out</button></div></header>
+    <main class="shell">
+      <section class="intro"><div><p class="eyebrow">Good evening, editor</p><h1>Make every story ready to be heard.</h1><p>Work through the catalog in small, reviewable steps. Nothing is published without your approval.</p></div><div class="status-pill"><span></span> Local-first mode</div></section>
+      <section id="stats" class="stats"></section>
+      <div class="toolbar"><div class="tabs"><button class="tab active" data-queue="transcripts">Transcript queue</button><button class="tab" data-queue="teasers">Teaser queue</button><button class="tab" data-queue="narrator-submissions">Narrator submissions</button><button class="tab" data-queue="published">Published audio</button><button class="tab" data-queue="catalog">Seed catalog</button></div><input id="queue-search" class="queue-search" type="search" placeholder="Search titles…" aria-label="Search stories"><button id="refresh" class="ghost">↻ Refresh</button></div>
+      <section id="queue" class="queue"></section>
+    </main>
+  </div>
+  <div id="asset-modal" class="asset-modal" hidden>
+    <div class="asset-dialog" role="dialog" aria-modal="true" aria-labelledby="asset-title">
+      <button id="asset-close" class="asset-close" type="button" aria-label="Close asset details">×</button>
+      <p class="eyebrow" id="asset-modal-eyebrow">Narrator submission detail</p>
+      <h2 id="asset-title">Asset</h2>
+        <textarea id="delete-notes" class="delete-notes" data-delete-notes rows="2" placeholder="Optional deletion comments"></textarea>
+        <div id="asset-detail"></div>
+    </div>
+  </div>
+  <div id="toast" class="toast"></div>
+  <script src="/editor/editor.js?v=20260922-2"></script>
+</body>
+</html>

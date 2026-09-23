@@ -1,212 +1,218 @@
-# KathaChepta AI and Persistence Decisions
+# KathaChepta Platform Architecture
 
-## Current local-first baseline
+Target architecture for a store-published, multilingual listening platform
+hosted on a single AWS Lightsail VM. The delivery plan is in
+[BACKLOG.md](./BACKLOG.md).
 
-During development, keep all persistent data on the local PC:
+Last reviewed: 2026-09-23.
 
-- `catalog/kadachepta.db`: SQLite catalog, workflow state, transcripts, teaser drafts, and audit records.
-- `audio/`: original source files, treated as read-only inputs.
-- `catalog/transcripts/`: raw and normalized transcript artifacts.
-- `catalog/teasers/`: generated teaser drafts.
-- `catalog/previews/`: optional audio excerpts.
-- `catalog/import-report.json`: import diagnostics.
+## Shape of the system
 
-SQLite is the right temporary system of record for this single-PC phase. The
-schema is intentionally designed so it can later be migrated to PostgreSQL.
-Keep large audio and transcript artifacts as files, with checksums and paths in
-SQLite. Do not commit generated database files, transcripts, or teaser drafts.
+```
+ Listener + narrator app              Studio (editors, admins)
+ Expo / React Native                  React + Vite web app
+ iOS · Android · Web                  desktop web
+          │                                   │
+          └──────────── HTTPS ────────────────┘
+                          │
+        ┌─────────────────▼──────────────────────────┐
+        │ Lightsail VM (Ubuntu, Docker Compose)      │
+        │                                            │
+        │  Caddy ── TLS, reverse proxy, rate limits  │
+        │   │                                        │
+        │  api ─── FastAPI (REST + OpenAPI)          │
+        │   │                                        │
+        │  worker ─ jobs: media, payments, payouts,  │
+        │   │       notifications, reconciliation    │
+        │  postgres 16 (+ pgvector, pg_trgm)         │
+        │  [optional] LM Studio headless (CPU)       │
+        └───────┬───────────────────────┬────────────┘
+                │                       │  job leases over HTTPS
+   Lightsail bucket + CDN          AI worker(s) — pull model
+   audio renditions, artwork,      your GPU machine: LM Studio,
+   uploads (signed URLs)           image model, faster-whisper
+                                   (or the VM itself, slowly)
 
-Ollama is the local generation adapter. The installed models should be
-benchmarked rather than assumed to be Telugu specialists:
-
-- `llama3.1:8b`: first practical teaser-generation baseline.
-- `qwen3-coder:30b` and the Qwen coder models: not recommended as the primary
-  Telugu editorial model; use them for code/tooling tasks instead.
-
-The local teaser script is `scripts/ollama_teaser.py`. It requires an explicit
-transcript and writes drafts as `needs-review`.
-
-## Cloud migration boundary
-
-At the final phase, migrate SQLite to PostgreSQL and local artifacts to an
-S3-compatible object store. Preserve IDs, checksums, version numbers, and
-review/audit history during migration.
-
-## Earlier production-oriented options
-
-### Telugu speech-to-text
-
-Use a provider adapter with this future production order:
-
-1. **Managed Telugu batch transcription:** Sarvam AI Saaras, if its current plan and data-processing terms meet the project's requirements.
-2. **Managed fallback:** Google Cloud Speech-to-Text or Azure AI Speech with Telugu (`te-IN`) support.
-3. **Self-hosted fallback:** `faster-whisper` with a multilingual large model, benchmarked on a representative Telugu sample before committing to production quality.
-
-The application must not depend directly on one vendor. The adapter interface should accept an audio asset and return:
-
-- language
-- normalized transcript
-- timestamped segments
-- confidence, if supplied
-- speaker labels, if supplied
-- provider/model/version
-- duration and cost
-- request ID
-
-The first implementation should run batch jobs, not synchronous web requests. Long audiobook chapters need resumable jobs, bounded retries, and clear permanent-failure states.
-
-### Teaser and metadata generation
-
-Use a structured-output capable multilingual LLM:
-
-1. **Default:** a current small/fast model such as OpenAI GPT-4.1-mini or Google Gemini 2.5 Flash, selected after a Telugu quality benchmark.
-2. **Higher-quality review/regeneration path:** a larger current model such as OpenAI GPT-4.1 or Google Gemini 2.5 Pro.
-3. **Self-hosted option:** Qwen multilingual instruct models only after evaluating Telugu fluency, factuality, JSON reliability, and operating cost on the project's sample set.
-
-The generation input should be the reviewed Telugu transcript plus trusted metadata. The model must return schema-validated JSON containing Telugu and English teasers, short descriptions, themes, mood, age suggestion, content warnings, confidence, and source transcript segments.
-
-Do not allow generated text to publish automatically. Every draft needs a `needs-review` state and an editor approval event.
-
-### English translation
-
-Use the same multilingual LLM for the first draft, then compare it against:
-
-- **Self-hosted:** AI4Bharat IndicTrans2
-- **Managed:** Google Cloud Translation or Azure Translator with Telugu-English support
-
-The source transcript version must be recorded. A transcript revision invalidates dependent translation and teaser drafts.
-
-## Persistent storage
-
-Use a split storage model:
-
-### PostgreSQL
-
-Use PostgreSQL as the system of record for:
-
-- story, book, chapter, narrator, collection, and license metadata
-- audio asset references and checksums
-- transcript and teaser status
-- version relationships
-- reviewer decisions and audit events
-- searchable short text
-- job state, retries, provider request IDs, and costs
-
-Use relational columns for fields used in filtering and reporting. Use JSONB for provider-specific response details and flexible segment payloads.
-
-Recommended transcript shape:
-
-```json
-{
-  "language": "te",
-  "text": "...",
-  "segments": [
-    {
-      "startMs": 0,
-      "endMs": 4200,
-      "text": "...",
-      "confidence": 0.91
-    }
-  ],
-  "provider": "sarvam",
-  "model": "provider-model-version",
-  "sourceAudioChecksum": "sha256",
-  "status": "needs-review"
-}
+ External (only where local models or self-hosting are the wrong tool):
+ Sarvam (speech-to-text) · Razorpay / Stripe / RevenueCat (billing)
+ Amazon SES (email) · Expo push → APNs / FCM · error tracking
 ```
 
-Recommended teaser draft fields:
+## Key decisions and why
 
-- story/chapter ID
-- source transcript version ID
-- language
-- short text
-- long text
-- themes
-- mood
-- age suggestion
-- content warnings
-- source segment IDs
-- model/provider/prompt version
-- generation timestamp
-- review status
-- reviewer and review timestamp
-- rejection/regeneration reason
+### Clients
 
-### Object storage
+- **Expo (React Native + TypeScript)** for the listener and narrator
+  experience on iOS, Android, and web from one codebase. It covers background
+  audio, lock-screen controls, offline storage, in-app purchases, push, and
+  store builds (EAS), and it can do CarPlay/Android Auto through native
+  modules. Flutter would also work; Expo wins on sharing TypeScript types with
+  the studio and on its web target.
+- **Studio** is a separate React + Vite web app. Editor and admin work is
+  desktop, table-heavy, and keyboard-driven; forcing it into React Native web
+  would slow editors down.
+- Both clients use a typed client generated from the API's OpenAPI spec.
+- The current vanilla JS pages are retired after Phase 1 reaches parity.
 
-Use S3-compatible object storage such as Amazon S3, Cloudflare R2, Azure Blob Storage, or Google Cloud Storage for:
+### API and data
 
-- original audio
-- normalized/streaming audio renditions
-- audio previews
-- cover art
-- raw provider transcripts
-- exported subtitle files
-- large transcript JSON files
+- **FastAPI** keeps the team in Python, where the audio, AI, and pipeline code
+  already lives. Pydantic gives request validation and the OpenAPI spec.
+- **PostgreSQL 16** on the same VM as the system of record. Extensions:
+  `pg_trgm` (fuzzy search), `unaccent`, `pgvector` (recommendations).
+  Money is stored as integer minor units with a currency code.
+- **Job queue on PostgreSQL** (`SELECT … FOR UPDATE SKIP LOCKED` with leases,
+  retries, backoff, dead-letter). No Redis until measurements justify it.
+- **Pull-based AI workers:** workers authenticate with a worker token, lease
+  jobs over HTTPS, and upload results. A GPU machine at home or in the office
+  can serve production without inbound ports or a VPN, and more workers can be
+  added without changing the server.
 
-Keep immutable objects addressed by checksum or versioned asset ID. Store only references, checksums, MIME types, sizes, and lifecycle status in PostgreSQL.
+### Media
 
-### Search
+- Uploads land in the bucket through pre-signed URLs (chunked and resumable).
+  The API never streams large files through Python.
+- The worker normalizes loudness (EBU R128, −16 LUFS integrated, −1.5 dBTP),
+  converts to mono AAC-LC 64 kbps (standard) and HE-AAC 32 kbps (data saver),
+  and extracts duration, a waveform, chapter markers, and QC metrics.
+- Playback uses CDN URLs signed per entitlement with a short expiry, which
+  supports HTTP Range seeking. Offline downloads are encrypted in the app
+  sandbox and expire with the entitlement.
+- Originals are kept in a private bucket prefix; renditions are addressed by
+  asset ID + version + checksum.
 
-Start with PostgreSQL full-text search and trigram indexes. Add OpenSearch or Meilisearch only when catalog scale or typo-tolerant Telugu search requires it.
+### Identity and access
 
-Add `pgvector` later for semantic discovery such as “calm stories about courage”; it is not required for the first catalog ingestion milestone.
+- Listeners: email one-time code, Sign in with Apple, Sign in with Google.
+  Phone OTP (important in India) is added when SMS cost is acceptable.
+- Staff (editors, admins, finance): password + TOTP, enforced.
+- Web uses httpOnly session cookies with CSRF protection; mobile uses a
+  15-minute access token plus a rotating refresh token in secure storage.
+- **Households:** one billing parent, up to N profiles, child profiles without
+  credentials, a parental PIN gate for settings, purchases, and external links.
+- Role- and permission-based authorization is enforced in the API only.
 
-## Recommended initial deployment
+### AI: local first
 
-- PostgreSQL for application data and workflow state
-- S3-compatible object storage for media and raw/large artifacts
-- Redis or a PostgreSQL-backed queue for job dispatch, depending on operational simplicity
-- A worker process for metadata, transcription, translation, and teaser jobs
-- A provider adapter layer with secrets supplied through environment variables
-- An admin review surface before anything is published
+All model names, endpoints, and prompt versions are configuration. Every AI
+output is stored with provider, model, prompt version, input version, and
+review status.
 
-For the current 588-file, approximately 84-hour catalog, PostgreSQL plus object storage is more than sufficient. Do not introduce a document database or vector database before the product demonstrates a need.
+| Task | Default (local) | Internet fallback / reason | Candidates to benchmark |
+|---|---|---|---|
+| Speech-to-text | — | **Sarvam** (Saarika/Saaras): local Telugu STT quality is not good enough yet | faster-whisper large-v3, AI4Bharat IndicConformer |
+| Metadata, teaser, moral, age band, safety descriptors (structured JSON) | LM Studio, OpenAI-compatible, JSON schema output | none planned | Sarvam-M (24B, Indic-tuned), Gemma 3 12B/27B, Qwen3 14B/30B-A3B |
+| Translation (teasers, metadata) | LM Studio | none planned | Sarvam-Translate, IndicTrans2, the metadata model |
+| Review moderation | LM Studio classifier + word lists | none planned | Llama Guard 3, Gemma 3 |
+| Embeddings (search, recommendations) | LM Studio embeddings endpoint | none planned | bge-m3, multilingual-e5-large |
+| Cover artwork | Local diffusion on the GPU worker (ComfyUI or diffusers) | paid FLUX API only if no GPU is available | FLUX.1-schnell (Apache 2.0), SDXL |
+| Transliteration for search | Rule-based libraries | none | indic-transliteration, Aksharamukha |
 
-## Evaluation benchmark before locking providers
+Benchmark before locking in: 20 licensed sample stories per language, scored for
+factual accuracy, spoilers, fluency, JSON validity, and time per story. Model
+choice is per language. The harness is `worker/bench/llm_benchmark.py`; results
+are kept in `docs/benchmarks/`.
 
-Select 10–20 licensed representative files:
+**Current hardware (desktop GPU worker): RTX 5060, 8 GB.** That fits roughly
+8–12B models in 4-bit form. Telugu text costs about 1.4 tokens per character, so
+the teaser prompt sends the opening and ending of long transcripts (never the
+middle) to stay within LM Studio's default 8k context. Larger Indic-tuned models
+(Sarvam-M 24B) need a bigger GPU or a cloud GPU worker.
 
-- short bedtime story
-- long chapter
-- mythology/proper names
-- poetry or Sanskrit verses
-- background music
-- different narrators
-- fast and slow speech
-- incomplete metadata
+**Hosting reality check:** Lightsail has no GPU instances. An 8B-class model on
+a 4-vCPU CPU instance produces a few tokens per second, which is acceptable
+for batch drafting (a minute or two per story) but not for image generation or
+larger models. That is why AI runs as pull-based jobs: a GPU machine does the
+heavy work, and the VM can process a slow backlog on its own if the GPU worker
+is offline.
 
-Score each candidate on:
+### Payments
 
-- Telugu word error rate
-- proper-name accuracy
-- timestamp alignment
-- punctuation quality
-- transcript correction effort
-- teaser factuality
-- spoiler rate
-- Telugu naturalness
-- English translation quality
-- per-hour processing cost
-- latency and failure/retry behavior
+- The server owns **entitlements**; payment providers only report events.
+- `PaymentProvider` interface with implementations for Razorpay (INR
+  subscriptions with UPI Autopay and e-mandates), Stripe (international), and
+  RevenueCat (App Store and Google Play subscriptions).
+- All money movements are written to an append-only double-entry ledger:
+  customer charges, refunds, provider fees, taxes, narrator accruals,
+  adjustments, holds, clawbacks, and payouts.
+- Webhooks are verified, idempotent, stored raw, and replayable. A nightly job
+  reconciles the ledger against provider reports.
+- **App store rules:** digital subscriptions sold inside iOS/Android apps
+  generally must use store billing (15–30% fee). "Reader" apps (audio content)
+  may instead let users sign up outside the app in some regions, and payment
+  rules differ by country (for example external links in the US storefront,
+  alternative billing in India on Google Play). Recommendation: launch with
+  store billing via RevenueCat and revisit per region after launch. Re-check
+  the current store guidelines at Phase 4.
+- Narrator payouts: RazorpayX Payouts (India) and Stripe Connect
+  (international), with KYC, monthly close, and admin approval.
 
-Choose providers from measured results, not model reputation alone.
+### Multilingual design
 
-## Decision summary
+- BCP 47 language tags on stories, chapters, audio, transcripts, teasers,
+  metadata, prompts, narrators, editors, profiles, and search documents.
+- Localized text lives in `*_localizations` tables keyed by
+  `(entity_id, language)`, each with its own review status and source version.
+- The AI router picks the STT provider, LLM model, prompt template, and safety
+  lists by language.
+- PostgreSQL full-text configuration is chosen by language, plus trigram
+  search and transliterated search keys.
+- The UI uses ICU messages, locale-aware formatting, Noto font stacks for each
+  script, and logical CSS properties so right-to-left scripts work later.
 
-For the first production-oriented implementation, use:
+## Data model (v1 outline)
 
-```text
-Audio files       -> S3-compatible object storage
-Catalog/workflow  -> PostgreSQL
-Job execution     -> Worker + queue
-Telugu STT        -> Sarvam Saaras adapter, managed fallback
-Teaser drafts     -> GPT-4.1-mini or Gemini 2.5 Flash adapter
-Translation       -> Same LLM initially; benchmark IndicTrans2 later
-Review             -> Human approval required
-Search             -> PostgreSQL first
-Embeddings         -> pgvector later
+```
+users, identities (email/apple/google), sessions, refresh_tokens, staff_mfa
+households, profiles (adult|child, age_band, languages[]), parental_pins
+narrators (user_id, languages[], trust_level, kyc_status), narrator_agreements
+works (source text: title, origin, public_domain|original|licensed)
+stories / series / chapters (language, age_band, duration, status, version)
+audio_assets (checksum, original_key, rendition keys, qc_metrics, version)
+story_localizations (story_id, language, title, teaser_short/long, moral, review_status)
+transcripts (asset_version, language, segments jsonb, provider, confidence, status)
+ai_outputs (task, input_version, provider, model, prompt_version, output jsonb, status)
+rights_records, rights_evidence, takedowns
+reviews_editorial (entity, decision, reasons, reviewer, at)
+ratings (profile_id, story_id, story_score, narration_score, listen_ratio, weight)
+reviews_text, reports, moderation_actions
+listening_sessions, listening_progress, listening_daily, favorites, downloads
+collections, shelves (moment: bedtime|drive|run|work|learn, language)
+plans, prices (region, currency), subscriptions, entitlements, purchases
+payment_events (raw webhooks), ledger_entries (double-entry), invoices
+earnings_statements, payouts, payout_accounts
+jobs (type, payload, status, lease_until, attempts, idempotency_key), workers
+audit_log, notifications, devices (push tokens)
 ```
 
-Model names and provider endpoints must remain configuration, not hard-coded application behavior, because availability, pricing, and quality change.
+## Deployment on Lightsail
+
+| Environment | Size (starting point) | Notes |
+|---|---|---|
+| Staging | 4 GB / 2 vCPU | Phases 0–5; sandbox payment keys |
+| Production (no on-VM LLM) | 8 GB / 2 vCPU | GPU worker handles AI |
+| Production (with CPU LLM fallback) | 16 GB / 4 vCPU | Slow backlog processing when the GPU worker is offline |
+
+- Docker Compose services: `caddy`, `api` (Uvicorn workers), `worker`,
+  `postgres`, optional `lmstudio`.
+- Lightsail bucket (private) + Lightsail CDN distribution for media delivery.
+- Backups: Lightsail automatic snapshots (daily), nightly `pg_dump` to the
+  bucket, WAL archiving for point-in-time recovery before launch (Phase 6).
+  Target: lose at most 15 minutes of data; restore within 2 hours.
+- CI/CD: GitHub Actions builds images and deploys over SSH with a health-check
+  gate. Mobile builds and store submissions go through EAS; small JavaScript
+  fixes ship as OTA updates.
+- The single VM is a single point of failure. That is acceptable for launch
+  with a practiced restore drill. The move out is to managed PostgreSQL
+  (Lightsail managed database) first, then a second app VM behind a Lightsail
+  load balancer.
+
+## Observability and privacy
+
+- Structured JSON logs with request IDs; `/api/health`; uptime checks; error
+  tracking with PII scrubbing.
+- First-party product analytics stored in PostgreSQL (events table), not
+  third-party SDKs; no behavioural tracking or advertising identifiers for
+  child profiles.
+- Data retention rules per table; account deletion cascades within 30 days;
+  export on request.

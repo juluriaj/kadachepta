@@ -1,0 +1,23 @@
+# Local: plain HTTP on :8080 so phones on the home network can connect.
+# Lightsail (Phase 6): replace with the site blocks in infra/lightsail/Caddyfile.production for automatic TLS.
+{
+	auto_https off
+	admin off
+}
+
+:8080 {
+	encode zstd gzip
+	request_body {
+		max_size 520MB
+	}
+	header {
+		-Server
+		Permissions-Policy "camera=(), geolocation=(), microphone=(self)"
+	}
+	reverse_proxy api:8000 {
+		transport http {
+			read_timeout 10m
+			write_timeout 10m
+		}
+	}
+}
