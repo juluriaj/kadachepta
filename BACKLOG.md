@@ -223,6 +223,7 @@ minutes of effort; an editor makes a publish decision in under 5 minutes.
 | P2-11 | Series and audiobooks: multi-chapter uploads, ordering, series metadata | |
 | P2-12 | Studio web app (editor/admin): queues with SLA timers, keyboard shortcuts, bulk actions, audit trail | |
 | P2-13 | Content safety policy and the age-rating rubric encoded as review checklists and AI safety prompts | Replaces BKL-003 |
+| P2-14 | Admin "AI & processing" settings page: model per task and language (from the models LM Studio reports), artwork provider, prompt version, "test on one story" button, worker status. Settings stored in the database and sent to workers with each job, so changes apply without restarts; every change is audited. API keys stay in `.env` and are never shown in the browser | Requested 2026-09-23; replaces editing `.env` for model choice |
 
 ---
 
