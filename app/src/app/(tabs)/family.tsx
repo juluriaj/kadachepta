@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Platform, Pressable, ScrollView, Share, View } from 'react-native';
 
@@ -22,7 +23,7 @@ export default function Family() {
   const { t, language, setLanguage } = useI18n();
   const colors = useColors();
   const queryClient = useQueryClient();
-  const { household, signOut, refresh } = useSession();
+  const { household, signOut, refresh, isNarrator } = useSession();
   const hasPin = !!household?.household.hasParentPin;
   const [unlocked, setUnlocked] = useState(!hasPin || hasRecentParentPin());
   const [pinMode, setPinMode] = useState<'verify' | 'create' | null>(hasPin && !hasRecentParentPin() ? 'verify' : null);
@@ -154,6 +155,15 @@ export default function Family() {
             );
           })}
         </View>
+
+        {!isNarrator ? (
+          <Card>
+            <Text variant="heading">{t('narrate.become')}</Text>
+            <Text variant="small" muted>{t('narrate.becomeHint')}</Text>
+            <Button kind="secondary" title={t('narrate.become')} onPress={() => router.push('/narrate/apply')}
+              icon={<Ionicons name="mic-outline" size={18} color={colors.text} />} />
+          </Card>
+        ) : null}
 
         <Text variant="heading">{t('family.account')}</Text>
         <Text variant="small" muted>{household.account.email ?? household.account.username}</Text>

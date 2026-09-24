@@ -32,4 +32,10 @@ try {
 }
 
 Set-Location (Join-Path $root "worker")
-python -m kc_worker
+# The GPU virtualenv (scripts\setup_gpu_worker.ps1) has PyTorch for local artwork; plain Python still runs teasers.
+$python = Join-Path $root "worker\.venv-gpu\Scripts\python.exe"
+if (-not (Test-Path $python)) {
+    Write-Warning "GPU virtualenv not found: local artwork won't work. Run scripts\setup_gpu_worker.ps1."
+    $python = "python"
+}
+& $python -m kc_worker

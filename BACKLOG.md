@@ -202,6 +202,15 @@ with no help.
 
 ## Phase 2 — Narrator studio and automated pipeline
 
+**Status (2026-09-24): built, awaiting your review** — checklist in
+[docs/phase-2-review.md](docs/phase-2-review.md). All items P2-01 to P2-14 are in. Deviations: push
+notifications wait for the store builds (narrators get in-app updates and email now); background upload on
+mobile is "resume where it stopped while the app is open", not an OS background transfer; the editor studio
+lives in the Expo app at `/studio` (web-first) instead of a separate `studio/` app, so there's one codebase.
+Added beyond plan: a safety word list per language (small local models under-report), GPU sharing between
+LM Studio and the image model on the 8 GB card, a daily transcription-minutes cap, and an in-progress limit
+for new narrators (protects the Sarvam bill from abuse).
+
 **Goal:** a narrator records a story on their phone and submits it in under 5
 minutes of effort; an editor makes a publish decision in under 5 minutes.
 

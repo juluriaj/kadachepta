@@ -4,7 +4,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from kc_worker.handlers.media import MediaHandler  # noqa: E402
-from kc_worker.handlers.teaser import build_messages, fit_transcript, validate  # noqa: E402
+from kc_worker.handlers.artwork import build_prompt  # noqa: E402
+from kc_worker.handlers.teaser import SCHEMA_V3, SCHEMA_V4, build_messages, fit_transcript, validate  # noqa: E402
 from kc_worker.llm import THINK_BLOCK  # noqa: E402
 
 
@@ -55,3 +56,24 @@ def test_loud_master_is_not_called_clipping_but_pinned_samples_are():
 def test_background_sound_and_long_pauses_warn():
     codes = {c["code"] for c in qc(noiseFloorDb=-40, silenceSeconds=120)["checks"]}
     assert codes == {"background-sound", "long-pauses"}
+
+
+def test_mostly_silent_recording_fails():
+    assert [c["code"] for c in qc(silenceSeconds=250)["checks"]] == ["mostly-silence"]
+    assert qc(silenceSeconds=250)["verdict"] == "fail"
+
+
+def test_drafts_v4_asks_for_safety_and_metadata_but_v3_does_not():
+    v4 = build_messages("కాకి", "ఒక కాకి.", ["te-IN", "en-IN"], "drafts-v4", series="పంచతంత్రం")[1]["content"]
+    assert "safety" in v4 and "listeningContexts" in v4 and "Part of the series: పంచతంత్రం" in v4
+    assert "safety" not in build_messages("కాకి", "ఒక కాకి.", ["te-IN"], "teaser-v3")[1]["content"]
+    assert set(SCHEMA_V4["required"]) - set(SCHEMA_V3["required"]) == {
+        "englishTitle", "genres", "keywords", "listeningContexts", "safety"}
+
+
+def test_artwork_prompt_leads_with_the_story_and_stays_short():
+    prompt = build_prompt({"assetId": "a" * 16, "title": "కాకి", "englishTitle": "The Clever Crow",
+                           "englishTeaser": "A thirsty crow finds a pot with little water. " * 10,
+                           "themes": ["cleverness", "patience"], "mood": "funny"})
+    assert prompt.startswith("Children's storybook illustration for \"The Clever Crow\". A thirsty crow")
+    assert len(prompt) < 600 and "no text" in prompt

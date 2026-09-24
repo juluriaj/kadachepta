@@ -142,3 +142,14 @@ def test_interactive_jobs_run_before_bulk_backfill(client, db):
     db.commit()
     token = make_worker(db)
     assert client.post("/api/worker/lease", json={}, headers=auth(token)).json()["id"] == urgent.id
+
+
+def test_workers_get_the_same_kind_of_job_as_last_time(client, db):
+    make_asset(db, "a" * 16)
+    make_asset(db, "b" * 16)
+    jobs.enqueue(db, "teaser", asset_id="a" * 16)
+    artwork = jobs.enqueue(db, "artwork", asset_id="b" * 16)
+    db.commit()
+    token = make_worker(db)
+    lease = client.post("/api/worker/lease", json={"preferType": "artwork"}, headers=auth(token)).json()
+    assert lease["id"] == artwork.id  # same priority: no model swap on a shared GPU

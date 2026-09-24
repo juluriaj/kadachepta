@@ -45,6 +45,8 @@ class Storage(Protocol):
     def put_bytes(self, key: str, data: bytes) -> int: ...
     def delete(self, key: str) -> None: ...
     def size(self, key: str) -> int: ...
+    def write_at(self, key: str, offset: int, stream: BinaryIO) -> int: ...
+    def move(self, source: str, target: str) -> None: ...
 
 
 class LocalStorage:
@@ -88,6 +90,32 @@ class LocalStorage:
         if safe_key(key).startswith(LEGACY_PREFIX):
             raise StorageError("The legacy audio folder is read-only.")
         self.path(key).unlink(missing_ok=True)
+
+    def write_at(self, key: str, offset: int, stream: BinaryIO) -> int:
+        """Write a resumable-upload chunk at ``offset`` (truncating anything after it); returns the new size.
+
+        The Lightsail bucket backend (Phase 6) keeps chunks as multipart-upload parts instead.
+        """
+        if not safe_key(key).startswith("incoming/"):
+            raise StorageError("Chunked writes are only allowed for incoming uploads.")
+        target = self.path(key)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("r+b" if target.exists() else "wb") as handle:
+            handle.truncate(offset)
+            handle.seek(offset)
+            shutil.copyfileobj(stream, handle, length=1024 * 1024)
+            return handle.tell()
+
+    def move(self, source: str, target: str) -> None:
+        source_path, target_path = self.path(source), self.path(target)
+        if safe_key(target).startswith(LEGACY_PREFIX):
+            raise StorageError("The legacy audio folder is read-only.")
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        source_path.replace(target_path)
+        try:
+            source_path.parent.rmdir()
+        except OSError:
+            pass
 
 
 _storage: Storage | None = None

@@ -49,7 +49,8 @@ def active_job(db: Session, asset_id: str, job_type: str) -> Job | None:
     ).order_by(Job.id.desc())).first()
 
 
-def lease(db: Session, worker_name: str, capabilities: list[str], lease_seconds: int) -> Job | None:
+def lease(db: Session, worker_name: str, capabilities: list[str], lease_seconds: int,
+          prefer: str | None = None) -> Job | None:
     types = [job_type for job_type, capability in JOB_CAPABILITIES.items() if capability in capabilities]
     if not types:
         return None
@@ -63,7 +64,8 @@ def lease(db: Session, worker_name: str, capabilities: list[str], lease_seconds:
                 and_(Job.status == "leased", Job.lease_until < now),  # expired lease: worker died
             ),
         )
-        .order_by(Job.priority, Job.run_after, Job.id)
+        # Within a priority, the same job type as the worker's last one first (fewer GPU model swaps).
+        .order_by(Job.priority, (Job.job_type != prefer) if prefer in types else Job.priority, Job.run_after, Job.id)
         .limit(1)
         .with_for_update(skip_locked=True)
     ).first()

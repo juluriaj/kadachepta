@@ -104,7 +104,7 @@ def artwork_url(asset: AudioAsset) -> str | None:
 
 def narrator_label(asset: AudioAsset) -> str:
     if asset.narrator_user:
-        return asset.narrator_user.handle
+        return asset.narrator_user.display_name or asset.narrator_user.handle
     return asset.narrator_name or "KathaChepta"
 
 

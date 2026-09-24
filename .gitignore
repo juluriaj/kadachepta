@@ -12,3 +12,5 @@ catalog/logs/
 data/
 .pytest_cache/
 .ruff_cache/
+.venv*/
+models/

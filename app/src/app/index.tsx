@@ -1,43 +1,47 @@
-import { Redirect } from 'expo-router';
-import { useEffect } from 'react';
-import { Platform, View } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect } from 'react';
 
-import { Button, Loading, Screen, Text } from '@/components/ui';
-import { useSession } from '@/lib/session';
-import { space } from '@/lib/theme';
+import { Loading } from '@/components/ui';
+import { getProfileId } from '@/lib/api';
+import { useSession, type Household, type Session } from '@/lib/session';
 
-// Decides where a person lands: sign-in, onboarding, "who's listening?", or home.
+type Target = '/sign-in' | '/studio' | '/onboarding' | '/profiles' | '/(tabs)' | null;
+
+function decide(session: Session | undefined, household: Household | undefined, profileId: number | null): Target {
+  if (!session) return null;
+  if (!session.authenticated || session.mfaRequired || session.mfaEnrollmentRequired) return '/sign-in';
+  if (['editor', 'admin'].includes(session.role ?? '')) return '/studio';
+  if (!household) return null;
+  if (!household.household.onboarded) return '/onboarding';
+  const profiles = household.profiles;
+  if (profiles.some((p) => p.id === profileId)) return '/(tabs)';
+  return profiles.length === 1 ? null : '/profiles'; // one profile: selected automatically below
+}
+
+// Decides where a person lands: sign-in, the editor studio, onboarding, "who's listening?", or home.
+// This screen stays underneath others in the stack, so each time it's shown it reads the *current* cache
+// (not the values from its last render), which otherwise sent people back to onboarding after finishing it.
 export default function Gate() {
-  const { ready, session, household, profile, isStaff, selectProfile, signOut } = useSession();
-  const profiles = household?.profiles ?? [];
-  const onlyProfile = profiles.length === 1 ? profiles[0] : null;
+  const queryClient = useQueryClient();
+  const { ready, household, profile, selectProfile } = useSession();
+  const onlyProfile = household?.profiles.length === 1 ? household.profiles[0] : null;
+
+  const go = useCallback(() => {
+    const target = decide(queryClient.getQueryData<Session>(['session']),
+      queryClient.getQueryData<Household>(['household']), getProfileId());
+    if (target) router.replace(target);
+  }, [queryClient]);
 
   useEffect(() => {
     if (onlyProfile && !profile) void selectProfile(onlyProfile.id);
   }, [onlyProfile, profile, selectProfile]);
 
   useEffect(() => {
-    if (ready && isStaff && Platform.OS === 'web') {
-      window.location.replace(session.role === 'narrator' ? '/narrator/' : '/editor/');
-    }
-  }, [ready, isStaff, session.role]);
+    if (ready) go();
+  }, [ready, household, profile, go]);
 
-  if (!ready) return <Loading />;
-  if (!session.authenticated || session.mfaRequired || session.mfaEnrollmentRequired) return <Redirect href="/sign-in" />;
-  if (isStaff) {
-    if (Platform.OS === 'web') return <Loading />;
-    return (
-      <Screen>
-        <View style={{ flex: 1, justifyContent: 'center', gap: space.lg }}>
-          <Text variant="title">The studio is on the web</Text>
-          <Text muted>Narrator and editor tools open in a browser at your KathaChepta address. This app is for listening.</Text>
-          <Button title="Sign out" kind="secondary" onPress={signOut} />
-        </View>
-      </Screen>
-    );
-  }
-  if (!household) return <Loading />;
-  if (!household.household.onboarded) return <Redirect href="/onboarding" />;
-  if (!profile) return onlyProfile ? <Loading /> : <Redirect href="/profiles" />;
-  return <Redirect href="/(tabs)" />;
+  useFocusEffect(go);
+
+  return <Loading />;
 }

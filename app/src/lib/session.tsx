@@ -41,6 +41,7 @@ type SessionContext = {
   household: Household | undefined;
   profile: Profile | null;
   isStaff: boolean;
+  isNarrator: boolean;
   selectProfile: (id: number | null) => Promise<void>;
   signIn: (body: Record<string, unknown>) => Promise<Session>;
   signOut: () => Promise<void>;
@@ -48,7 +49,8 @@ type SessionContext = {
 };
 
 const Context = createContext<SessionContext | null>(null);
-const STAFF_ROLES = new Set(['editor', 'admin', 'narrator']);
+// Editors and admins use the studio; narrators are listeners too (a household plus the Studio tab).
+const STAFF_ROLES = new Set(['editor', 'admin']);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -97,7 +99,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<SessionContext>(() => ({
     ready: loaded && !sessionQuery.isLoading && (!session.authenticated || isStaff || !householdQuery.isLoading),
-    session, household: householdQuery.data, profile, isStaff,
+    session, household: householdQuery.data, profile, isStaff, isNarrator: session.role === 'narrator',
     selectProfile: async (id) => {
       await setProfileId(id);
       setSelected(id);

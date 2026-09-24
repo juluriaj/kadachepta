@@ -126,8 +126,11 @@ def story(asset_id: str, profile: Profile = Depends(current_profile), db: Sessio
     asset, teaser = match
     progress, favorites = _progress_map(db, profile), _favorite_set(db, profile)
     card = story_card(asset, teaser, profile, progress.get(asset.id), asset.id in favorites)
-    series = sorted(((a, t) for a, t in stories if a.album and a.album == asset.album and a.id != asset.id),
-                    key=lambda pair: (_episode_key(pair[0]), pair[0].title))
+    if asset.series_id:  # a real series (P2-11) orders chapters explicitly
+        same = [(a, t) for a, t in stories if a.series_id == asset.series_id and a.id != asset.id]
+    else:
+        same = [(a, t) for a, t in stories if a.album and a.album == asset.album and a.id != asset.id]
+    series = sorted(same, key=lambda pair: (_episode_key(pair[0]), pair[0].title))
     later = [pair for pair in series if _episode_key(pair[0]) > _episode_key(asset)]
     same_narrator = [(a, t) for a, t in stories if a.id != asset.id and a.narrator_user_id
                      and a.narrator_user_id == asset.narrator_user_id][:10]
@@ -138,6 +141,8 @@ def story(asset_id: str, profile: Profile = Depends(current_profile), db: Sessio
 
 
 def _episode_key(asset: AudioAsset) -> tuple[int, str]:
+    if asset.series_position:
+        return (asset.series_position, "")
     for value in (asset.episode_number, asset.track_number):
         digits = "".join(ch for ch in (value or "") if ch.isdigit())
         if digits:

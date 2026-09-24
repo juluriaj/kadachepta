@@ -106,6 +106,17 @@ async function refreshAccess(): Promise<boolean> {
   return refreshing;
 }
 
+// For raw requests that can't go through api() (binary upload chunks).
+export async function authHeaders(): Promise<Record<string, string>> {
+  if (IS_WEB) return {};
+  if (!accessToken) await refreshAccess();
+  return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+}
+
+export async function refreshAfter401() {
+  return !IS_WEB && refreshAccess();
+}
+
 type Options = { method?: string; body?: unknown; profile?: boolean; retry?: boolean };
 
 export async function api<T = any>(path: string, { method = 'GET', body, profile = true, retry = true }: Options = {}): Promise<T> {

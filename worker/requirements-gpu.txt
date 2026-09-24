@@ -1,0 +1,9 @@
+# GPU worker extras (install torch first from the CUDA 12.8 index; see scripts/setup_gpu_worker.ps1)
+sarvamai==0.1.33
+diffusers>=0.35
+transformers>=4.56
+accelerate>=1.10
+peft>=0.17
+safetensors
+pillow
+huggingface_hub

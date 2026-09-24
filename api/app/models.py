@@ -132,8 +132,34 @@ class AudioAsset(Base):
     published_at: Mapped[datetime | None] = mapped_column(Timestamp)
     created_at: Mapped[datetime] = now_column()
     updated_at: Mapped[datetime] = now_column(onupdate=func.now())
+    # Automated pipeline position (see services/pipeline.py); drives the narrator's plain-language status.
+    pipeline_stage: Mapped[str] = mapped_column(String(24), nullable=False, server_default="none", index=True)
+    pipeline_error: Mapped[str | None] = mapped_column(Text)
+    ready_for_review_at: Mapped[datetime | None] = mapped_column(Timestamp)  # starts the editor SLA clock
+    # {"reasons": ["audio-noise", ...], "note": "...", "by": "...", "at": "..."} when an editor asks for changes
+    changes_requested: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    captions_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    source_text: Mapped[str | None] = mapped_column(Text)  # what the narrator read from (teleprompter), if given
+    series_id: Mapped[int | None] = mapped_column(ForeignKey("series.id", ondelete="SET NULL"), index=True)
+    series_position: Mapped[int | None] = mapped_column(Integer)
 
     narrator_user: Mapped[User | None] = relationship(foreign_keys=[narrator_user_id])
+    series: Mapped[Series | None] = relationship()
+
+
+class Series(Base):
+    """A multi-chapter work (audiobook or story series) whose chapters are audio assets in order."""
+
+    __tablename__ = "series"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    language: Mapped[str] = mapped_column(String(16), nullable=False, server_default="te-IN")
+    narrator_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    created_by: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = now_column()
+    updated_at: Mapped[datetime] = now_column(onupdate=func.now())
 
 
 class NarratorProfile(Base):
@@ -144,6 +170,12 @@ class NarratorProfile(Base):
     biography: Mapped[str | None] = mapped_column(Text)
     languages: Mapped[list[str]] = mapped_column(ARRAY(String(16)), nullable=False, server_default="{te-IN}")
     updated_at: Mapped[datetime] = now_column(onupdate=func.now())
+    # new: every submission gets a full review. trusted: expedited review and bulk publishing.
+    trust_level: Mapped[str] = mapped_column(String(16), nullable=False, server_default="new")
+    agreement_version: Mapped[str | None] = mapped_column(String(16))
+    agreement_accepted_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    onboarded_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    sample_key: Mapped[str | None] = mapped_column(Text)  # short sample recording editors hear first
 
 
 class NarratorCredit(Base):
@@ -178,6 +210,9 @@ class AssetRights(Base):
     reviewer: Mapped[str | None] = mapped_column(Text)
     review_notes: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = now_column(onupdate=func.now())
+    # The narrator's own claim at submission: {"sourceType", "sourceReference", "notes", "attestedAt", "by"}
+    attestation: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    evidence_key: Mapped[str | None] = mapped_column(Text)
 
 
 class Transcript(Base):
@@ -199,6 +234,10 @@ class Transcript(Base):
     review_notes: Mapped[str | None] = mapped_column(Text)
     reviewed_at: Mapped[datetime | None] = mapped_column(Timestamp)
     created_at: Mapped[datetime] = now_column()
+    # 0..1 estimate from provider signals and speech-rate sanity checks; low values require human review.
+    confidence: Mapped[float | None] = mapped_column(Float)
+    quality: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    intro_removed: Mapped[str | None] = mapped_column(Text)  # channel intro stripped from the start of `text`
 
 
 class TeaserDraft(Base):
@@ -216,6 +255,10 @@ class TeaserDraft(Base):
     mood: Mapped[Any] = mapped_column(JSONB, nullable=False, server_default="[]")
     age_suggestion: Mapped[str | None] = mapped_column(Text)
     warnings: Mapped[Any] = mapped_column(JSONB, nullable=False, server_default="[]")
+    # AI safety pre-check against docs/content-policy.md: {"rating", "minAge", "flags": [{"category", "severity", "evidence"}]}
+    safety: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # Metadata suggestions editors confirm: {"genres", "keywords", "listeningContexts", "englishTitle"}
+    suggestions: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
     provider: Mapped[str | None] = mapped_column(Text)
     model: Mapped[str | None] = mapped_column(Text)
     prompt_version: Mapped[str | None] = mapped_column(Text)
@@ -350,6 +393,51 @@ class EditorialEvent(Base):
     action: Mapped[str] = mapped_column(String(64), nullable=False)
     actor: Mapped[str] = mapped_column(Text, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = now_column()
+
+
+class AppSetting(Base):
+    """Admin-editable runtime settings (AI models, pipeline switches). Secrets never live here."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[Any] = mapped_column(JSONB, nullable=False)
+    updated_by: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = now_column(onupdate=func.now())
+
+
+class Upload(Base):
+    """A resumable upload: the client sends chunks at increasing offsets until received == total."""
+
+    __tablename__ = "uploads"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False, server_default="audio")  # audio | evidence | sample
+    total_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    received_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="open")  # open | complete | used
+    created_at: Mapped[datetime] = now_column()
+    updated_at: Mapped[datetime] = now_column(onupdate=func.now())
+    expires_at: Mapped[datetime] = mapped_column(Timestamp, nullable=False)
+
+    @property
+    def key(self) -> str:
+        return f"incoming/{self.id}/{self.filename}"
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str | None] = mapped_column(Text)
+    audio_asset_id: Mapped[str | None] = mapped_column(ForeignKey("audio_assets.id", ondelete="CASCADE"))
+    read_at: Mapped[datetime | None] = mapped_column(Timestamp)
     created_at: Mapped[datetime] = now_column()
 
 

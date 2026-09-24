@@ -30,6 +30,15 @@ def _run(context: JobContext, args: list[str], *, capture: bool = True) -> subpr
     return result
 
 
+def _sha256(path: Path) -> str:
+    import hashlib
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _float(value: Any) -> float | None:
     try:
         number = float(value)
@@ -54,8 +63,14 @@ class MediaHandler:
 
     def run(self, context: JobContext) -> dict[str, Any]:
         inputs = context.inputs
-        suffix = Path(inputs.get("sourceFilename") or "source.mp3").suffix or ".mp3"
-        source = context.client.download(inputs["sourceUrl"], context.scratch / f"source{suffix}")
+        joined: dict[str, Any] = {}
+        if inputs.get("parts"):
+            source = self._join(context, inputs["parts"])
+            key = context.client.upload(context.job["id"], source.name, source)
+            joined = {"sourceKey": key, "sourceChecksum": _sha256(source)}
+        else:
+            suffix = Path(inputs.get("sourceFilename") or "source.mp3").suffix or ".mp3"
+            source = context.client.download(inputs["sourceUrl"], context.scratch / f"source{suffix}")
         probe = self._probe(context, source)
         analysis = self._analyse(context, source)
         standard, datasaver = context.scratch / "standard.m4a", context.scratch / "datasaver.m4a"
@@ -70,7 +85,22 @@ class MediaHandler:
             renditions[name] = {"key": key, "bytes": path.stat().st_size, "bitrate": bitrate, "sampleRate": rate,
                                 "mime": "audio/mp4", "codec": "aac-lc", "channels": 1}
         return {"durationSeconds": probe["duration"], "bitrate": probe["bitrate"], "sampleRate": probe["sampleRate"],
-                "channels": probe["channels"], "renditions": renditions, "waveform": waveform, "qc": qc}
+                "channels": probe["channels"], "renditions": renditions, "waveform": waveform, "qc": qc, **joined}
+
+    def _join(self, context: JobContext, parts: list[dict[str, Any]]) -> Path:
+        """Join takes recorded in the app (possibly different containers) into one lossless-enough original."""
+        files = []
+        for index, part in enumerate(parts):
+            suffix = Path(part.get("filename") or "take.m4a").suffix or ".m4a"
+            files.append(context.client.download(part["url"], context.scratch / f"part{index:02d}{suffix}"))
+        target = context.scratch / "original.m4a"
+        inputs = [arg for path in files for arg in ("-i", str(path))]
+        graph = "".join(f"[{i}:a]aformat=sample_rates=48000:channel_layouts=mono[a{i}];" for i in range(len(files)))
+        graph += "".join(f"[a{i}]" for i in range(len(files))) + f"concat=n={len(files)}:v=0:a=1[out]"
+        _run(context, [self.ffmpeg, "-hide_banner", "-nostats", "-y", *inputs, "-filter_complex", graph,
+                       "-map", "[out]", "-c:a", "aac", "-b:a", "192k", str(target)])
+        context.log(f"Joined {len(files)} takes into {target.name}")
+        return target
 
     def _probe(self, context: JobContext, source: Path) -> dict[str, Any]:
         result = _run(context, [self.ffprobe, "-v", "error", "-print_format", "json", "-show_format",
@@ -178,9 +208,15 @@ class MediaHandler:
             check("background-sound", "warn",
                   f"Background sound stays audible between words (about {noise:.0f} dB after levelling).",
                   "If it's intended music, that's fine. Otherwise record in a quieter room, away from fans and traffic.")
-        if silence_ratio > 0.25:
+        if silence_ratio > 0.6:
+            check("mostly-silence", "fail", f"About {silence_ratio:.0%} of the recording is silence.",
+                  "Check the microphone was working, then record again.")
+        elif silence_ratio > 0.25:
             check("long-pauses", "warn", f"About {silence_ratio:.0%} of the recording is silence.",
                   "Trim long pauses, or check the recording didn't keep running after you finished.")
+        if analysis.get("leadingSilence", 0) > 5:
+            check("slow-start", "warn", f"The story starts after {analysis['leadingSilence']:.0f} seconds of silence.",
+                  "Start speaking within a couple of seconds of pressing record.")
         if duration < 30:
             check("too-short", "fail", f"The recording is only {duration:.0f} seconds long.",
                   "Upload the complete story.")
@@ -191,5 +227,6 @@ class MediaHandler:
         return {"verdict": verdict, "checks": checks, "integratedLufs": integrated, "truePeakDb": true_peak,
                 "loudnessRange": _float(loudness.get("input_lra")), "noiseFloorDb": noise,
                 "peakDb": analysis.get("peakDb"), "silenceSeconds": analysis["silenceSeconds"],
-                "silenceRatio": round(silence_ratio, 3), "sourceCodec": probe.get("codec"),
+                "silenceRatio": round(silence_ratio, 3), "speechRatio": round(1 - silence_ratio, 3),
+                "sourceCodec": probe.get("codec"),
                 "targetLufs": TARGET_I}
