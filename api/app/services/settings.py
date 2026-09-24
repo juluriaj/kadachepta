@@ -51,6 +51,10 @@ SPECS: dict[str, Spec] = {
                              "The local model is tuned for 8 steps; fewer is faster but rougher.", minimum=2, maximum=40),
     "ai.stt.model": Spec(os.environ.get("KC_STT_MODEL") or "saaras:v4", "text", "Speech-to-text model",
                          "Sarvam model used for transcription (billed per audio minute)."),
+    "audio.noiseReduction": Spec("auto", "choice", "Noise reduction",
+                                 "First pass on listening copies (the original is kept). auto: only when background "
+                                 "noise is audible; it can dull intended background music. always / off.",
+                                 choices=("auto", "always", "off")),
     "pipeline.autoTranscribe": Spec(True, "bool", "Transcribe narrator submissions automatically",
                                     "Paid (Sarvam). Seed-catalog stories are never transcribed without an admin action."),
     "pipeline.autoArtwork": Spec(True, "bool", "Create artwork automatically",
@@ -77,7 +81,7 @@ WORKER_KEYS = {
     "teaser": ("ai.llm.model", "ai.llm.modelByLanguage", "ai.drafts.promptVersion"),
     "artwork": ("ai.artwork.provider", "ai.artwork.steps"),
     "transcription": ("ai.stt.model",),
-    "media.process": (),
+    "media.process": ("audio.noiseReduction",),
 }
 
 

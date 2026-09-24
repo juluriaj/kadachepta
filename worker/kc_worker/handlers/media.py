@@ -19,6 +19,10 @@ from typing import Any
 from . import JobContext, PermanentError
 
 TARGET_I, TARGET_TP, TARGET_LRA = -16.0, -1.5, 11.0
+# Gentle: 12 dB of reduction with noise tracking, plus a 70 Hz high-pass for rumble and handling noise.
+DENOISE_FILTER = "highpass=f=70,afftdn=nr=12:nf=-50:tn=1"
+NOISE_TRIGGER_DB = -50.0  # the QC "background sound" warning starts at -48 dB
+MIN_IMPROVEMENT_DB = 3.0  # "auto" keeps the denoised copy only when it is clearly quieter
 
 
 def _run(context: JobContext, args: list[str], *, capture: bool = True) -> subprocess.CompletedProcess:
@@ -73,11 +77,25 @@ class MediaHandler:
             source = context.client.download(inputs["sourceUrl"], context.scratch / f"source{suffix}")
         probe = self._probe(context, source)
         analysis = self._analyse(context, source)
+        mode = (inputs.get("settings") or {}).get("audio.noiseReduction") or "auto"
+        render_from, reduction = self._maybe_denoise(context, source, analysis, mode)
+        if reduction.get("applied"):
+            analysis = {**self._analyse(context, render_from), "leadingSilence": analysis["leadingSilence"]}
         standard, datasaver = context.scratch / "standard.m4a", context.scratch / "datasaver.m4a"
-        self._render(context, source, analysis, standard, datasaver)
+        self._render(context, render_from, analysis, standard, datasaver)
         waveform, noise_floor = self._pcm_analysis(context, standard)
-        analysis["noiseFloorDb"] = noise_floor
+        before = reduction.get("beforeDb")
+        if reduction.get("applied") and noise_floor is not None and before is not None \
+                and noise_floor > before - MIN_IMPROVEMENT_DB and mode == "auto":
+            # Background music, not noise: the denoiser can't remove it and only dulls it. Keep the original.
+            context.log(f"Noise reduction gave {before} -> {noise_floor} dB; keeping the original")
+            reduction = {**reduction, "applied": False, "rejected": True, "rejectedAfterDb": noise_floor}
+            analysis = self._analyse(context, source)
+            self._render(context, source, analysis, standard, datasaver)
+            waveform, noise_floor = self._pcm_analysis(context, standard)
+        analysis["noiseFloorDb"], analysis["noiseReduced"] = noise_floor, bool(reduction.get("applied"))
         qc = self._qc(probe, analysis)
+        qc["noiseReduction"] = {**reduction, "afterDb": noise_floor if reduction.get("applied") else None}
         job_id = context.job["id"]
         renditions = {}
         for name, path, bitrate, rate in (("standard", standard, 64000, 44100), ("datasaver", datasaver, 32000, 22050)):
@@ -86,6 +104,27 @@ class MediaHandler:
                                 "mime": "audio/mp4", "codec": "aac-lc", "channels": 1}
         return {"durationSeconds": probe["duration"], "bitrate": probe["bitrate"], "sampleRate": probe["sampleRate"],
                 "channels": probe["channels"], "renditions": renditions, "waveform": waveform, "qc": qc, **joined}
+
+    def _maybe_denoise(self, context: JobContext, source: Path, analysis: dict[str, Any],
+                       mode: str) -> tuple[Path, dict[str, Any]]:
+        """First-pass noise reduction for listening copies; the narrator's original is never changed.
+
+        ffmpeg's FFT denoiser (afftdn) tracks steady noise (fans, hiss, traffic hum) and a high-pass removes
+        rumble below the voice. "auto" only runs it when the background, estimated at the -16 LUFS listening
+        level, is louder than NOISE_TRIGGER_DB, because denoising also dulls intended background music.
+        """
+        if mode == "off":
+            return source, {"mode": mode, "applied": False}
+        _, raw_noise = self._pcm_analysis(context, source)
+        input_i = _float(analysis["loudness"].get("input_i"))
+        estimate = round(raw_noise + (TARGET_I - input_i), 1) if raw_noise is not None and input_i is not None else None
+        if mode == "auto" and (estimate is None or estimate <= NOISE_TRIGGER_DB):
+            return source, {"mode": mode, "applied": False, "beforeDb": estimate}
+        target = context.scratch / "denoised.wav"
+        _run(context, [self.ffmpeg, "-hide_banner", "-nostats", "-y", "-i", str(source), "-af", DENOISE_FILTER,
+                       "-ac", "1", "-ar", "48000", str(target)])
+        context.log(f"Noise reduction ({mode}): estimated background {estimate} dB")
+        return target, {"mode": mode, "applied": True, "beforeDb": estimate, "filter": DENOISE_FILTER}
 
     def _join(self, context: JobContext, parts: list[dict[str, Any]]) -> Path:
         """Join takes recorded in the app (possibly different containers) into one lossless-enough original."""
@@ -206,7 +245,8 @@ class MediaHandler:
                   "Lower the input level slightly or move back from the microphone during loud parts.")
         if noise is not None and noise > -48:
             check("background-sound", "warn",
-                  f"Background sound stays audible between words (about {noise:.0f} dB after levelling).",
+                  f"Background sound stays audible between words (about {noise:.0f} dB after levelling"
+                  + (", even after automatic noise reduction)." if analysis.get("noiseReduced") else ")."),
                   "If it's intended music, that's fine. Otherwise record in a quieter room, away from fans and traffic.")
         if silence_ratio > 0.6:
             check("mostly-silence", "fail", f"About {silence_ratio:.0%} of the recording is silence.",

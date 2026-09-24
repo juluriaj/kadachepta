@@ -60,7 +60,7 @@ function SettingsForm({ page, refetch }: { page: SettingsPage; refetch: () => vo
     }
   };
 
-  const groups = [['AI models', 'ai.'], ['Pipeline', 'pipeline.'], ['Review', 'review.'], ['Narrators', 'narrators.']] as const;
+  const groups = [['AI models', 'ai.'], ['Audio', 'audio.'], ['Pipeline', 'pipeline.'], ['Review', 'review.'], ['Narrators', 'narrators.']] as const;
   return (
     <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.lg, maxWidth: 1100, width: '100%', alignSelf: 'center' }}>
       <Text variant="title">AI & processing</Text>

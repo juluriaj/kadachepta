@@ -77,3 +77,18 @@ def test_artwork_prompt_leads_with_the_story_and_stays_short():
                            "themes": ["cleverness", "patience"], "mood": "funny"})
     assert prompt.startswith("Children's storybook illustration for \"The Clever Crow\". A thirsty crow")
     assert len(prompt) < 600 and "no text" in prompt
+
+
+def test_noise_reduction_only_when_background_is_audible(tmp_path, monkeypatch):
+    handler = MediaHandler()
+    calls = []
+    monkeypatch.setattr("kc_worker.handlers.media._run", lambda context, args: calls.append(args))
+    context = type("Ctx", (), {"scratch": tmp_path, "log": lambda self, line: None})()
+    quiet_room = {"loudness": {"input_i": "-20"}}
+    monkeypatch.setattr(handler, "_pcm_analysis", lambda ctx, path: ([], -70.0))  # -70 + 4 = -66 dB at listening level
+    path, info = handler._maybe_denoise(context, tmp_path / "a.mp3", quiet_room, "auto")
+    assert path.name == "a.mp3" and info == {"mode": "auto", "applied": False, "beforeDb": -66.0} and not calls
+    monkeypatch.setattr(handler, "_pcm_analysis", lambda ctx, path: ([], -46.0))  # fan noise: -42 dB
+    path, info = handler._maybe_denoise(context, tmp_path / "a.mp3", quiet_room, "auto")
+    assert path.name == "denoised.wav" and info["applied"] and "afftdn" in " ".join(calls[0])
+    assert handler._maybe_denoise(context, tmp_path / "a.mp3", quiet_room, "off")[1]["applied"] is False

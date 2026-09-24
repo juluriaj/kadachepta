@@ -32,6 +32,7 @@ artwork) until an editor reviews it on one screen and publishes with one action.
 | 14 | Series: chapters in order; the listener app's "Up next" follows the series | New story → Part of a series |
 | 15 | Everyone keeps their own details: name, email (changed only with a code sent to the new address), phone, preferred contact (email, phone, WhatsApp) | Family → Your details; Studio tab; studio → My details |
 | 16 | Editors see each narrator's contact details and preference | Studio → Narrators; review screen |
+| 17 | Noise reduction on listening copies (original kept): auto, always, or off; auto keeps it only when it lowers the background by 3 dB or more | AI & processing → Audio; sound check on the review screen |
 
 ## What I tested
 
@@ -44,7 +45,17 @@ artwork) until an editor reviews it on one screen and publishes with one action.
 - **Pilot catalog:** the 26 stories that already had transcripts were prepared with free local drafts and
   artwork, so the review queue has real stories.
 
+## Development set
+
+22 catalog stories with transcripts (11 published, 11 in review), with no book chapters. Chapters and the
+other 558 catalog stories are back to "not started" (their drafts are kept). No new transcription was needed.
+
 ## Being a critic: what isn't good enough yet
+
+- **Noise reduction helps with steady noise, not music.** On the 15 development stories with audible
+  background, it lowered the noise on 2 (about 6–7 dB) and was undone on 13, whose background is a music bed.
+  Separating voice from music (a source-separation model such as Demucs) or a speech-trained denoiser
+  (RNNoise, DeepFilterNet) would do better; both run locally.
 
 - **The local 8B model is weak at safety.** It rated every story "all-ages", including a ghost story and one
   where animals are killed. The word list and the rule "all-ages only when nothing is flagged" now catch
