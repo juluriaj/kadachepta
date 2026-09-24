@@ -1,185 +1,104 @@
 # KathaChepta Engineering Handoff
 
-This document is the short operational guide for continuing work in another
-model or session. The project is intentionally local-first and currently uses
-Python's standard library, SQLite, and browser JavaScript.
+Operational guide for continuing work in another session. Read [ARCHITECTURE.md](ARCHITECTURE.md) for the
+design and [BACKLOG.md](BACKLOG.md) for the phase plan. Current state: **Phase 1 (listener app) complete, awaiting review.** Phase 0 on branch `phase-0-foundation`, Phase 1 on `phase-1-listener-app`.
 
 ## Runtime
 
-Start the unified server:
+`docker compose up -d --build` runs everything on the desktop (the hosting environment until Phase 6):
 
-```powershell
-npm start
-```
+| Service | Purpose |
+|---|---|
+| `postgres` | PostgreSQL 16 + pgvector. Host port 127.0.0.1:5433 for tests and admin tools only |
+| `api` | FastAPI (Uvicorn, 2 processes). Runs `alembic upgrade head` on start |
+| `worker-media` (×`KC_MEDIA_WORKERS`) | Pulls `media.process` and `transcription` jobs |
+| `caddy` | Reverse proxy on :8080 (LAN-reachable). TLS on Lightsail in Phase 6 |
+| `mailpit` | Catches development email (sign-in codes) at http://localhost:8025 |
+| `backup` | `pg_dump` at start and daily at 02:30 UTC into `data/backups/`, kept 14 days |
+| GPU worker (not in Docker) | `scripts/run_gpu_worker.ps1`: pulls `teaser` (LM Studio) and `artwork` jobs |
 
-The server listens on `http://127.0.0.1:4173/`.
+Secrets live in `.env` (created by `scripts/setup_local.py`, never committed). `/api/health` reports the
+running build, process ID, and supported processing actions; every response carries
+`X-KathaChepta-Server` and `X-Request-Id` headers.
 
-- `/` is the shared login screen and listener application.
-- `/editor/` is protected for `editor` and `admin`.
-- `/narrator/` is protected for `narrator`.
-- `/api/session` returns `{ authenticated, username, role, permissions }`.
+## Accounts and roles
 
-The current development accounts all use `change-me`:
+`ROLE_PERMISSIONS` in `api/app/security.py` is the only authority; the UI hides what the API forbids.
 
-| Username | Role | Main destination |
-| --- | --- | --- |
-| listener | listener | `/` listener app |
-| parent | parent | `/` listener app |
-| narrator | narrator | `/narrator/` |
-| editor | editor | `/editor/` |
-| admin | admin | `/editor/` |
+| Role | Permissions |
+|---|---|
+| listener | catalog.read |
+| parent | catalog.read, library.manage |
+| narrator | catalog.read, narrator.upload, narrator.pipeline, narrator.history |
+| editor | catalog.read, transcript.review, teaser.review, content.publish, rights.manage, metadata.review |
+| admin | editor permissions + users.manage, library.manage, jobs.manage |
 
-Recreate or repair these accounts with:
+Sign-in methods:
+- Username or email + password (argon2; prototype PBKDF2 hashes are upgraded on first login).
+- Email one-time code: `POST /api/auth/otp/request` then `/api/auth/otp/verify` (creates a listener account).
+- Mobile: add `"client": "mobile"` to either login to receive a 15-minute access token and a 60-day
+  refresh token. `POST /api/auth/refresh` rotates; reusing an old refresh token ends the whole session family.
+- Staff two-factor (TOTP): `/api/auth/totp/setup` and `/api/auth/totp/verify`. Required in production
+  (`KC_STAFF_MFA_REQUIRED=true`); optional locally. Until verified, staff sessions have no permissions.
 
-```powershell
-npm run users:demo
-```
+Operator CLI: `docker compose exec api python -m app.cli create-user|set-password|set-role|reset-mfa|create-worker|seed-demo`.
 
-## Roles and permissions
+## Jobs and workers
 
-Role authorization is enforced by `ROLE_PERMISSIONS` in
-`scripts/editor_server.py`; frontend visibility is not security.
+- Job types: `media.process` (capability `media`), `transcription` (`stt`), `teaser` (`llm`), `artwork` (`image`).
+- Workers authenticate with `Authorization: Worker <token>`, lease jobs (`POST /api/worker/lease`), send
+  heartbeats, upload output files, and report `complete` or `fail`. The API validates and applies results;
+  workers never touch the database.
+- Failures retry with exponential back-off (30 s × 2^attempt) up to `max_attempts`, then become `dead`.
+  An expired lease (worker crashed) is picked up again automatically.
+- Admin view: `GET /api/admin/jobs`; retry a dead job: `POST /api/admin/jobs/{id}/retry`;
+  queue audio processing for everything unprocessed: `POST /api/admin/backfill`.
+- Uploads trigger `media.process` automatically. Transcription, teasers, and artwork are still started by an
+  editor in Phase 0; Phase 2 chains them automatically.
 
-- `listener`: `catalog.read`
-- `parent`: `catalog.read`, `library.manage`
-- `narrator`: `catalog.read`, `narrator.upload`, `narrator.pipeline`,
-  `narrator.history`
-- `editor`: catalog, transcript review, teaser review, and
-  `content.publish`
-- `admin`: all editor permissions plus user, rights, and library management
+## Media
 
-Changing a role requires updating both the permission map and redirect logic
-in `app.js`/`editor/editor.js`, then testing direct route access.
+- Storage keys: `legacy/…` (prototype audio, read-only mount of `audio/`), `originals/<asset>/…`
+  (narrator uploads), `renditions/<asset>/v<n>/standard.m4a|datasaver.m4a`, `artworks/<asset>/…`,
+  `transcripts/<asset>/…`, `reports/…`.
+- Clients only receive signed `/media/<key>?e=&s=` URLs (HMAC with `KC_SECRET_KEY`, 6-hour expiry) that
+  support HTTP Range requests.
+- Audio processing normalizes to −16 LUFS / −1.5 dBTP, writes a 64 kbps and a 32 kbps mono AAC version, a
+  200-point waveform, and QC checks (quiet, clipping, background sound, long pauses, too short, low sample
+  rate) with plain-language tips shown to narrators.
 
-## Narrator workflow
+## Listener app (`app/`)
 
-1. Narrator signs in and is redirected to `/narrator/`.
-2. `POST /api/narrator/upload` accepts a multipart field named `audio`.
-   For a published replacement, include `parentAssetId` with the published
-   asset ID.
-3. The server stores the file under `audio/narrator/<username>/`.
-4. A deterministic checksum-derived asset ID is created or reused.
-5. A first upload starts as `draft`; a replacement upload starts as
-   `needs-review` and receives `parent_asset_id` plus the next
-   `version_number`.
-6. A `narrator_assets` ownership row is created.
-7. A `processing_jobs` transcription row is queued.
-8. The editor sees the asset in `/api/queue?queue=narrator-submissions`.
-9. The editor can reject it through `POST /api/narrator/review`.
-10. Publishing uses `POST /api/content/publish`.
-11. Publishing requires at least one approved transcript and one approved
-    teaser for the same asset.
-12. Publishing sets `audio_assets.status` to `published`, records
-    `narrator_assets.published_at`, and inserts one row into
-    `narrator_credits` using `INSERT OR IGNORE`.
-13. The narrator workspace exposes `/api/narrator/assets` and native audio
-    previews. A replacement form sends `parentAssetId`; the server creates a
-    new version and leaves the current published parent untouched.
-14. In the editor narrator-submission detail modal, `POST
-    /api/narrator/process` can start `transcription` or `teaser` processing.
-    Transcription uses `scripts/transcribe_sarvam.py` for the selected asset;
-    teaser generation requires an approved transcript and uses
-    `scripts/ollama_teaser.py`. Processing jobs are shown in the detail
-    response and failed child processes are recorded as failed jobs.
-15. The same detail modal displays transcription and teaser job states
-    (`queued`, `running`, `needs-review`, `completed`, or `failed`) and polls
-    every three seconds while a job is active. It refreshes the modal and
-    editor queues when processing reaches a terminal state.
-16. Rights are stored in `asset_rights`. Editors can configure the rights
-    checklist from the narrator asset detail modal. Publishing requires an
-    approved checklist, all five rights categories, and a non-expired license
-    end date when one is provided.
-    The listener catalog uses the published status and latest approved teaser
-    as its visibility contract, so assets published before the rights gate was
-    introduced remain discoverable instead of being silently hidden.
-17. Editors can edit transcript and teaser text in the asset detail modal via
-    `POST /api/narrator/content-edit`. Edits reset the item to `needs-review`;
-    transcript edits also reset approved teasers for that asset so stale teaser
-    copy cannot remain publishable.
-18. Narrators provide structured metadata with every upload: title, multi-select
-    genres, album, collection, episode number, language, audience/age range,
-    mood, listening contexts, content warnings, moral/takeaway, source or
-    adaptation, and search keywords. The editor asset detail view displays this
-    metadata and publishing blocks missing title, genre, language, audience/age
-    range, takeaway, or source/adaptation metadata. Existing databases migrate
-    these fields automatically.
-19. Metadata has its own review state: `not-reviewed`, `needs-changes`, or
-    `approved`. Editors can correct metadata and approve/request changes from
-    the narrator submission detail view. Publication requires approved metadata.
-    Listener genre filters are generated from the published catalog rather than
-    being limited to a hard-coded list.
+- Expo SDK 57, Expo Router, TypeScript. Read `app/AGENTS.md` before touching Expo APIs: fetch the
+  versioned docs, don't rely on memory.
+- Web is exported to `app/dist` and served by the API at `/` (same origin, so it uses the httpOnly
+  session cookie). Native apps use bearer tokens in SecureStore with refresh rotation.
+- Every listener request carries `X-Profile-Id`; the API filters stories for child profiles
+  (`services/households.py: suitable_for`: stories without a parseable age range are hidden from children).
+- Parent PIN: sent as `X-Parent-Pin` for five minutes after entry; required for profile changes, family
+  stats, export, and deletion once set.
+- Playback runs in `app/src/lib/player/engine.ts` outside React (one expo-audio player, driven by native
+  status events so background listening is counted). Pure rules are in `logic.ts` with node tests.
+- Listening reports include screen-off seconds (app backgrounded or tab hidden), which power the
+  "screen off" share parents see.
 
-The credit ledger is intentionally idempotent: one credit is awarded per
-approved audio asset/version, not per upload attempt. When a replacement is
-published, its parent version is moved to `archived`; the replacement becomes
-the published version and receives its own credit. Until approval, the prior
-published version remains untouched and playable.
+## Engineering rules learned the hard way
 
-## Important implementation files
+- **Never run blocking database calls inside `async def` endpoints.** It deadlocked the API during the
+  first media backfill (one request held a row lock while awaiting its body; another blocked the event loop
+  waiting for that lock). Async endpoints read the body, then call a sync function via `run_in_threadpool`.
+- Keep request transactions short; don't hold locks on shared rows (for example `workers`) across I/O.
+- Language tags are BCP 47 (`te-IN`); normalize with `services.assets.normalize_language`.
 
-- `scripts/editor_server.py`: HTTP server, sessions, RBAC, APIs, SQLite
-  migrations, narrator upload and publication rules.
-- `scripts/init_local_store.py`: initial catalog schema and idempotent catalog
-  import into SQLite.
-- `scripts/create_demo_users.py`: local role fixtures.
-- `editor/index.html`, `editor/editor.js`, `editor/editor.css`: editor queues
-  and review controls.
-- `narrator/index.html`, `narrator/narrator.js`, `narrator/narrator.css`:
-  narrator upload, pipeline summary, credits, and published history.
-- `catalog/kadachepta.db`: local system of record; do not commit generated
-  database files.
-- `audio/`: original and local uploaded audio; treat source files as
-  sensitive and do not commit new private recordings.
+## Tests
 
-## Data model and state rules
+`npm test` (or `docker compose --profile test run --rm api-test`) runs ruff and pytest against a separate
+`kathachepta_test` database, migrated from scratch each run. Worker unit tests live in `worker/tests`.
+CI (`.github/workflows/ci.yml`) runs the same plus image builds.
 
-Core tables are `audio_assets`, `transcripts`, `teaser_drafts`,
-`processing_jobs`, `editor_users`, and `editorial_events`.
+## Known limitations (tracked in BACKLOG.md)
 
-Narrator-specific tables:
-
-- `narrator_assets(audio_asset_id, narrator_username, submitted_at,
-  published_at, review_required)`
-- `narrator_credits(narrator_username, audio_asset_id, awarded_at, reason)`
-
-Relevant asset states currently include `draft`, `needs-review`, `rejected`,
-and `published`. Transcript and teaser states are separate and must be
-approved before publication.
-
-Do not overwrite raw Sarvam transcripts. Transcript revisions should create a
-new version and invalidate dependent teaser drafts. Keep audit events for
-editorial decisions.
-
-## Verification commands
-
-```powershell
-python -m py_compile scripts/editor_server.py scripts/init_local_store.py scripts/create_demo_users.py
-node --check app.js
-node --check editor/editor.js
-node --check narrator/narrator.js
-```
-
-Manual smoke checks:
-
-1. Visit `/` without a cookie and confirm the shared login is shown.
-2. Log in as `listener`; confirm the listener app loads.
-3. Log in as `narrator`; confirm `/narrator/` and upload form load.
-4. Log in as `editor`; confirm the narrator submissions tab loads.
-5. Confirm direct `/editor/` and `/narrator/` access redirects unauthorized
-   roles to `/`.
-
-## Known limitations and next work
-
-- Narrator upload currently records duration as zero; metadata extraction and
-  audio validation must run before publication.
-- The editor queue can reject or publish narrator submissions, but it does not
-  yet provide a full asset detail page, audio preview, or rights checklist.
-- Publish currently requires approved transcript and teaser rows, but metadata
-  and rights validation still need to be added.
-- Replacement uploads are now versioned through `/api/narrator/upload` with
-  `parentAssetId`. The legacy `submit-edit` endpoint only records an audit
-  request and does not mutate published content.
-- SQLite/local files are temporary. The planned migration target is
-  PostgreSQL for workflow data and S3-compatible storage for media/artifacts.
-- Do not run full-catalog transcription or teaser generation until the review
-  UI, cost controls, and provider retry behavior are hardened.
+- The web pages are the prototype UI adapted to the new API; Phase 1 and Phase 2 replace them.
+- The Lightsail bucket storage backend (`KC_STORAGE_BACKEND=s3`) is not implemented yet (Phase 6).
+- Artwork still uses Pollinations; the local SDXL provider is Phase 2.
+- Rate limiting is per API process (in memory), fine for one VM.

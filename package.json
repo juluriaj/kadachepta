@@ -1,17 +1,22 @@
 {
-  "name": "kadachepta",
-  "version": "0.1.0",
+  "name": "kathachepta",
+  "version": "0.2.0",
   "private": true,
-  "description": "Telugu-first story listening MVP",
+  "description": "KathaChepta: human-narrated stories and audiobooks for families",
   "scripts": {
-    "start": "python scripts/editor_server.py",
-    "listener:static": "python -m http.server 4173",
-    "editor": "python scripts/editor_server.py",
-    "catalog:ingest": "python scripts/ingest_catalog.py",
-    "store:init": "python scripts/init_local_store.py",
-    "users:demo": "python scripts/create_demo_users.py",
-    "transcribe:benchmark": "python scripts/transcribe_sarvam.py --limit 3",
-    "transcript:approve": "python scripts/review_transcript.py",
-    "teaser:review": "python scripts/review_teaser.py"
+    "setup": "python scripts/setup_local.py",
+    "start": "docker compose up -d --build",
+    "stop": "docker compose down",
+    "status": "docker compose ps",
+    "logs": "docker compose logs -f --tail 100 api worker-media",
+    "test": "docker compose --profile test run --rm api-test",
+    "users:demo": "docker compose exec api python -m app.cli seed-demo",
+    "migrate:legacy": "docker compose exec api python -m app.migrate_sqlite",
+    "worker:gpu": "powershell -ExecutionPolicy Bypass -File scripts/run_gpu_worker.ps1",
+    "app:web": "cd app && npx expo export -p web",
+    "app:dev": "cd app && npx expo start",
+    "app:test": "cd app && npx tsc --noEmit && npx expo lint && node --test src/lib/player/logic.test.ts src/lib/i18n.test.ts",
+    "app:apk": "cd app && npx eas-cli@latest build --platform android --profile preview",
+    "benchmark:llm": "python worker/bench/llm_benchmark.py --models qwen/qwen3-8b google/gemma-3-12b"
   }
 }

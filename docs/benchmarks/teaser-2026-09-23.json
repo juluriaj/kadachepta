@@ -1,0 +1,281 @@
+[
+  {
+    "model": "qwen/qwen3-8b",
+    "assetId": "0014d01eb8612a85",
+    "title": "Adavi - chettu amayakatvam",
+    "chars": 1735,
+    "ok": true,
+    "output": {
+      "texts": [
+        {
+          "language": "te-IN",
+          "short": "కథచెప్తా.కామ్ అడవిలో ఒక కట్టెల వ్యాపారి వచ్చి చెట్లను నరికి అమ్మడం ప్రయత్నిస్తాడు.",
+          "long": "కథచెప్తా.కామ్ అడవిలో ఒక కట్టెల వ్యాపారి వచ్చి చెట్లను నరికి అమ్మడం ప్రయత్నిస్తాడు. అతనికి గొడ్డలి లేకపోవడంతో చెట్లు కర్ర ఇస్తాయి. అతను చెట్లను నరికి ప్రయత్నించడంతో ఒక చెట్టు ఉలిక్కిపడి తనకు సహాయం చేశావా? అని పలుకుతుంది."
+        },
+        {
+          "language": "en-IN",
+          "short": "KathaCheptha.com tells a story about a trader who tries to cut down trees in the forest.",
+          "long": "KathaCheptha.com tells a story about a trader who comes into a forest and tries to cut down trees for profit. He is unable to do so because he has no tools, but the trees offer him a tool. However, when he uses it to cut down the trees, one tree gets angry and questions his actions."
+        }
+      ],
+      "themes": [
+        "kindness",
+        "nature",
+        "consequences"
+      ],
+      "mood": [
+        "sad",
+        "thoughtful",
+        "hopeful"
+      ],
+      "ageSuggestion": "4-8",
+      "contentWarnings": [],
+      "moralTakeaway": "Helping others without expecting anything in return is a kind and noble act."
+    },
+    "stats": {
+      "model": "qwen/qwen3-8b",
+      "seconds": 17.1,
+      "promptTokens": 2812,
+      "completionTokens": 667,
+      "tokensPerSecond": 39.0
+    },
+    "problems": [],
+    "scriptShare": 1.0,
+    "longWords": {
+      "te-IN": 28,
+      "en-IN": 56
+    }
+  },
+  {
+    "model": "qwen/qwen3-8b",
+    "assetId": "0081fae26e9cafc1",
+    "title": "Chapter 35",
+    "chars": 20748,
+    "ok": true,
+    "output": {
+      "texts": [
+        {
+          "language": "te-IN",
+          "short": "యుద్ధంలో జయాపజయాలు ఎవరివవుతవో నిర్ణయించడం, మాట ఎలా ఉన్నా ఊహించడం కూడా ఎవరికీ సాధ్యం కానట్టు తోస్తోంది.",
+          "long": "యుద్ధ రంగాలలో అనేక విపరీత పరిణామాలు ఆంగ్లేయులు ఎదుర్కోవలసి వచ్చింది. అనేక ప్రాంతాలలో ఘోర పరాజయం మళ్ళీ అనుభవించవలసి వచ్చింది. నౌకా శాఖకు ఆనాడు మంత్రిగా ఉన్న విన్స్టన్ చర్చిల్ ఉద్యోగ విరమణ చేయవలసి వచ్చింది."
+        },
+        {
+          "language": "en-IN",
+          "short": "The outcome of battles and the fate of words are unpredictable, leaving everyone in doubt.",
+          "long": "In the battlefield, many unexpected events occurred for the British. They faced a humiliating defeat again in several regions. Winston Churchill, who was the minister at that time, had to resign from his post."
+        }
+      ],
+      "themes": [
+        "leadership",
+        "conflict",
+        "duty"
+      ],
+      "mood": [
+        "serious",
+        "hopeful"
+      ],
+      "ageSuggestion": "10-14",
+      "contentWarnings": [],
+      "moralTakeaway": "Leaders must remain steadfast in the face of challenges and be ready to make difficult decisions."
+    },
+    "stats": {
+      "model": "qwen/qwen3-8b",
+      "seconds": 20.5,
+      "promptTokens": 6445,
+      "completionTokens": 649,
+      "tokensPerSecond": 31.6
+    },
+    "problems": [],
+    "scriptShare": 1.0,
+    "longWords": {
+      "te-IN": 26,
+      "en-IN": 34
+    }
+  },
+  {
+    "model": "qwen/qwen3-8b",
+    "assetId": "0090d008bebe634d",
+    "title": "Sahaayam Korina Dayyam",
+    "chars": 8371,
+    "ok": true,
+    "output": {
+      "texts": [
+        {
+          "language": "te-IN",
+          "short": "పాపన్న చేసిన సహాయం ఏమిటి? దయ్యం కోరిన వాడికి ఎలా సహాయం చేశాడు?",
+          "long": "పాపన్న ఒక దయ్యం కోరిన వాడికి సహాయం చేశాడు. ఆ వాడికి జీవితంలో పెద్ద దెబ్బ తగిలినప్పటికీ, అతను సరైన మార్గం కోసం వెళ్ళాడు. ఇది ఎలా జరిగిందో చూద్దాం."
+        },
+        {
+          "language": "en-IN",
+          "short": "What did Papan do to help the demon? How did he assist a man in need?",
+          "long": "Papan helped a man who was in great trouble. Despite his hardships, he chose the right path and showed kindness. Let's find out how this happened."
+        }
+      ],
+      "themes": [
+        "kindness",
+        "struggle",
+        "love"
+      ],
+      "mood": [
+        "hopeful",
+        "emotional",
+        "determined"
+      ],
+      "ageSuggestion": "4-8",
+      "contentWarnings": [],
+      "moralTakeaway": "Kindness and perseverance can lead to great rewards, even in the face of hardship."
+    },
+    "stats": {
+      "model": "qwen/qwen3-8b",
+      "seconds": 17.3,
+      "promptTokens": 6411,
+      "completionTokens": 491,
+      "tokensPerSecond": 28.4
+    },
+    "problems": [],
+    "scriptShare": 1.0,
+    "longWords": {
+      "te-IN": 22,
+      "en-IN": 26
+    }
+  },
+  {
+    "model": "qwen/qwen3-8b",
+    "assetId": "0145188debb92d27",
+    "title": "Chapter 5",
+    "chars": 1725,
+    "ok": true,
+    "output": {
+      "texts": [
+        {
+          "language": "te-IN",
+          "short": "హనుమంతుడు రావణుని అంతఃపురములోకి వెళ్ళి, సీత కోసం వెతుకుతున్నాడు. అయితే సీత కనపడలేదు.",
+          "long": "రావణుని అంతఃపురములోకి వెళ్ళి, సీత కోసం హనుమంతుడు వెతుకుతున్నాడు. అయితే సీత కనపడలేదు. రాక్షసులు, విద్యావంతులు, గౌరవప్రపత్తులు కలవారు కనిపిస్తున్నారు. అయితే సీత కనపడలేదు."
+        },
+        {
+          "language": "en-IN",
+          "short": "Hanuman searches for Sita in Rakshasa kingdom, but she is not found.",
+          "long": "Hanuman enters the Rakshasa palace to search for Sita. He sees many women and wise beings, but he cannot find Sita. His heart feels sad as he realizes that Sita is missing."
+        }
+      ],
+      "themes": [
+        "love",
+        "search",
+        "sacrifice"
+      ],
+      "mood": [
+        "sad",
+        "hopeful",
+        "determined"
+      ],
+      "ageSuggestion": "4-8",
+      "contentWarnings": [],
+      "moralTakeaway": "Even in the darkest places, love and determination can light the way."
+    },
+    "stats": {
+      "model": "qwen/qwen3-8b",
+      "seconds": 16.7,
+      "promptTokens": 2790,
+      "completionTokens": 557,
+      "tokensPerSecond": 33.4
+    },
+    "problems": [],
+    "scriptShare": 1.0,
+    "longWords": {
+      "te-IN": 18,
+      "en-IN": 32
+    }
+  },
+  {
+    "model": "qwen/qwen3-8b",
+    "assetId": "ac7f8aee53bea3eb",
+    "title": "కాకి హంస కాగలదా",
+    "chars": 815,
+    "ok": true,
+    "output": {
+      "texts": [
+        {
+          "language": "te-IN",
+          "short": "కాకి హంసలను చూసి కుళ్ళుతుంది. అది తన రూపాన్ని మార్చేందుకు ప్రయత్నిస్తుంది.",
+          "long": "కాకి హంసల రూపాన్ని చూసి కుళ్ళుతుంది. తన రూపాన్కు మారేందుకు నీళ్ళలో ఈత కొడుతుంది, కానీ అది తనకు సహాయం కావడం లేదు. అలవాట్లు మార్చడం ద్వారా తన రూపాన్ని మార్చాలని కోరుకుంది."
+        },
+        {
+          "language": "en-IN",
+          "short": "A goose envies swans and tries to change its look. But it fails because it can't swim.",
+          "long": "A goose sees swans and feels jealous of their beauty. It tries to imitate them by swimming, but since it can't swim well, it fails. Eventually, it learns that changing its habits won't make it look like a swan."
+        }
+      ],
+      "themes": [
+        "self-discovery",
+        "jealousy",
+        "acceptance"
+      ],
+      "mood": [
+        "sad",
+        "hopeful",
+        "reflective"
+      ],
+      "ageSuggestion": "4-8",
+      "contentWarnings": [],
+      "moralTakeaway": "You can't change who you are by trying to be someone else."
+    },
+    "stats": {
+      "model": "qwen/qwen3-8b",
+      "seconds": 15.8,
+      "promptTokens": 1449,
+      "completionTokens": 562,
+      "tokensPerSecond": 35.5
+    },
+    "problems": [],
+    "scriptShare": 1.0,
+    "longWords": {
+      "te-IN": 24,
+      "en-IN": 39
+    }
+  },
+  {
+    "model": "google/gemma-3-12b",
+    "assetId": "0014d01eb8612a85",
+    "title": "Adavi - chettu amayakatvam",
+    "chars": 1735,
+    "ok": false,
+    "error": "Could not reach the LLM server at http://localhost:1234/v1: timed out. Is LM Studio's server running with the model available?",
+    "seconds": 902.1
+  },
+  {
+    "model": "google/gemma-3-12b",
+    "assetId": "0081fae26e9cafc1",
+    "title": "Chapter 35",
+    "chars": 20748,
+    "ok": false,
+    "error": "Could not reach the LLM server at http://localhost:1234/v1: timed out. Is LM Studio's server running with the model available?",
+    "seconds": 902.1
+  },
+  {
+    "model": "google/gemma-3-12b",
+    "assetId": "0090d008bebe634d",
+    "title": "Sahaayam Korina Dayyam",
+    "chars": 8371,
+    "ok": false,
+    "error": "Could not reach the LLM server at http://localhost:1234/v1: timed out. Is LM Studio's server running with the model available?",
+    "seconds": 902.0
+  },
+  {
+    "model": "google/gemma-3-12b",
+    "assetId": "0145188debb92d27",
+    "title": "Chapter 5",
+    "chars": 1725,
+    "ok": false,
+    "error": "Could not reach the LLM server at http://localhost:1234/v1: timed out. Is LM Studio's server running with the model available?",
+    "seconds": 902.1
+  },
+  {
+    "model": "google/gemma-3-12b",
+    "assetId": "ac7f8aee53bea3eb",
+    "title": "కాకి హంస కాగలదా",
+    "chars": 815,
+    "ok": false,
+    "error": "Could not reach the LLM server at http://localhost:1234/v1: timed out. Is LM Studio's server running with the model available?",
+    "seconds": 902.1
+  }
+]

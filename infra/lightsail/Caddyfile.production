@@ -1,0 +1,21 @@
+{
+	email ops@kathachepta.com
+}
+
+kathachepta.com, www.kathachepta.com, app.kathachepta.com, api.kathachepta.com {
+	encode zstd gzip
+	request_body {
+		max_size 520MB
+	}
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		Permissions-Policy "camera=(), geolocation=(), microphone=(self)"
+	}
+	reverse_proxy api:8000
+}
+
+# The common misspelling redirects permanently to the canonical domain.
+kadachepta.com, www.kadachepta.com {
+	redir https://kathachepta.com{uri} permanent
+}
