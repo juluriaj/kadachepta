@@ -53,8 +53,10 @@ artwork) until an editor reviews it on one screen and publishes with one action.
   about 12 seconds per image and 20 seconds per set of drafts, plus a 13-second model load at each switch.
 - Genres and listening moments from the AI are rough ("Fable" and "bedtime" for a 41-minute novel chapter);
   editors should glance at them.
-- **In-app recording and background upload are only verified in a desktop browser**, not on a phone
-  (needs the Android build). Recording on web produces WebM; the server converts it.
+- **In-app recording is not verified yet**: my test browser has no microphone, so I tested the upload path
+  only. Please try recording on your phone (web now; the Android build after `npx eas-cli login`).
+  Recording on web produces WebM; the server converts it. Resumable upload is tested by the API tests,
+  not yet over a real flaky connection.
 - Push notifications are not in yet: narrators get in-app updates and email.
 - The prototype editor and narrator pages still exist at `/editor/` and `/narrator/` as a fallback; they'll
   be removed after you sign off.
