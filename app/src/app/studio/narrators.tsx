@@ -6,7 +6,8 @@ import { Button, Card, ErrorState, Loading, Text, useColors } from '@/components
 import { api, mediaUrl } from '@/lib/api';
 import { space } from '@/lib/theme';
 
-type Narrator = { userId: number; name: string; email: string | null; languages: string[]; trustLevel: 'new' | 'trusted';
+type Narrator = { userId: number; name: string; email: string | null; phone: string | null; contactChannel: string;
+  contactNotes: string; languages: string[]; trustLevel: 'new' | 'trusted';
   onboardedAt: string | null; sampleUrl: string | null; published: number; rejected: number; inReview: number;
   suggestTrust: boolean };
 
@@ -38,7 +39,8 @@ export default function Narrators() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.md }}>
             <View style={{ flex: 1, minWidth: 220 }}>
               <Text variant="heading">{narrator.name}</Text>
-              <Text variant="small" muted>{[narrator.email, narrator.languages.join(', ')].filter(Boolean).join(' · ')}</Text>
+              <Text variant="small" muted>{[narrator.email, narrator.phone, narrator.languages.join(', ')].filter(Boolean).join(' · ')}</Text>
+              <Text variant="small">Prefers {narrator.contactChannel}{narrator.contactNotes ? ` · ${narrator.contactNotes}` : ''}</Text>
               <Text variant="small">
                 {narrator.published} published · {narrator.inReview} in progress · {narrator.rejected} rejected
               </Text>

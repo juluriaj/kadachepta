@@ -34,6 +34,7 @@ export type Review = {
   changesRequested: { reasons: string[]; texts: string[]; note: string; by: string; at: string } | null;
   series: { id: number; title: string; position: number | null } | null;
   narrator: { userId: number; name: string; trustLevel: string | null; sampleUrl: string | null; published?: number;
+    email?: string | null; phone?: string | null; contactChannel?: string; contactNotes?: string;
     rejected?: number; changesRequested?: number } | null;
   transcript: { id: number; status: string; language: string; text: string; introRemoved: string | null;
     confidence: number | null; quality: { reasons?: string[]; charsPerSecond?: number; coverage?: number };

@@ -166,6 +166,8 @@ export default function Family() {
         ) : null}
 
         <Text variant="heading">{t('family.account')}</Text>
+        <Button kind="secondary" title={t('account.open')} onPress={() => router.push('/account')}
+          icon={<Ionicons name="person-circle-outline" size={18} color={colors.text} />} />
         <Text variant="small" muted>{household.account.email ?? household.account.username}</Text>
         <Button title={t('family.export')} kind="secondary" onPress={() => void act(async () => {
           const data = await api('/api/me/export', { profile: false });

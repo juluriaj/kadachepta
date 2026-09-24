@@ -2,7 +2,7 @@ import { Redirect, router, Stack, usePathname } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
 import { Loading, Text, useColors } from '@/components/ui';
-import { useSession } from '@/lib/session';
+import { useGuardSession } from '@/lib/session';
 import { space } from '@/lib/theme';
 
 const LINKS = [
@@ -16,7 +16,7 @@ const LINKS = [
 export default function StudioLayout() {
   const colors = useColors();
   const path = usePathname();
-  const { ready, session, isStaff, signOut } = useSession();
+  const { ready, session, isStaff, signOut } = useGuardSession();
   if (!ready) return <Loading />;
   if (!session.authenticated) return <Redirect href="/sign-in" />;
   if (!isStaff) return <Redirect href="/" />;
@@ -38,7 +38,11 @@ export default function StudioLayout() {
           );
         })}
         <View style={{ flex: 1 }} />
-        <Text variant="small" muted>{session.username} · {session.role}</Text>
+        <Pressable accessibilityRole="link" onPress={() => router.navigate('/studio/profile')}>
+          <Text variant="small" color={path === '/studio/profile' ? colors.primary : colors.muted}>
+            {session.username} · {session.role} · My details
+          </Text>
+        </Pressable>
         <Pressable accessibilityRole="button" onPress={() => void signOut()}>
           <Text variant="small" color={colors.primary}>Sign out</Text>
         </Pressable>

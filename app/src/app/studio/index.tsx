@@ -16,6 +16,7 @@ const VIEWS = [
   { id: 'attention', label: 'Needs attention' },
   { id: 'waiting', label: 'Waiting on narrator' },
   { id: 'pipeline', label: 'Being prepared' },
+  { id: 'transcription', label: 'Needs transcription (paid)' },
   { id: 'catalog', label: 'Catalog (not started)' },
   { id: 'published', label: 'Published' },
 ];
@@ -121,7 +122,7 @@ export default function Queue() {
         ))}
       </View>
 
-      {view === 'review' || view === 'catalog' ? (
+      {view === 'review' || view === 'catalog' || view === 'transcription' ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md, alignItems: 'center', padding: space.md,
           borderRadius: radius.md, backgroundColor: colors.surfaceAlt }}>
           <Button kind="ghost" title={view === 'review' ? 'Select all eligible' : 'Select all'}
@@ -152,7 +153,7 @@ export default function Queue() {
       <View style={{ gap: 2 }}>
         {items.map((item, index) => (
           <Row key={item.id} item={item} focused={index === cursor} selected={selected.has(item.id)}
-            selectable={view === 'review' || view === 'catalog'} onToggle={() => toggle(item.id)} />
+            selectable={view === 'review' || view === 'catalog' || view === 'transcription'} onToggle={() => toggle(item.id)} />
         ))}
       </View>
       {Platform.OS === 'web' ? <Text variant="small" muted>Keys: j / k move · x select · Enter open</Text> : null}

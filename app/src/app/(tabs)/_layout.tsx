@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MiniPlayer } from '@/components/stories';
 import { Text, useColors } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
-import { useSession } from '@/lib/session';
+import { useGuardSession } from '@/lib/session';
 import { space } from '@/lib/theme';
 
 const ICONS: Record<string, [keyof typeof Ionicons.glyphMap, keyof typeof Ionicons.glyphMap]> = {
@@ -20,7 +20,7 @@ export default function TabsLayout() {
   const { t } = useI18n();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { ready, session, profile, isNarrator } = useSession();
+  const { ready, session, profile, isNarrator } = useGuardSession();
   if (ready && (!session.authenticated || !profile)) return <Redirect href="/" />;
   const labels: Record<string, string> = { index: t('tabs.home'), library: t('tabs.library'), family: t('tabs.family'),
     narrate: t('tabs.studio') };

@@ -137,3 +137,13 @@ export function useSession() {
   if (!context) throw new Error('useSession must be used inside SessionProvider');
   return context;
 }
+
+// For route guards. Right after sign-in, a screen can render before the provider has re-rendered with
+// the new session, and a guard reading the old "signed out" value sent staff straight back to sign-in.
+// The query cache is already up to date at that point, so guards read it first.
+export function useGuardSession() {
+  const context = useSession();
+  const cached = useQueryClient().getQueryData<Session>(['session']);
+  const session = cached ?? context.session;
+  return { ...context, session, isStaff: STAFF_ROLES.has(session.role ?? ''), isNarrator: session.role === 'narrator' };
+}

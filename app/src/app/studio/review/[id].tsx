@@ -282,6 +282,11 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
         <Card>
           <Text variant="heading">Narrator: {review.narrator.name}</Text>
           <Text variant="small" muted>
+            {[review.narrator.email, review.narrator.phone].filter(Boolean).join(' · ') || 'No contact details yet'}
+            {review.narrator.contactChannel ? ` · prefers ${review.narrator.contactChannel}` : ''}
+            {review.narrator.contactNotes ? ` (${review.narrator.contactNotes})` : ''}
+          </Text>
+          <Text variant="small" muted>
             {review.narrator.trustLevel ?? 'new'} · {review.narrator.published ?? 0} published · {review.narrator.changesRequested ?? 0} change requests · {review.narrator.rejected ?? 0} rejected
           </Text>
           {review.narrator.sampleUrl ? (

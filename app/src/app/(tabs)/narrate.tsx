@@ -44,6 +44,7 @@ export default function NarratorStudio() {
 
         <Button title={t('narrate.new')} icon={<Ionicons name="mic" size={20} color={colors.onPrimary} />}
           onPress={() => router.push('/narrate/new')} />
+        <Button kind="ghost" title={t('account.open')} onPress={() => router.push('/account')} />
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md }}>
           <Metric label={t('narrate.published')} value={data.totals.published} />

@@ -35,7 +35,8 @@ me_router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
 VIEWS = {
     "review": ("ready",),
-    "attention": ("failed", "waiting-transcript", "needs-fix"),
+    "attention": ("failed", "needs-fix"),
+    "transcription": ("waiting-transcript",),  # catalog stories waiting for an admin to allow paid transcription
     "waiting": ("changes-requested", "awaiting-submit"),
     "pipeline": ("checking", "transcribing", "drafting", "illustrating"),
 }
@@ -144,6 +145,15 @@ def queue(view: str = "review", q: str | None = None, language: str | None = Non
     return {"view": view, "items": items, "counts": tabs, "slaHours": sla}
 
 
+def _contact(user: User | None) -> dict[str, Any]:
+    """How editors reach a narrator about a submission (staff only)."""
+    if not user:
+        return {}
+    preferences = user.contact_preferences or {}
+    return {"email": user.email, "phone": user.phone, "contactChannel": preferences.get("channel") or "email",
+            "contactNotes": preferences.get("notes") or ""}
+
+
 def review_payload(db: Session, asset: AudioAsset) -> dict[str, Any]:
     transcript = pipeline.latest_transcript(db, asset.id)
     if transcript:
@@ -176,6 +186,7 @@ def review_payload(db: Session, asset: AudioAsset) -> dict[str, Any]:
         "series": {"id": asset.series.id, "title": asset.series.title, "position": asset.series_position}
         if asset.series else None,
         "narrator": {"userId": asset.narrator_user_id, "name": asset_payload(asset)["narrator"],
+                     **_contact(asset.narrator_user),
                      "trustLevel": profile.trust_level if profile else None,
                      "sampleUrl": media_url(profile.sample_key) if profile else None, **(narrator_stats or {})}
         if asset.narrator_user_id else None,
@@ -513,6 +524,8 @@ def narrators(identity: Identity = Depends(require("content.publish")), db: Sess
         counts.setdefault(user_id, {})[status] = count
     needed = int(app_settings.get(db, "narrators.trustAfterPublished"))
     return {"items": [{"userId": user.id, "name": profile.display_name or user.handle, "email": user.email,
+                       "phone": user.phone, "contactChannel": (user.contact_preferences or {}).get("channel") or "email",
+                       "contactNotes": (user.contact_preferences or {}).get("notes") or "",
                        "languages": profile.languages, "trustLevel": profile.trust_level,
                        "onboardedAt": iso(profile.onboarded_at), "sampleUrl": media_url(profile.sample_key),
                        "published": counts.get(user.id, {}).get("published", 0),

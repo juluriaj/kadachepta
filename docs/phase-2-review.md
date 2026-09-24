@@ -30,6 +30,8 @@ artwork) until an editor reviews it on one screen and publishes with one action.
 | 12 | Catalog: "Prepare" makes free local drafts and artwork; paid transcription only by an admin, with the minutes shown | Queue → Catalog |
 | 13 | AI & processing settings: model per task and language, artwork provider, prompt version, limits; "Test on one story"; worker status | /studio/settings (admin) |
 | 14 | Series: chapters in order; the listener app's "Up next" follows the series | New story → Part of a series |
+| 15 | Everyone keeps their own details: name, email (changed only with a code sent to the new address), phone, preferred contact (email, phone, WhatsApp) | Family → Your details; Studio tab; studio → My details |
+| 16 | Editors see each narrator's contact details and preference | Studio → Narrators; review screen |
 
 ## What I tested
 

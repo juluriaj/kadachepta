@@ -225,6 +225,7 @@ def export_data(x_parent_pin: str | None = Header(None), identity: Identity = De
     return {
         "exportedAt": iso(utcnow()),
         "account": {"email": user.email, "username": user.username, "displayName": user.display_name,
+                    "phone": user.phone, "contactPreferences": user.contact_preferences,
                     "role": user.role, "uiLanguage": user.ui_language, "createdAt": iso(user.created_at)},
         "profiles": [profile_payload(p) for p in profiles],
         "favorites": [{"profileId": f.profile_id, "storyId": f.audio_asset_id, "savedAt": iso(f.created_at)}
@@ -266,6 +267,8 @@ def delete_account(payload: DeleteAccount, request: Request, response: Response,
     user.email = None
     user.username = None
     user.display_name = None
+    user.phone = None
+    user.contact_preferences = {}
     user.password_hash = None
     user.totp_secret = None
     user.disabled_at = now

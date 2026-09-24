@@ -45,6 +45,10 @@ class User(Base):
     updated_at: Mapped[datetime] = now_column(onupdate=func.now())
     last_login_at: Mapped[datetime | None] = mapped_column(Timestamp)
     disabled_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    # Contact details for coordinating with people (E.164 phone, e.g. +919876543210).
+    phone: Mapped[str | None] = mapped_column(String(20))
+    # {"channel": "email" | "phone" | "whatsapp", "notes": "best after 6 pm"}
+    contact_preferences: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
 
     @property
     def handle(self) -> str:
