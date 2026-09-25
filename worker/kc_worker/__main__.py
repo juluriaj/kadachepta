@@ -50,13 +50,20 @@ def main() -> int:
     signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
     client = ApiClient(api_url, token)
-    info = {"host": platform.node(), "python": sys.version.split()[0], "capabilities": capabilities,
-            **{name: handler.describe() for name, handler in HANDLERS.items() if handler.capability in capabilities}}
+
+    def describe() -> dict:
+        # Sent with each lease; the studio settings page shows it (for example the models LM Studio has).
+        return {"host": platform.node(), "python": sys.version.split()[0], "capabilities": capabilities,
+                **{name: handler.describe() for name, handler in HANDLERS.items() if handler.capability in capabilities}}
+
+    info, described_at = describe(), time.monotonic()
     log.info("Worker started: api=%s capabilities=%s", api_url, capabilities)
-    idle = 1.0
+    idle, last_type = 1.0, None
     while not _stopping:
+        if time.monotonic() - described_at > 300:
+            info, described_at = describe(), time.monotonic()
         try:
-            job = client.lease(capabilities, info)
+            job = client.lease(capabilities, info, last_type)  # same kind of job next: fewer GPU model swaps
         except (ApiError, OSError) as error:
             log.warning("Lease failed (%s); retrying in %.0fs", error, min(idle * 2, 30))
             time.sleep(min(idle := idle * 2, 30))
@@ -64,7 +71,7 @@ def main() -> int:
         if not job:
             time.sleep(min(idle := min(idle * 1.5, 10), 10))
             continue
-        idle = 1.0
+        idle, last_type = 1.0, job["type"]
         run_job(client, job, workdir)
     return 0
 

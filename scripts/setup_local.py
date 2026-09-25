@@ -40,7 +40,7 @@ def main() -> int:
     env["KC_BOOTSTRAP_WORKERS"] = (f"media-docker:{env['KC_MEDIA_WORKER_TOKEN']}:media,stt;"
                                    f"gpu-desktop:{env['KC_GPU_WORKER_TOKEN']}:llm,image")
     ensure("KC_LLM_MODEL", "qwen/qwen3-8b")
-    ensure("KC_ARTWORK_PROVIDER", "pollinations")
+    ensure("KC_ARTWORK_PROVIDER", "local-sdxl")  # fallback only; the studio AI settings decide per job
     if not env.get("SARVAM_API_KEY"):
         legacy = ROOT / "config" / "secrets.local.json"
         if legacy.exists():

@@ -16,7 +16,8 @@ TEST_DATABASE_URL = os.environ.get("KC_TEST_DATABASE_URL") or _base_url.rsplit("
 os.environ.update({
     "KC_ENVIRONMENT": "test", "KC_DATABASE_URL": TEST_DATABASE_URL, "KC_MEDIA_ROOT": str(_media),
     "KC_LEGACY_AUDIO_ROOT": str(_legacy), "KC_SECRET_KEY": "test-secret-key-for-signing-media-urls-0123456789",
-    "KC_BOOTSTRAP_WORKERS": "", "KC_STAFF_MFA_REQUIRED": "false",
+    "KC_BOOTSTRAP_WORKERS": "", "KC_STAFF_MFA_REQUIRED": "false", "KC_ARTWORK_PROVIDER": "local-sdxl",
+    "KC_LLM_MODEL": "qwen/qwen3-8b",
 })
 
 import pytest  # noqa: E402

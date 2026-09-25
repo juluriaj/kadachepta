@@ -202,6 +202,15 @@ with no help.
 
 ## Phase 2 — Narrator studio and automated pipeline
 
+**Status (2026-09-24): built, awaiting your review** — checklist in
+[docs/phase-2-review.md](docs/phase-2-review.md). All items P2-01 to P2-14 are in. Deviations: push
+notifications wait for the store builds (narrators get in-app updates and email now); background upload on
+mobile is "resume where it stopped while the app is open", not an OS background transfer; the editor studio
+lives in the Expo app at `/studio` (web-first) instead of a separate `studio/` app, so there's one codebase.
+Added beyond plan: a safety word list per language (small local models under-report), GPU sharing between
+LM Studio and the image model on the 8 GB card, a daily transcription-minutes cap, and an in-progress limit
+for new narrators (protects the Sarvam bill from abuse).
+
 **Goal:** a narrator records a story on their phone and submits it in under 5
 minutes of effort; an editor makes a publish decision in under 5 minutes.
 
@@ -230,6 +239,7 @@ minutes of effort; an editor makes a publish decision in under 5 minutes.
 | P2-12 | Studio web app (editor/admin): queues with SLA timers, keyboard shortcuts, bulk actions, audit trail | |
 | P2-13 | Content safety policy and the age-rating rubric encoded as review checklists and AI safety prompts | Replaces BKL-003 |
 | P2-14 | Admin "AI & processing" settings page: model per task and language (from the models LM Studio reports), artwork provider, prompt version, "test on one story" button, worker status. Settings stored in the database and sent to workers with each job, so changes apply without restarts; every change is audited. API keys stay in `.env` and are never shown in the browser | Requested 2026-09-23; replaces editing `.env` for model choice |
+| P2-18 | Automatic mastering, part of the pipeline for narrator uploads and the seed-catalog backlog: detect what is between the words (music bed, edited silence, steady noise, hum, quiet room); clean up raw recordings (RNNoise speech noise removal, rumble filter, de-essing, gentle voice EQ, peak limiting, dead air trimmed at the ends, short fades), polish edited ones lightly, leave produced music-bed tracks alone. Original always kept; editors hear listening copy vs. as-recorded at the same loudness and choose per story; narrators hear the before and after; admins re-run it on existing stories | Requested 2026-09-24. No LLM: words, pauses, fillers ("hmm"), and expression are never edited |
 
 ---
 

@@ -1,1 +1,2 @@
 sarvamai==0.1.33
+numpy==2.3.3

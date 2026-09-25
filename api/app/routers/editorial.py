@@ -17,8 +17,9 @@ from ..models import (
     AssetRights, AudioAsset, EditorialEvent, Job, NarratorCredit, TeaserDraft, Transcript,
 )
 from ..services.assets import (
-    apply_metadata, asset_payload, clean_metadata, iso, missing_publication_metadata,
+    apply_metadata, asset_payload, clean_metadata, iso, missing_publication_metadata, rendition_keys,
 )
+from ..services.notify import notify
 from ..storage import get_storage
 
 router = APIRouter(prefix="/api", tags=["editorial"])
@@ -288,20 +289,46 @@ def mark_kathachepta_owned(payload: OwnedRights, identity: Identity = Depends(re
                            db: Session = Depends(get_db)):
     """One click for stories KathaChepta owns outright: every right granted, worldwide, no expiry."""
     asset = _asset_or_404(db, payload.audioAssetId)
+    rights = grant_owned_rights(db, asset, identity.username, payload.notes)
+    db.commit()
+    return {"ok": True, "rights": _rights_payload(rights)}
+
+
+def grant_owned_rights(db: Session, asset: AudioAsset, actor: str, notes: str | None = None) -> AssetRights:
     rights = db.get(AssetRights, asset.id) or AssetRights(audio_asset_id=asset.id)
     now = utcnow()
-    attestation = f"KathaChepta-owned; confirmed by {identity.username} on {now:%Y-%m-%d}."
+    attestation = f"KathaChepta-owned; confirmed by {actor} on {now:%Y-%m-%d}."
     rights.status, rights.source_type, rights.rights_holder = "approved", "kathachepta-owned", "KathaChepta"
     for column in RIGHTS_COLUMNS.values():
         setattr(rights, column, True)
     rights.territory, rights.allowed_uses = "Worldwide", "streaming, download, preview, translation"
     rights.license_start = rights.license_end = None
-    rights.evidence_reference, rights.attested_by, rights.attested_at = attestation, identity.username, now
-    rights.reviewer, rights.review_notes = identity.username, payload.notes or attestation
+    rights.evidence_reference, rights.attested_by, rights.attested_at = attestation, actor, now
+    rights.reviewer, rights.review_notes = actor, notes or attestation
     db.add(rights)
-    _event(db, "rights", asset.id, "rights:kathachepta-owned", identity.username, payload.notes)
-    db.commit()
-    return {"ok": True, "rights": _rights_payload(rights)}
+    _event(db, "rights", asset.id, "rights:kathachepta-owned", actor, notes)
+    return rights
+
+
+def accept_narrator_attestation(db: Session, asset: AudioAsset, actor: str, notes: str | None = None) -> AssetRights:
+    """The editor accepts what the narrator attested at submission (their voice, a text they may narrate)."""
+    rights = db.get(AssetRights, asset.id)
+    if not rights or not rights.attestation:
+        raise HTTPException(status_code=409, detail="The narrator hasn't said where this story comes from.")
+    claim = rights.attestation
+    rights.status = "approved"
+    for column in RIGHTS_COLUMNS.values():
+        setattr(rights, column, True)  # narration, performance by the narrator; artwork is made by KathaChepta
+    rights.rights_holder = rights.rights_holder or (
+        "KathaChepta" if claim.get("sourceType") == "kathachepta-owned" else asset.narrator_user.handle
+        if asset.narrator_user else None)
+    rights.territory = rights.territory or "Worldwide"
+    rights.allowed_uses = rights.allowed_uses or "streaming, download, preview"
+    rights.evidence_reference = claim.get("sourceReference") or rights.evidence_reference
+    rights.reviewer, rights.review_notes = actor, notes or f"Narrator attestation ({claim.get('sourceType')}) accepted."
+    db.add(rights)
+    _event(db, "rights", asset.id, "rights:attestation-accepted", actor, notes)
+    return rights
 
 
 class ContentEdit(BaseModel):
@@ -352,7 +379,7 @@ def delete_submission(payload: DeleteRequest, identity: Identity = Depends(requi
     if asset.status in {"published", "archived"}:
         raise HTTPException(status_code=409, detail="Published or archived audio cannot be deleted.")
     keys = [asset.source_key, asset.artwork_key,
-            *[(value or {}).get("key") for value in (asset.renditions or {}).values() if isinstance(value, dict)]]
+            *rendition_keys(asset)]
     jobs.cancel_active(db, asset.id)
     db.delete(asset)
     _event(db, "narrator_asset", asset.id, "content:deleted", identity.username, payload.notes)
@@ -381,7 +408,7 @@ def publish_readiness(db: Session, asset: AudioAsset) -> list[str]:
     if asset.metadata_review_status != "approved":
         problems.append("Metadata is not approved")
     if not db.scalar(select(Transcript.id).where(Transcript.audio_asset_id == asset.id,
-                                                 Transcript.status == "approved").limit(1)):
+                                                 Transcript.status.in_(("approved", "accepted"))).limit(1)):
         problems.append("No approved transcript")
     if not db.scalar(select(TeaserDraft.id).where(TeaserDraft.audio_asset_id == asset.id,
                                                   TeaserDraft.status == "approved").limit(1)):
@@ -406,16 +433,23 @@ def publish(payload: AssetDecision, identity: Identity = Depends(require("conten
     if problems:
         raise HTTPException(status_code=409, detail={"error": "Not ready to publish: " + "; ".join(problems) + ".",
                                                      "problems": problems})
+    mark_published(db, asset, identity.username, payload.notes)
+    db.commit()
+    return {"ok": True, "status": "published"}
+
+
+def mark_published(db: Session, asset: AudioAsset, actor: str, notes: str | None = None) -> None:
     now = utcnow()
     asset.status, asset.published_at, asset.review_required = "published", now, False
+    asset.pipeline_stage, asset.pipeline_error = "published", None
     if asset.parent_asset_id:
         db.execute(update(AudioAsset).where(AudioAsset.id == asset.parent_asset_id, AudioAsset.status == "published")
                    .values(status="archived"))
     if asset.narrator_user_id and not db.scalar(select(NarratorCredit.id).where(NarratorCredit.audio_asset_id == asset.id)):
         db.add(NarratorCredit(narrator_user_id=asset.narrator_user_id, audio_asset_id=asset.id))
-    _event(db, "content", asset.id, "content:published", identity.username, payload.notes)
-    db.commit()
-    return {"ok": True, "status": "published"}
+    _event(db, "content", asset.id, "content:published", actor, notes)
+    notify(db, asset.narrator_user_id, "published", f"“{asset.title}” is published",
+           "Families can listen to it now. Thank you for narrating!", asset.id)
 
 
 @router.post("/narrator/review")

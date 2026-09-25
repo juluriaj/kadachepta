@@ -63,7 +63,7 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npx expo lint
-      - run: node --test src/lib/player/logic.test.ts src/lib/i18n.test.ts
+      - run: node --test src/lib/player/logic.test.ts src/lib/i18n.test.ts src/lib/recording.test.ts
       - run: npx expo export -p web
 
   web:

@@ -17,7 +17,8 @@ _hasher = PasswordHasher()
 ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
     "listener": frozenset({"catalog.read"}),
     "parent": frozenset({"catalog.read", "library.manage"}),
-    "narrator": frozenset({"catalog.read", "narrator.upload", "narrator.pipeline", "narrator.history"}),
+    "narrator": frozenset({"catalog.read", "library.manage", "narrator.upload", "narrator.pipeline",
+                           "narrator.history"}),
     "editor": frozenset({
         "catalog.read", "transcript.review", "teaser.review", "content.publish", "rights.manage", "metadata.review",
     }),

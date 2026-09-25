@@ -40,8 +40,9 @@ class ApiClient:
                 pass
             raise ApiError(error.code, str(detail)[:500]) from None
 
-    def lease(self, capabilities: list[str], info: dict[str, Any]) -> dict[str, Any] | None:
-        status, body = self._request("POST", "/api/worker/lease", {"capabilities": capabilities, "info": info})
+    def lease(self, capabilities: list[str], info: dict[str, Any], prefer: str | None = None) -> dict[str, Any] | None:
+        status, body = self._request("POST", "/api/worker/lease",
+                                     {"capabilities": capabilities, "info": info, "preferType": prefer})
         return body if status == 200 else None
 
     def heartbeat(self, job_id: int) -> None:

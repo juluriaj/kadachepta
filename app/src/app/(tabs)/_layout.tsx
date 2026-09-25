@@ -6,24 +6,27 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MiniPlayer } from '@/components/stories';
 import { Text, useColors } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
-import { useSession } from '@/lib/session';
+import { useGuardSession } from '@/lib/session';
 import { space } from '@/lib/theme';
 
 const ICONS: Record<string, [keyof typeof Ionicons.glyphMap, keyof typeof Ionicons.glyphMap]> = {
   index: ['home', 'home-outline'],
   library: ['heart', 'heart-outline'],
   family: ['people', 'people-outline'],
+  narrate: ['mic', 'mic-outline'],
 };
 
 export default function TabsLayout() {
   const { t } = useI18n();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { ready, session, profile } = useSession();
+  const { ready, session, profile, isNarrator } = useGuardSession();
   if (ready && (!session.authenticated || !profile)) return <Redirect href="/" />;
-  const labels: Record<string, string> = { index: t('tabs.home'), library: t('tabs.library'), family: t('tabs.family') };
-  // Children don't see the Family tab; it's for parents and needs the PIN anyway.
-  const hidden = profile?.kind === 'child' ? new Set(['family']) : new Set<string>();
+  const labels: Record<string, string> = { index: t('tabs.home'), library: t('tabs.library'), family: t('tabs.family'),
+    narrate: t('tabs.studio') };
+  // Children don't see the Family tab (it's for parents and needs the PIN) or the narrator studio.
+  const hidden = profile?.kind === 'child' ? new Set(['family', 'narrate'])
+    : isNarrator ? new Set<string>() : new Set(['narrate']);
 
   return (
     <Tabs
@@ -50,6 +53,7 @@ export default function TabsLayout() {
       )}>
       <Tabs.Screen name="index" />
       <Tabs.Screen name="library" />
+      <Tabs.Screen name="narrate" />
       <Tabs.Screen name="family" />
     </Tabs>
   );

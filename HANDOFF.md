@@ -1,7 +1,8 @@
 # KathaChepta Engineering Handoff
 
 Operational guide for continuing work in another session. Read [ARCHITECTURE.md](ARCHITECTURE.md) for the
-design and [BACKLOG.md](BACKLOG.md) for the phase plan. Current state: **Phase 1 (listener app) complete, awaiting review.** Phase 0 on branch `phase-0-foundation`, Phase 1 on `phase-1-listener-app`.
+design and [BACKLOG.md](BACKLOG.md) for the phase plan. Current state: **Phase 2 (narrator studio and
+automated pipeline) complete, awaiting review** on branch `phase-2-studio-pipeline`. Phases 0 and 1 are merged.
 
 ## Runtime
 
@@ -53,8 +54,17 @@ Operator CLI: `docker compose exec api python -m app.cli create-user|set-passwor
   An expired lease (worker crashed) is picked up again automatically.
 - Admin view: `GET /api/admin/jobs`; retry a dead job: `POST /api/admin/jobs/{id}/retry`;
   queue audio processing for everything unprocessed: `POST /api/admin/backfill`.
-- Uploads trigger `media.process` automatically. Transcription, teasers, and artwork are still started by an
-  editor in Phase 0; Phase 2 chains them automatically.
+- The pipeline (`services/pipeline.py`) chains the steps: every finished or dead job calls `advance`, which
+  works out the next missing step from the data (media → QC gate → transcription → drafts → artwork → ready).
+  `pipeline_stage` on the asset is the narrator-facing status. Seed-catalog stories stay at `none` until an
+  editor "prepares" them; paid transcription for them needs an admin (`allowTranscription`).
+- Admin settings (`services/settings.py`, table `app_settings`) are sent to workers in `inputs.settings` with
+  every job. "Test" jobs (`payload.test`) never change the story.
+- The GPU worker runs from `worker/.venv-gpu` (`scripts/setup_gpu_worker.ps1`). On the 8 GB card it unloads
+  LM Studio (`lms unload --all`) before images and drops SDXL before LLM jobs (`kc_worker/gpu.py`), and
+  leases the same job type as its last job (`preferType`) so models switch rarely.
+- Safety: the model's rating is never trusted on its own; `policy.derive_rating` plus the per-language word
+  list decide, and bulk publishing requires "all-ages" with no flags.
 
 ## Media
 
@@ -98,7 +108,10 @@ CI (`.github/workflows/ci.yml`) runs the same plus image builds.
 
 ## Known limitations (tracked in BACKLOG.md)
 
-- The web pages are the prototype UI adapted to the new API; Phase 1 and Phase 2 replace them.
+- The prototype editor/narrator pages remain at `/editor/` and `/narrator/` as a fallback until Phase 2
+  sign-off; `/` now sends staff to the new studio at `/studio`.
+- App lockfile: regenerate on Linux (`docker run --rm -v "${PWD}/app:/w" -w /w node:24 npm install
+  --package-lock-only`), because npm on Windows leaves out packages CI's `npm ci` requires.
 - The Lightsail bucket storage backend (`KC_STORAGE_BACKEND=s3`) is not implemented yet (Phase 6).
 - Artwork still uses Pollinations; the local SDXL provider is Phase 2.
 - Rate limiting is per API process (in memory), fine for one VM.

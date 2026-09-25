@@ -35,8 +35,12 @@ Teasers (LLM) and artwork run on the desktop, next to LM Studio, through the sam
 GPU machine will use in production:
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_gpu_worker.ps1   # once: PyTorch + local artwork models (~10 GB)
 powershell -ExecutionPolicy Bypass -File scripts\run_gpu_worker.ps1
 ```
+
+Models, prompts, the artwork provider, and pipeline limits are chosen in the studio under
+**AI & processing** (admins), not in `.env`.
 
 The model is set by `KC_LLM_MODEL` in `.env`. Compare models on real transcripts with
 `python worker/bench/llm_benchmark.py --models qwen/qwen3-8b google/gemma-3-12b`.
@@ -56,8 +60,9 @@ npm run stop
 |---|---|
 | `api/` | FastAPI service, SQLAlchemy models, Alembic migrations, tests |
 | `worker/` | Pull-based job worker: audio processing (ffmpeg), transcription (Sarvam), teasers (LM Studio), artwork |
-| `app/` | Listener app (Expo, TypeScript): iOS, Android, and the web app at `/` |
-| `web/` | Prototype editor and narrator pages (replaced by the Phase 2 studio) |
+| `app/` | The app (Expo, TypeScript): listeners and narrators on iOS, Android, and web; the editor studio at `/studio` |
+| `web/` | Prototype editor and narrator pages (fallback until Phase 2 sign-off) |
+| `docs/` | Review checklists per phase, the content policy, benchmarks |
 | `infra/` | Caddy config, backup script, Lightsail provisioning (Phase 6) |
 | `scripts/` | Local setup and the GPU worker launcher |
 | `legacy/` | Retired prototype code, kept until Phase 0 sign-off |

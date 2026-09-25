@@ -41,6 +41,7 @@ type SessionContext = {
   household: Household | undefined;
   profile: Profile | null;
   isStaff: boolean;
+  isNarrator: boolean;
   selectProfile: (id: number | null) => Promise<void>;
   signIn: (body: Record<string, unknown>) => Promise<Session>;
   signOut: () => Promise<void>;
@@ -48,7 +49,8 @@ type SessionContext = {
 };
 
 const Context = createContext<SessionContext | null>(null);
-const STAFF_ROLES = new Set(['editor', 'admin', 'narrator']);
+// Editors and admins use the studio; narrators are listeners too (a household plus the Studio tab).
+const STAFF_ROLES = new Set(['editor', 'admin']);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -97,7 +99,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<SessionContext>(() => ({
     ready: loaded && !sessionQuery.isLoading && (!session.authenticated || isStaff || !householdQuery.isLoading),
-    session, household: householdQuery.data, profile, isStaff,
+    session, household: householdQuery.data, profile, isStaff, isNarrator: session.role === 'narrator',
     selectProfile: async (id) => {
       await setProfileId(id);
       setSelected(id);
@@ -134,4 +136,14 @@ export function useSession() {
   const context = useContext(Context);
   if (!context) throw new Error('useSession must be used inside SessionProvider');
   return context;
+}
+
+// For route guards. Right after sign-in, a screen can render before the provider has re-rendered with
+// the new session, and a guard reading the old "signed out" value sent staff straight back to sign-in.
+// The query cache is already up to date at that point, so guards read it first.
+export function useGuardSession() {
+  const context = useSession();
+  const cached = useQueryClient().getQueryData<Session>(['session']);
+  const session = cached ?? context.session;
+  return { ...context, session, isStaff: STAFF_ROLES.has(session.role ?? ''), isNarrator: session.role === 'narrator' };
 }

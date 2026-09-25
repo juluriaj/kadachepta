@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from kc_worker import llm  # noqa: E402
-from kc_worker.handlers.teaser import SCHEMA, build_messages, validate  # noqa: E402
+from kc_worker.handlers.teaser import SCHEMA_V4 as SCHEMA, build_messages, validate  # noqa: E402
 
 SCRIPT_PREFIX = {"te-IN": "TELUGU", "hi-IN": "DEVANAGARI", "ta-IN": "TAMIL", "kn-IN": "KANNADA"}
 

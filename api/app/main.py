@@ -23,7 +23,7 @@ from .auth import SESSION_COOKIE, Identity, optional_identity
 from .config import get_settings
 from .db import get_db, get_sessionmaker
 from .models import Worker
-from .routers import admin, auth, editorial, household, listener, media, narrator, worker
+from .routers import account, admin, auth, editorial, household, listener, media, narrator, studio, uploads, worker
 from .security import STAFF_ROLES, token_hash
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -83,8 +83,9 @@ async def validation_error(request: Request, error: RequestValidationError):
                                                   "problems": problems})
 
 
-for module in (auth, listener, household, media, narrator, editorial, worker, admin):
+for module in (auth, account, listener, household, media, narrator, uploads, editorial, studio, worker, admin):
     app.include_router(module.router)
+app.include_router(studio.me_router)
 
 
 @app.get("/api/health")
@@ -101,10 +102,7 @@ def _page(path: Path) -> FileResponse:
 
 @app.get("/", include_in_schema=False)
 def home(identity: Identity | None = Depends(optional_identity)):
-    if identity and identity.role in STAFF_ROLES and identity.permissions:
-        return RedirectResponse("/editor/", status_code=302)
-    if identity and identity.role == "narrator":
-        return RedirectResponse("/narrator/", status_code=302)
+    # Everyone uses the app now: listeners and narrators land on Home, editors and admins on /studio.
     return _app_index()
 
 

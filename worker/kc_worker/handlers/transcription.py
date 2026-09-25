@@ -36,7 +36,7 @@ class TranscriptionHandler:
             from sarvamai import SarvamAI
         except ImportError as error:
             raise PermanentError("The sarvamai package is not installed on this worker.") from error
-        model = os.environ.get("KC_STT_MODEL", "saaras:v4")
+        model = (context.inputs.get("settings") or {}).get("ai.stt.model") or os.environ.get("KC_STT_MODEL", "saaras:v4")
         suffix = Path(context.inputs.get("sourceFilename") or "audio.mp3").suffix or ".mp3"
         source = context.client.download(context.inputs["sourceUrl"],
                                          context.scratch / f"{context.inputs['assetId']}{suffix}")
@@ -63,4 +63,4 @@ class TranscriptionHandler:
             raise PermanentError("The transcript came back empty; the audio may have no speech.")
         segments = raw.get("timestamps") or raw.get("chunks") or raw.get("segments") or []
         return {"language": language, "text": text, "segments": segments, "rawKey": raw_key,
-                "provider": "sarvam", "model": model}
+                "provider": "sarvam", "model": model, "languageProbability": raw.get("language_probability")}
