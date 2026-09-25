@@ -8,7 +8,7 @@ import { Button, Chip, Cover, ErrorState, Loading, Text, useColors } from '@/com
 import { api } from '@/lib/api';
 import { formatClock, LANGUAGE_LABELS } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
-import { hoursLabel, type QueueItem, type QueueResponse } from '@/lib/studio';
+import { BACKGROUND_LABELS, hoursLabel, MASTERING_CHOICES, type QueueItem, type QueueResponse } from '@/lib/studio';
 import { radius, space } from '@/lib/theme';
 
 const VIEWS = [
@@ -33,11 +33,14 @@ export default function Queue() {
   const [cursor, setCursor] = useState(0);
   const [spotChecked, setSpotChecked] = useState(false);
   const [markOwned, setMarkOwned] = useState(true);
+  const [background, setBackground] = useState<string | null>(null);
+  const [masterChoice, setMasterChoice] = useState<string>('auto');
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const params = new URLSearchParams({ view, ...(search.trim() ? { q: search.trim() } : {}), ...(language ? { language } : {}) });
-  const queue = useQuery({ queryKey: ['studio-queue', view, search.trim(), language],
+  const params = new URLSearchParams({ view, ...(search.trim() ? { q: search.trim() } : {}), ...(language ? { language } : {}),
+    ...(background ? { mastering: background } : {}) });
+  const queue = useQuery({ queryKey: ['studio-queue', view, search.trim(), language, background],
     queryFn: () => api<QueueResponse>(`/api/studio/queue?${params}`, { profile: false }), refetchInterval: 20_000 });
   const items = useMemo(() => queue.data?.items ?? [], [queue.data]);
 
@@ -101,6 +104,14 @@ export default function Queue() {
       : result.untranscribedMinutes ? ` ${result.untranscribedMinutes} minutes wait for paid transcription (admin).` : '');
   });
 
+  // P2-18: queue the selected stories for mastering (free, local workers); listeners keep the current copy meanwhile.
+  const bulkMaster = () => run(async () => {
+    const result = await api<{ queued: number; skipped: { title: string; reason: string }[] }>('/api/studio/audio/master',
+      { method: 'POST', profile: false, body: { assetIds: [...selected], choice: masterChoice } });
+    return `Queued ${result.queued} for mastering.` + (result.skipped.length
+      ? ` Skipped: ${result.skipped.map((s) => `${s.title} (${s.reason})`).join(', ')}` : '');
+  });
+
   const selectedItems = items.filter((item) => selected.has(item.id));
   const untranscribedMinutes = Math.round(selectedItems.filter((i) => !i.hasTranscript).reduce((s, i) => s + i.duration, 0) / 60);
 
@@ -121,13 +132,26 @@ export default function Queue() {
           <Chip key={code} label={label} selected={language === code} onPress={() => setLanguage(language === code ? null : code)} />
         ))}
       </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, alignItems: 'center' }}>
+        <Text variant="small" muted>Background:</Text>
+        {Object.entries(BACKGROUND_LABELS).filter(([code]) => code !== 'unknown').map(([code, label]) => (
+          <Chip key={code} label={label} selected={background === code}
+            onPress={() => { setBackground(background === code ? null : code); setSelected(new Set()); }} />
+        ))}
+      </View>
 
-      {view === 'review' || view === 'catalog' || view === 'transcription' ? (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md, alignItems: 'center', padding: space.md,
-          borderRadius: radius.md, backgroundColor: colors.surfaceAlt }}>
-          <Button kind="ghost" title={view === 'review' ? 'Select all eligible' : 'Select all'}
-            onPress={() => setSelected(new Set(items.filter((i) => view !== 'review' || i.bulkEligible).map((i) => i.id)))} />
+      <View style={{ gap: space.sm, padding: space.md, borderRadius: radius.md, backgroundColor: colors.surfaceAlt }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md, alignItems: 'center' }}>
+          <Button kind="ghost" title="Select all" onPress={() => setSelected(new Set(items.map((i) => i.id)))} />
+          {view === 'review' ? (
+            <Button kind="ghost" title="Select all eligible to publish"
+              onPress={() => setSelected(new Set(items.filter((i) => i.bulkEligible).map((i) => i.id)))} />
+          ) : null}
+          {selected.size ? <Button kind="ghost" title="Clear" onPress={() => setSelected(new Set())} /> : null}
           <Text variant="small">{selected.size} selected</Text>
+        </View>
+        {view === 'review' || view === 'catalog' || view === 'transcription' ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md, alignItems: 'center' }}>
           {view === 'review' ? (
             <>
               <Check label="I spot-checked a few of these" checked={spotChecked} onChange={setSpotChecked} />
@@ -145,7 +169,20 @@ export default function Queue() {
             </>
           )}
         </View>
-      ) : null}
+        ) : null}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, alignItems: 'center' }}>
+          <Text variant="small" muted>Mastering:</Text>
+          {MASTERING_CHOICES.map(([value, label]) => (
+            <Chip key={value} label={label} selected={masterChoice === value} onPress={() => setMasterChoice(value)} />
+          ))}
+          <Button kind="secondary" title={`Queue mastering (${selected.size})`} disabled={!selected.size} loading={busy}
+            onPress={() => void bulkMaster()} />
+        </View>
+        <Text variant="small" muted>
+          Free, on our own workers. Listeners keep the current audio until the new copy is ready. Automatic decides from
+          the recording; the other choices are kept for each story. Words, pauses, and expression are never edited.
+        </Text>
+      </View>
       {message ? <Text>{message}</Text> : null}
 
       {queue.isLoading ? <Loading /> : queue.error ? <ErrorState error={queue.error} onRetry={() => void queue.refetch()} /> : null}
@@ -153,7 +190,7 @@ export default function Queue() {
       <View style={{ gap: 2 }}>
         {items.map((item, index) => (
           <Row key={item.id} item={item} focused={index === cursor} selected={selected.has(item.id)}
-            selectable={view === 'review' || view === 'catalog' || view === 'transcription'} onToggle={() => toggle(item.id)} />
+            showBlockers={view === 'review'} onToggle={() => toggle(item.id)} />
         ))}
       </View>
       {Platform.OS === 'web' ? <Text variant="small" muted>Keys: j / k move · x select · Enter open</Text> : null}
@@ -180,20 +217,18 @@ function Badge({ text, color }: { text: string; color: string }) {
   );
 }
 
-function Row({ item, focused, selected, selectable, onToggle }: {
-  item: QueueItem; focused: boolean; selected: boolean; selectable: boolean; onToggle: () => void;
+function Row({ item, focused, selected, showBlockers, onToggle }: {
+  item: QueueItem; focused: boolean; selected: boolean; showBlockers: boolean; onToggle: () => void;
 }) {
   const colors = useColors();
   const safetyColor = item.safetyRating === 'all-ages' ? colors.success : item.safetyRating === 'caution' ? colors.accent : colors.danger;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.sm, borderRadius: radius.md,
       backgroundColor: focused ? colors.surfaceAlt : colors.surface, borderWidth: 1, borderColor: focused ? colors.primary : colors.border }}>
-      {selectable ? (
-        <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: selected }} accessibilityLabel={`Select ${item.title}`}
-          onPress={onToggle} hitSlop={8}>
-          <Ionicons name={selected ? 'checkbox' : 'square-outline'} size={22} color={colors.primary} />
-        </Pressable>
-      ) : null}
+      <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: selected }} accessibilityLabel={`Select ${item.title}`}
+        onPress={onToggle} hitSlop={8}>
+        <Ionicons name={selected ? 'checkbox' : 'square-outline'} size={22} color={colors.primary} />
+      </Pressable>
       <Pressable accessibilityRole="link" onPress={() => router.push(`/studio/review/${item.id}`)}
         style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.md }}>
         <Cover id={item.id} title={item.title} artworkUrl={item.artworkUrl} size={48} rounded={8} />
@@ -213,13 +248,17 @@ function Row({ item, focused, selected, selectable, onToggle }: {
             {item.qcVerdict && item.qcVerdict !== 'pass' ? <Badge text={`sound ${item.qcVerdict}`} color={colors.accent} /> : null}
             {item.transcriptReviewRequired ? <Badge text="read transcript" color={colors.accent} /> : null}
             {!item.hasTranscript && item.stage !== 'published' ? <Badge text="no transcript" color={colors.muted} /> : null}
+            {item.mastering.processing ? <Badge text="mastering…" color={colors.primary} />
+              : item.mastering.profile === 'tonal' ? <Badge text="steady tone: listen" color={colors.accent} />
+              : item.mastering.level ? <Badge text={{ full: 'cleaned up', light: 'polished', none: 'as recorded' }[item.mastering.level]}
+                color={colors.muted} /> : null}
           </View>
           {item.waitingHours != null ? (
             <Text variant="small" color={item.overdue ? colors.danger : colors.muted}>
               {item.overdue ? 'Overdue · ' : ''}waiting {hoursLabel(item.waitingHours)}
             </Text>
           ) : null}
-          {selectable && !item.bulkEligible && item.bulkBlockers.length ? (
+          {showBlockers && !item.bulkEligible && item.bulkBlockers.length ? (
             <Text variant="small" muted numberOfLines={1}>Bulk: {item.bulkBlockers.join(', ')}</Text>
           ) : null}
         </View>

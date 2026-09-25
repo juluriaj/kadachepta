@@ -90,7 +90,7 @@ def bulk_blockers(db: Session, asset: AudioAsset, trust: str | None, draft: Teas
 
 
 @router.get("/queue")
-def queue(view: str = "review", q: str | None = None, language: str | None = None,
+def queue(view: str = "review", q: str | None = None, language: str | None = None, mastering: str | None = None,
           identity: Identity = Depends(require("content.publish")), db: Session = Depends(get_db)):
     query = select(AudioAsset).options(selectinload(AudioAsset.narrator_user), selectinload(AudioAsset.series))
     if view in VIEWS:
@@ -109,11 +109,17 @@ def queue(view: str = "review", q: str | None = None, language: str | None = Non
         query = query.where(or_(AudioAsset.title.ilike(like), AudioAsset.album.ilike(like), AudioAsset.id == q.strip()))
     if language:
         query = query.where(AudioAsset.language == language)
+    if mastering == "not-analysed":
+        query = query.where(AudioAsset.media_status == "ready", ~AudioAsset.qc.has_key("mastering"))
+    elif mastering:  # a background profile (music, tonal, noise, ...)
+        query = query.where(AudioAsset.qc["mastering"]["profile"].astext == mastering)
     assets = db.scalars(query.order_by(*order).limit(300)).all()
     ids = [a.id for a in assets]
     drafts = _latest_by_asset(db, TeaserDraft, ids, ("needs-review", "approved"))
     transcripts = _latest_by_asset(db, Transcript, ids, pipeline.USABLE)
     trust = _trust(db, {a.narrator_user_id for a in assets if a.narrator_user_id})
+    processing = set(db.scalars(select(Job.audio_asset_id).where(
+        Job.audio_asset_id.in_(ids), Job.job_type == "media.process", Job.status.in_(("queued", "leased", "failed")))))
     sla = float(app_settings.get(db, "review.slaHours"))
     now = utcnow()
     items = []
@@ -134,6 +140,10 @@ def queue(view: str = "review", q: str | None = None, language: str | None = Non
             "transcriptReviewRequired": pipeline.transcript_review_required(db, asset, transcript),
             "artworkUrl": asset_payload(asset)["artworkUrl"], "series": asset.series.title if asset.series else None,
             "bulkEligible": not blockers, "bulkBlockers": blockers, "publishedAt": iso(asset.published_at),
+            "mastering": {"choice": asset.audio_mastering or "auto",
+                          "profile": ((asset.qc or {}).get("mastering") or {}).get("profile"),
+                          "level": ((asset.qc or {}).get("mastering") or {}).get("level"),
+                          "processing": asset.id in processing},
         })
     if view in VIEWS:  # trusted narrators get expedited review: their stories go first
         items.sort(key=lambda item: (item["trustLevel"] != "trusted", -(item["waitingHours"] or 0)))
@@ -531,6 +541,33 @@ def choose_mastering(asset_id: str, payload: MasteringChoice, identity: Identity
     _event(db, asset.id, "audio:mastering", identity.username, f"{payload.choice}; job {job.id}")
     db.commit()
     return {"ok": True, "job": _job_payload(job)}
+
+
+class BulkMastering(BaseModel):
+    assetIds: list[str] = Field(min_length=1, max_length=300)
+    choice: Literal["auto", "full", "light", "none"] = "auto"
+
+
+@router.post("/audio/master", status_code=202)
+def bulk_mastering(payload: BulkMastering, identity: Identity = Depends(require("content.publish")),
+                   db: Session = Depends(get_db)):
+    """Queue selected stories for mastering (free: local workers). Listeners keep the current copy until the
+    new one is ready. "auto" lets the recording decide; the other choices are kept for each story."""
+    queued, skipped = 0, []
+    for asset in db.scalars(select(AudioAsset).where(AudioAsset.id.in_(payload.assetIds))):
+        if asset.media_status != "ready":
+            skipped.append({"id": asset.id, "title": asset.title, "reason": "audio not processed yet"})
+            continue
+        if jobs.active_job(db, asset.id, "media.process"):
+            skipped.append({"id": asset.id, "title": asset.title, "reason": "already queued"})
+            continue
+        asset.audio_mastering = None if payload.choice == "auto" else payload.choice
+        job = jobs.enqueue(db, "media.process", asset_id=asset.id, created_by=identity.username,
+                           priority=jobs.PRIORITY_DEFAULT)
+        _event(db, asset.id, "audio:mastering", identity.username, f"{payload.choice} (bulk); job {job.id}")
+        queued += 1
+    db.commit()
+    return {"queued": queued, "skipped": skipped}
 
 
 REMASTER_SCOPES = {

@@ -6,7 +6,7 @@ import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 
 import { Button, Card, Chip, ErrorState, Field, Loading, Text, useColors } from '@/components/ui';
 import { api, mediaUrl } from '@/lib/api';
-import type { MasteringSummary, SettingSpec, SettingsPage } from '@/lib/studio';
+import { BACKGROUND_LABELS, type MasteringSummary, type SettingSpec, type SettingsPage } from '@/lib/studio';
 import { radius, space } from '@/lib/theme';
 
 // P2-14: AI models, providers, and pipeline switches, stored in the database and sent with every job.
@@ -201,11 +201,6 @@ function TestPanel({ values }: { values: Record<string, unknown> }) {
   );
 }
 
-const PROFILE_LABELS: Record<string, string> = {
-  noise: 'steady noise', hum: 'hum', clean: 'quiet raw', edited: 'edited', music: 'music bed', tonal: 'steady tone (listen)',
-  unknown: 'too short', 'not-analysed': 'not analysed yet',
-};
-
 // P2-18: how the catalog was mastered, and re-running the audio step on existing stories (free, local).
 function MasteringPanel() {
   const colors = useColors();
@@ -235,7 +230,7 @@ function MasteringPanel() {
       {summary ? (
         <>
           <Text variant="small">
-            Background: {Object.entries(summary.profiles).map(([p, n]) => `${PROFILE_LABELS[p] ?? p} ${n}`).join(' · ') || 'nothing yet'}
+            Background: {Object.entries(summary.profiles).map(([p, n]) => `${BACKGROUND_LABELS[p] ?? p} ${n}`).join(' · ') || 'nothing yet'}
           </Text>
           <Text variant="small">
             Treatment: {Object.entries(summary.levels).map(([l, n]) => `${l} ${n}`).join(' · ') || 'none yet'}
