@@ -143,6 +143,7 @@ class AudioAsset(Base):
     # {"reasons": ["audio-noise", ...], "note": "...", "by": "...", "at": "..."} when an editor asks for changes
     changes_requested: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
     captions_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    audio_mastering: Mapped[str | None] = mapped_column(String(8))  # editor override: full | light | none
     source_text: Mapped[str | None] = mapped_column(Text)  # what the narrator read from (teleprompter), if given
     series_id: Mapped[int | None] = mapped_column(ForeignKey("series.id", ondelete="SET NULL"), index=True)
     series_position: Mapped[int | None] = mapped_column(Integer)

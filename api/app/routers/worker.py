@@ -74,6 +74,8 @@ def _inputs(db: Session, job: Job, request: Request) -> dict[str, Any]:
             "sourceFilename": asset.source_filename,
             # Admin settings (models, providers, prompt versions) travel with every job: no worker restarts.
             "settings": app_settings.for_job(db, job.job_type, asset.language, job.payload.get("settings"))}
+    if job.job_type == "media.process":
+        base["mastering"] = asset.audio_mastering  # an editor's choice for this story, if any
     if job.job_type == "media.process" and job.payload.get("parts"):
         # A recording made in several takes: the worker joins the parts before processing.
         base["parts"] = [{"url": _absolute(request, media_url(key)), "filename": key.rsplit("/", 1)[-1]}
@@ -128,8 +130,8 @@ def heartbeat(job_id: int, worker: Worker = Depends(current_worker), db: Session
 def _output_key(job: Job, asset: AudioAsset, name: str) -> str:
     if job.job_type == "media.process" and name.startswith("original."):
         return f"originals/{asset.id}/joined-{job.id}-{name}"
-    if job.job_type == "media.process":
-        return f"renditions/{asset.id}/v{asset.version_number}/{name}"
+    if job.job_type == "media.process":  # per job, so re-mastering never overwrites a file someone is playing
+        return f"renditions/{asset.id}/v{asset.version_number}/j{job.id}/{name}"
     if job.job_type == "artwork":
         return f"artworks/{asset.id}/{int(utcnow().timestamp())}-{name}"
     if job.job_type == "transcription":
@@ -180,12 +182,22 @@ def apply_media(db: Session, job: Job, asset: AudioAsset, result: dict[str, Any]
         asset.source_filename = result["sourceKey"].rsplit("/", 1)[-1]
         if result.get("sourceChecksum"):
             asset.checksum_sha256 = str(result["sourceChecksum"])[:64]
+    old = asset.renditions or {}
     renditions = {}
-    for name in ("standard", "datasaver"):
+    for name in ("standard", "datasaver", "compare"):
         entry = result.get("renditions", {}).get(name)
         if entry:
             renditions[name] = {**entry, "key": _require_key(asset, entry.get("key"), "renditions")}
     renditions["waveform"] = [round(float(v), 3) for v in result.get("waveform", [])][:400]
+    if renditions.get("standard"):
+        # Re-mastering: keep the previous copies one more round (someone may be playing them); drop older ones.
+        current = {entry["key"] for entry in renditions.values() if isinstance(entry, dict)}
+        replaced = {entry.get("key") for name, entry in old.items() if isinstance(entry, dict)} - current - {None}
+        for key in set(old.get("previous") or []) - current - replaced:
+            if key.startswith(f"renditions/{asset.id}/"):
+                get_storage().delete(key)
+        if replaced:
+            renditions["previous"] = sorted(replaced)
     asset.renditions = renditions
     asset.qc = result.get("qc", {})
     asset.media_status = "ready" if renditions.get("standard") else "failed"

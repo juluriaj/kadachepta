@@ -29,7 +29,7 @@ def test_media_job_round_trip(client, db):
     assert source.status_code == 200
     key = client.post(f"/api/worker/jobs/{lease['id']}/files?name=standard.m4a", content=b"m4a-data",
                       headers=auth(token)).json()["key"]
-    assert key == f"renditions/{'a' * 16}/v1/standard.m4a"
+    assert key == f"renditions/{'a' * 16}/v1/j{lease['id']}/standard.m4a"
     result = {"durationSeconds": 301.5, "renditions": {"standard": {"key": key, "bytes": 8}},
               "waveform": [0.1, 1.0], "qc": {"verdict": "pass", "checks": []}}
     assert client.post(f"/api/worker/jobs/{lease['id']}/complete", json={"result": result},

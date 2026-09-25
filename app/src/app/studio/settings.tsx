@@ -2,11 +2,11 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useState } from 'react';
-import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 
 import { Button, Card, Chip, ErrorState, Field, Loading, Text, useColors } from '@/components/ui';
 import { api, mediaUrl } from '@/lib/api';
-import type { SettingSpec, SettingsPage } from '@/lib/studio';
+import type { MasteringSummary, SettingSpec, SettingsPage } from '@/lib/studio';
 import { radius, space } from '@/lib/theme';
 
 // P2-14: AI models, providers, and pipeline switches, stored in the database and sent with every job.
@@ -99,6 +99,8 @@ function SettingsForm({ page, refetch }: { page: SettingsPage; refetch: () => vo
       ))}
       {message ? <Text>{message}</Text> : null}
       <Button title="Save settings" loading={busy} onPress={() => void save()} />
+
+      <MasteringPanel />
 
       <TestPanel values={(() => { const all = parsed(); return typeof all === 'string' ? {} : changed(all); })()} />
     </ScrollView>
@@ -195,6 +197,60 @@ function TestPanel({ values }: { values: Record<string, unknown> }) {
         </View>
       ) : null}
       {result?.prompt ? <Text variant="small" muted>{result.prompt}</Text> : null}
+    </Card>
+  );
+}
+
+const PROFILE_LABELS: Record<string, string> = {
+  noise: 'steady noise', hum: 'hum', clean: 'quiet raw', edited: 'edited', music: 'music bed', tonal: 'steady tone (listen)',
+  unknown: 'too short', 'not-analysed': 'not analysed yet',
+};
+
+// P2-18: how the catalog was mastered, and re-running the audio step on existing stories (free, local).
+function MasteringPanel() {
+  const colors = useColors();
+  const [message, setMessage] = useState<string | null>(null);
+  const query = useQuery({ queryKey: ['studio-mastering'], refetchInterval: 15_000,
+    queryFn: () => api<MasteringSummary>('/api/studio/audio/mastering', { profile: false }) });
+  const summary = query.data;
+  const run = async (scope: string, stories: number) => {
+    const text = `Re-process the audio of ${stories} stories with the saved mastering settings? Listeners keep the current `
+      + 'copy until each new one is ready, and per-story editor choices are kept.';
+    if (Platform.OS === 'web' && !window.confirm(text)) return;
+    try {
+      const result = await api<{ queued: number }>('/api/studio/audio/remaster', { method: 'POST', profile: false, body: { scope } });
+      setMessage(`${result.queued} stories queued.`);
+      void query.refetch();
+    } catch (failure) {
+      setMessage(failure instanceof Error ? failure.message : String(failure));
+    }
+  };
+  return (
+    <Card>
+      <Text variant="heading">Mastering the catalog</Text>
+      <Text variant="small" muted>
+        Runs on our own workers (no cost). Save the settings above first. Listen to a few stories in review before
+        running it on everything: each has an “As recorded” switch for comparison.
+      </Text>
+      {summary ? (
+        <>
+          <Text variant="small">
+            Background: {Object.entries(summary.profiles).map(([p, n]) => `${PROFILE_LABELS[p] ?? p} ${n}`).join(' · ') || 'nothing yet'}
+          </Text>
+          <Text variant="small">
+            Treatment: {Object.entries(summary.levels).map(([l, n]) => `${l} ${n}`).join(' · ') || 'none yet'}
+            {summary.editorChoices ? ` · ${summary.editorChoices} chosen by editors` : ''}
+            {summary.running ? ` · ${summary.running} in the queue` : ''}
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+            {summary.scopes.map((scope) => (
+              <Button key={scope.scope} kind="secondary" title={`${scope.label}: ${scope.stories} (${scope.minutes} min)`}
+                disabled={!scope.stories} onPress={() => void run(scope.scope, scope.stories)} />
+            ))}
+          </View>
+        </>
+      ) : query.error ? <Text color={colors.danger}>{String(query.error)}</Text> : null}
+      {message ? <Text>{message}</Text> : null}
     </Card>
   );
 }

@@ -51,10 +51,14 @@ SPECS: dict[str, Spec] = {
                              "The local model is tuned for 8 steps; fewer is faster but rougher.", minimum=2, maximum=40),
     "ai.stt.model": Spec(os.environ.get("KC_STT_MODEL") or "saaras:v4", "text", "Speech-to-text model",
                          "Sarvam model used for transcription (billed per audio minute)."),
-    "audio.noiseReduction": Spec("auto", "choice", "Noise reduction",
-                                 "First pass on listening copies (the original is kept). auto: only when background "
-                                 "noise is audible; it can dull intended background music. always / off.",
-                                 choices=("auto", "always", "off")),
+    "audio.mastering": Spec("auto", "choice", "Mastering",
+                            "auto: clean up raw recordings (noise removal, levels, fades), polish edited ones lightly, "
+                            "and leave produced tracks with music alone. The original is always kept, and editors can "
+                            "choose per story. off: loudness normalization only.",
+                            choices=("auto", "off")),
+    "audio.masteringStrength": Spec("standard", "choice", "Noise removal strength",
+                                    "How hard noise removal works on raw recordings. Strong removes more noise but can "
+                                    "make voices sound thin.", choices=("gentle", "standard", "strong")),
     "pipeline.autoTranscribe": Spec(True, "bool", "Transcribe narrator submissions automatically",
                                     "Paid (Sarvam). Seed-catalog stories are never transcribed without an admin action."),
     "pipeline.autoArtwork": Spec(True, "bool", "Create artwork automatically",
@@ -81,7 +85,7 @@ WORKER_KEYS = {
     "teaser": ("ai.llm.model", "ai.llm.modelByLanguage", "ai.drafts.promptVersion"),
     "artwork": ("ai.artwork.provider", "ai.artwork.steps"),
     "transcription": ("ai.stt.model",),
-    "media.process": ("audio.noiseReduction",),
+    "media.process": ("audio.mastering", "audio.masteringStrength"),
 }
 
 

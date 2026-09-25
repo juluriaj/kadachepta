@@ -17,7 +17,7 @@ from ..models import (
     AssetRights, AudioAsset, EditorialEvent, Job, NarratorCredit, TeaserDraft, Transcript,
 )
 from ..services.assets import (
-    apply_metadata, asset_payload, clean_metadata, iso, missing_publication_metadata,
+    apply_metadata, asset_payload, clean_metadata, iso, missing_publication_metadata, rendition_keys,
 )
 from ..services.notify import notify
 from ..storage import get_storage
@@ -379,7 +379,7 @@ def delete_submission(payload: DeleteRequest, identity: Identity = Depends(requi
     if asset.status in {"published", "archived"}:
         raise HTTPException(status_code=409, detail="Published or archived audio cannot be deleted.")
     keys = [asset.source_key, asset.artwork_key,
-            *[(value or {}).get("key") for value in (asset.renditions or {}).values() if isinstance(value, dict)]]
+            *rendition_keys(asset)]
     jobs.cancel_active(db, asset.id)
     db.delete(asset)
     _event(db, "narrator_asset", asset.id, "content:deleted", identity.username, payload.notes)

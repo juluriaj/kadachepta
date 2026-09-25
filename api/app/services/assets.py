@@ -97,6 +97,24 @@ def audio_urls(asset: AudioAsset, include_original: bool = False) -> dict[str, s
     return urls
 
 
+def rendition_keys(asset: AudioAsset) -> list[str]:
+    """Every listening-copy file of a story, including copies kept from the previous mastering run."""
+    renditions = asset.renditions or {}
+    keys = [value.get("key") for value in renditions.values() if isinstance(value, dict)]
+    return [key for key in [*keys, *(renditions.get("previous") or [])] if key]
+
+
+def mastering_payload(asset: AudioAsset) -> dict[str, Any]:
+    """What mastering did to a story, for editors and its narrator (P2-18)."""
+    mastering = (asset.qc or {}).get("mastering") or {}
+    compare = ((asset.renditions or {}).get("compare") or {}).get("key")
+    return {"choice": asset.audio_mastering or "auto", "profile": mastering.get("profile"),
+            "level": mastering.get("level"), "reason": mastering.get("reason"), "fallback": mastering.get("fallback"),
+            "beforeDb": mastering.get("beforeDb"), "afterDb": mastering.get("afterDb"),
+            "trimmedStart": mastering.get("trimmedStart"), "trimmedEnd": mastering.get("trimmedEnd"),
+            "compareUrl": media_url(compare) if compare else None}
+
+
 def artwork_url(asset: AudioAsset) -> str | None:
     version = int(asset.artwork_updated_at.timestamp()) if asset.artwork_updated_at else None
     return media_url(asset.artwork_key, version)

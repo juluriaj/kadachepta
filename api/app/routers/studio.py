@@ -23,7 +23,7 @@ from ..models import (
 )
 from ..services import pipeline, policy
 from ..services import settings as app_settings
-from ..services.assets import apply_metadata, asset_payload, clean_metadata, iso, metadata_of
+from ..services.assets import apply_metadata, asset_payload, clean_metadata, iso, mastering_payload, metadata_of
 from ..services.notify import notify
 from ..storage import media_url
 from .editorial import (
@@ -180,6 +180,7 @@ def review_payload(db: Session, asset: AudioAsset) -> dict[str, Any]:
         "asset": asset_payload(asset, include_original=True), "stage": asset.pipeline_stage,
         "stageLabel": pipeline.STAGES.get(asset.pipeline_stage), "pipelineError": asset.pipeline_error,
         "waveform": (asset.renditions or {}).get("waveform", []), "qc": asset.qc or {},
+        "mastering": mastering_payload(asset),
         "waitingHours": round(waiting, 1) if waiting is not None else None,
         "overdue": waiting is not None and waiting > sla, "captionsEnabled": asset.captions_enabled,
         "changesRequested": asset.changes_requested or None, "sourceText": asset.source_text,
@@ -509,6 +510,88 @@ def prepare(payload: Prepare, identity: Identity = Depends(require("content.publ
     return {"stories": sum(stages.values()), "stages": stages,
             "transcriptionMinutes": round(minutes) if payload.allowTranscription else 0,
             "untranscribedMinutes": round(minutes)}
+
+
+# --- Mastering (P2-18) ---
+
+class MasteringChoice(BaseModel):
+    choice: Literal["auto", "full", "light", "none"]
+
+
+@router.post("/review/{asset_id}/mastering", status_code=202)
+def choose_mastering(asset_id: str, payload: MasteringChoice, identity: Identity = Depends(require("content.publish")),
+                     db: Session = Depends(get_db)):
+    """Re-master one story: automatic, clean up (noise removal), light polish, or the recording as made."""
+    asset = _asset(db, asset_id)
+    if jobs.active_job(db, asset.id, "media.process"):
+        raise HTTPException(status_code=409, detail="The audio is already being processed; try again in a minute.")
+    asset.audio_mastering = None if payload.choice == "auto" else payload.choice
+    job = jobs.enqueue(db, "media.process", asset_id=asset.id, created_by=identity.username,
+                       priority=jobs.PRIORITY_INTERACTIVE)
+    _event(db, asset.id, "audio:mastering", identity.username, f"{payload.choice}; job {job.id}")
+    db.commit()
+    return {"ok": True, "job": _job_payload(job)}
+
+
+REMASTER_SCOPES = {
+    "pipeline": "Stories being prepared, in review, or published",
+    "catalog": "Every story with processed audio",
+}
+
+
+def _remaster_query(scope: str):
+    query = select(AudioAsset).where(AudioAsset.media_status == "ready", AudioAsset.status != "rejected")
+    if scope == "pipeline":
+        query = query.where(AudioAsset.pipeline_stage != "none")
+    return query
+
+
+@router.get("/audio/mastering")
+def mastering_summary(identity: Identity = Depends(require("jobs.manage")), db: Session = Depends(get_db)):
+    """How the catalog was mastered: counts by background profile and level, and what re-processing would cost."""
+    profiles: dict[str, int] = {}
+    levels: dict[str, int] = {}
+    overrides = 0
+    for qc, override in db.execute(select(AudioAsset.qc, AudioAsset.audio_mastering)
+                                   .where(AudioAsset.media_status == "ready")):
+        mastering = (qc or {}).get("mastering")
+        if override:
+            overrides += 1
+        profile = mastering.get("profile") if mastering else "not-analysed"
+        profiles[profile] = profiles.get(profile, 0) + 1
+        if mastering:
+            levels[mastering.get("level", "none")] = levels.get(mastering.get("level", "none"), 0) + 1
+    scopes = []
+    for scope, label in REMASTER_SCOPES.items():
+        rows = _remaster_query(scope).subquery()
+        stories, seconds = db.execute(select(func.count(), func.coalesce(func.sum(rows.c.duration_seconds), 0))).one()
+        scopes.append({"scope": scope, "label": label, "stories": stories, "minutes": round(float(seconds) / 60)})
+    running = db.scalar(select(func.count()).select_from(Job).where(
+        Job.job_type == "media.process", Job.status.in_(("queued", "leased", "failed"))))
+    return {"profiles": profiles, "levels": levels, "editorChoices": overrides, "scopes": scopes, "running": running}
+
+
+class Remaster(BaseModel):
+    scope: Literal["pipeline", "catalog"]
+
+
+@router.post("/audio/remaster", status_code=202)
+def remaster(payload: Remaster, request: Request, identity: Identity = Depends(require("jobs.manage")),
+             db: Session = Depends(get_db)):
+    """Run the audio step again with the current mastering settings (free: it runs on our own workers).
+
+    Listeners keep hearing the current copy until each new one is ready; editors' per-story choices stay.
+    """
+    queued = 0
+    for asset in db.scalars(_remaster_query(payload.scope)):
+        if jobs.active_job(db, asset.id, "media.process"):
+            continue
+        jobs.enqueue(db, "media.process", asset_id=asset.id, created_by=identity.username,
+                     priority=jobs.PRIORITY_BULK)
+        queued += 1
+    audit(db, "audio:remaster", request, identity.user.id, scope=payload.scope, stories=queued)
+    db.commit()
+    return {"queued": queued}
 
 
 # --- Narrators and trust (P2-10) ---

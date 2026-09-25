@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 
+import { MasteringCompare } from '@/components/MasteringCompare';
 import { QcList, StageBadge, Timeline } from '@/components/narrator';
 import { Button, Card, Cover, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -83,6 +84,16 @@ export default function SubmissionStatus() {
               return <Text key={code}>• {language === 'en' ? s.changesRequested!.texts[index] : t(key)}</Text>;
             })}
             {s.changesRequested.note ? <Text style={{ fontStyle: 'italic' }}>“{s.changesRequested.note}”</Text> : null}
+          </Card>
+        ) : null}
+
+        {s.mediaStatus === 'ready' && s.mastering?.level && s.mastering.level !== 'none' ? (
+          <Card>
+            <Text variant="heading">{t('master.title')}</Text>
+            <Text variant="small" muted>{t(s.mastering.level === 'full' ? 'master.full' : 'master.light')}</Text>
+            <MasteringCompare audioUrl={s.audioUrl} mastering={s.mastering} waveform={s.waveform} duration={s.duration}
+              labels={{ mastered: t('master.mastered'), original: t('master.original') }} />
+            <Text variant="small" muted>{t('master.editor')}</Text>
           </Card>
         ) : null}
 

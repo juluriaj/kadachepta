@@ -66,10 +66,18 @@ export type Submission = Story & {
   stats?: { listeners: number; seconds: number; completions: number; favorites: number } | null;
 };
 
+// P2-18: what mastering did to a story's listening copy (the original is always kept).
+export type Mastering = {
+  choice: 'auto' | 'full' | 'light' | 'none'; profile: string | null; level: 'full' | 'light' | 'none' | null;
+  reason: string | null; fallback: string | null; beforeDb: number | null; afterDb: number | null;
+  trimmedStart: number | null; trimmedEnd: number | null; compareUrl: string | null;
+};
+
 export type SubmissionDetail = Submission & {
   timeline: { key: string; label: string; state: 'done' | 'current' | 'todo' | 'blocked' }[];
   pipelineError: string | null;
   waveform: number[];
+  mastering: Mastering;
   sourceText: string | null;
   draft: { shortText: string | null; longText: string | null; themes: string[]; ageSuggestion: string | null } | null;
   attestation: { sourceType?: string; sourceReference?: string };

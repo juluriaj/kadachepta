@@ -32,13 +32,14 @@ artwork) until an editor reviews it on one screen and publishes with one action.
 | 14 | Series: chapters in order; the listener app's "Up next" follows the series | New story → Part of a series |
 | 15 | Everyone keeps their own details: name, email (changed only with a code sent to the new address), phone, preferred contact (email, phone, WhatsApp) | Family → Your details; Studio tab; studio → My details |
 | 16 | Editors see each narrator's contact details and preference | Studio → Narrators; review screen |
-| 17 | Noise reduction on listening copies (original kept): auto, always, or off; auto keeps it only when it lowers the background by 3 dB or more | AI & processing → Audio; sound check on the review screen |
+| 17 | Mastering (P2-18): each story gets a background profile and a treatment (clean up, light polish, or as recorded); the review screen has a "Listening copy / As recorded" switch at equal loudness and a per-story choice | Review screen → sound check; narrator's submission page |
+| 18 | Re-mastering existing stories: summary of the catalog by background, and one button per scope (development set, whole catalog) | AI & processing → Mastering the catalog |
 
 ## What I tested
 
-- **Automated:** 73 API tests (13 new for the pipeline, uploads, review, bulk publish, settings, and job
-  batching; 5 for the safety word list, channel-name removal, and transcript confidence), 11 worker tests,
-  10 app unit tests, typecheck and lint clean.
+- **Automated:** 81 API tests (including per-story mastering choice, keeping and cleaning up old listening
+  copies, and bulk re-mastering), 16 worker tests (background profiles checked against values measured on real
+  catalog tracks, mastering chain, trimming, sound-check wording), 10 app unit tests, typecheck and lint clean.
 - **In the browser:** listener onboarding → became a narrator → uploaded a 76-second story → sound check,
   transcription (Sarvam), AI drafts, and local artwork ran automatically → the editor published it from the
   review screen. Studio queue, settings page (workers, LM Studio models), and narrators page.
@@ -52,10 +53,14 @@ other 558 catalog stories are back to "not started" (their drafts are kept). No 
 
 ## Being a critic: what isn't good enough yet
 
-- **Noise reduction helps with steady noise, not music.** On the 15 development stories with audible
-  background, it lowered the noise on 2 (about 6–7 dB) and was undone on 13, whose background is a music bed.
-  Separating voice from music (a source-separation model such as Demucs) or a speech-trained denoiser
-  (RNNoise, DeepFilterNet) would do better; both run locally.
+- **Mastering is judged by measurement, not yet by ear.** Across the 589 seed tracks: 438 have pauses already
+  cut to silence (edited), 64 have a music bed, about 70 are raw with steady noise or hum, 12 are quiet raw
+  recordings. On raw samples noise removal lowered the background 6–15 dB (e.g. 85.mp3 from -43 to -58 dB);
+  edited and quiet tracks keep their background level. Compression is used only for very wide recordings,
+  because on ordinary narration it lifted the background up to 10 dB. Two known soft spots: a steady music
+  drone and electrical hum look alike (about 20 devotional tracks are "steady tone": left alone, flagged to
+  listen), and noise removal can soften very breathy or whispered delivery. Please listen to a few dramatic
+  stories with the "As recorded" switch before re-mastering the whole catalog.
 
 - **The local 8B model is weak at safety.** It rated every story "all-ages", including a ghost story and one
   where animals are killed. The word list and the rule "all-ages only when nothing is flagged" now catch

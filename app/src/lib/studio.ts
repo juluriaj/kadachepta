@@ -1,5 +1,5 @@
 // Types and constants for the editor studio (English-only staff UI).
-import type { QcCheck } from './types';
+import type { Mastering, QcCheck } from './types';
 
 export const GENRES = ['Folklore', 'Fable', 'Mythology', 'History', 'Adventure', 'Fantasy', 'Humor', 'Family', 'Science',
   'Moral', 'Biography', 'Mystery', 'Poetry', 'Devotional', 'Nature'];
@@ -30,6 +30,7 @@ export type Review = {
   };
   stage: string; stageLabel: string; pipelineError: string | null; waveform: number[];
   qc: { verdict?: string; checks?: QcCheck[]; integratedLufs?: number; noiseFloorDb?: number; speechRatio?: number };
+  mastering: Mastering;
   waitingHours: number | null; overdue: boolean; captionsEnabled: boolean; sourceText: string | null;
   changesRequested: { reasons: string[]; texts: string[]; note: string; by: string; at: string } | null;
   series: { id: number; title: string; position: number | null } | null;
@@ -78,3 +79,8 @@ export function listText(values: string[] | null | undefined) {
 export function parseList(text: string) {
   return [...new Set(text.split(',').map((part) => part.trim()).filter(Boolean))];
 }
+
+export type MasteringSummary = {
+  profiles: Record<string, number>; levels: Record<string, number>; editorChoices: number; running: number;
+  scopes: { scope: 'pipeline' | 'catalog'; label: string; stories: number; minutes: number }[];
+};

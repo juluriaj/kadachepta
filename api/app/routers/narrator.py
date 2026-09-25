@@ -23,7 +23,8 @@ from ..models import (
 )
 from ..services import pipeline
 from ..services import settings as app_settings
-from ..services.assets import apply_metadata, asset_payload, clean_metadata, iso, normalize_language
+from ..services.assets import (apply_metadata, asset_payload, clean_metadata, iso, mastering_payload,
+                               normalize_language, rendition_keys)
 from ..storage import get_storage, media_url
 
 router = APIRouter(prefix="/api/narrator", tags=["narrator"])
@@ -176,7 +177,7 @@ def submission(asset_id: str, identity: Identity = Depends(require("narrator.pip
     return {
         **submission_summary(asset), "timeline": pipeline.narrator_timeline(db, asset),
         "pipelineError": asset.pipeline_error, "waveform": (asset.renditions or {}).get("waveform", []),
-        "sourceText": asset.source_text,
+        "sourceText": asset.source_text, "mastering": mastering_payload(asset),
         "draft": {"shortText": draft.short_text, "longText": draft.long_text, "themes": draft.themes,
                   "ageSuggestion": draft.age_suggestion} if draft else None,
         "attestation": rights.attestation if rights else {},
@@ -403,8 +404,7 @@ def replace_audio(asset_id: str, payload: Replacement, identity: Identity = Depe
     if asset.status in ("published", "archived"):
         raise HTTPException(status_code=409, detail="Published stories change through a new version.")
     uploads = _completed_uploads(db, identity, payload.uploadIds)
-    old_keys = [asset.source_key, *[(v or {}).get("key") for v in (asset.renditions or {}).values()
-                                    if isinstance(v, dict)]]
+    old_keys = [asset.source_key, *rendition_keys(asset)]
     checksums = [_checksum(upload.key) for upload in uploads]
     asset.checksum_sha256 = checksums[0] if len(checksums) == 1 else hashlib.sha256("".join(checksums).encode()).hexdigest()
     asset.version_number += 1
@@ -440,7 +440,7 @@ def withdraw(asset_id: str, identity: Identity = Depends(require("narrator.uploa
     if asset.status in ("published", "archived"):
         raise HTTPException(status_code=409, detail="Published stories can't be withdrawn here; contact an editor.")
     keys = [asset.source_key, asset.artwork_key,
-            *[(v or {}).get("key") for v in (asset.renditions or {}).values() if isinstance(v, dict)]]
+            *rendition_keys(asset)]
     jobs.cancel_active(db, asset.id)
     db.delete(asset)
     db.add(EditorialEvent(entity_type="narrator_asset", entity_id=asset.id, action="content:withdrawn",

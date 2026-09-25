@@ -299,3 +299,67 @@ def test_settings_are_validated_audited_and_sent_with_jobs(client, db):
     db.commit()
     lease = client.post("/api/worker/lease", json={}, headers=worker_auth(token)).json()
     assert lease["inputs"]["settings"]["ai.llm.model"] == "sarvam-m"
+
+
+def master(client, token, asset_id, profile="noise", level="full"):
+    """Run one media job the way the worker reports a mastered story (listening copies plus the comparison)."""
+    lease = client.post("/api/worker/lease", json={}, headers=worker_auth(token)).json()
+    assert lease["type"] == "media.process"
+    renditions = {}
+    for name in ("standard", "datasaver", "compare"):
+        key = client.post(f"/api/worker/jobs/{lease['id']}/files?name={name}.m4a", content=b"m4a",
+                          headers=worker_auth(token)).json()["key"]
+        renditions[name] = {"key": key, "bytes": 3}
+    qc = {"verdict": "pass", "checks": [], "mastering": {"profile": profile, "level": level, "reason": "r",
+                                                          "beforeDb": -42.0, "afterDb": -55.0}}
+    response = client.post(f"/api/worker/jobs/{lease['id']}/complete", headers=worker_auth(token),
+                           json={"result": {**MEDIA_OK, "renditions": renditions, "qc": qc}})
+    assert response.status_code == 200, response.text
+    return lease, renditions
+
+
+def test_editors_choose_mastering_per_story_and_old_copies_are_cleaned_up(client, db):
+    from app.storage import get_storage
+
+    make_user(db, "ed", "editor")
+    make_asset(db, "m" * 16, status="published", ready_to_publish=True, pipeline_stage="published")
+    token = make_worker(db)
+    login(client, "ed")
+    assert client.post(f"/api/studio/review/{'m' * 16}/mastering", json={"choice": "loud"}).status_code == 422
+    assert client.post(f"/api/studio/review/{'m' * 16}/mastering", json={"choice": "light"}).status_code == 202
+    assert client.post(f"/api/studio/review/{'m' * 16}/mastering", json={"choice": "none"}).status_code == 409
+    lease, first = master(client, token, "m" * 16, level="light")
+    assert lease["inputs"]["mastering"] == "light"
+    review = client.get(f"/api/studio/review/{'m' * 16}").json()
+    assert review["mastering"]["choice"] == "light" and review["mastering"]["compareUrl"]
+    assert review["stage"] == "published"  # re-mastering never moves a story back through review
+
+    storage = get_storage()
+    client.post(f"/api/studio/review/{'m' * 16}/mastering", json={"choice": "auto"})
+    lease, second = master(client, token, "m" * 16)
+    assert lease["inputs"]["mastering"] is None
+    assert all(storage.exists(entry["key"]) for entry in first.values())  # kept one more round for open players
+    client.post(f"/api/studio/review/{'m' * 16}/mastering", json={"choice": "auto"})
+    master(client, token, "m" * 16)
+    assert not any(storage.exists(entry["key"]) for entry in first.values())
+    assert all(storage.exists(entry["key"]) for entry in second.values())
+
+
+def test_admin_remasters_in_bulk_and_sees_the_summary(client, db):
+    make_user(db, "boss", "admin")
+    make_user(db, "ed", "editor")
+    make_asset(db, "p" * 16, media_status="ready", pipeline_stage="ready",
+               qc={"mastering": {"profile": "edited", "level": "light"}})
+    make_asset(db, "c" * 16, media_status="ready")
+    make_asset(db, "n" * 16)  # never processed
+    login(client, "ed")
+    assert client.post("/api/studio/audio/remaster", json={"scope": "catalog"}).status_code == 403
+    login(client, "boss")
+    summary = client.get("/api/studio/audio/mastering").json()
+    assert summary["profiles"] == {"edited": 1, "not-analysed": 1} and summary["levels"] == {"light": 1}
+    assert [(s["scope"], s["stories"]) for s in summary["scopes"]] == [("pipeline", 1), ("catalog", 2)]
+    assert client.post("/api/studio/audio/remaster", json={"scope": "pipeline"}).json() == {"queued": 1}
+    assert client.post("/api/studio/audio/remaster", json={"scope": "catalog"}).json() == {"queued": 1}
+    queued = db.scalars(select(Job).where(Job.job_type == "media.process")).all()
+    assert {job.audio_asset_id for job in queued} == {"p" * 16, "c" * 16}
+    assert all(job.priority == jobs.PRIORITY_BULK for job in queued)

@@ -6,7 +6,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Linking, Platform, Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { QcList } from '@/components/narrator';
-import { StudioPlayer } from '@/components/StudioPlayer';
+import { MasteringCompare } from '@/components/MasteringCompare';
 import { Button, Card, Chip, ErrorState, Field, Loading, Text, useColors } from '@/components/ui';
 import { api, ApiError, mediaUrl } from '@/lib/api';
 import { formatClock, LANGUAGE_LABELS } from '@/lib/i18n';
@@ -128,7 +128,8 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
   const left = (
     <View style={{ gap: space.lg, flex: wide ? 1 : undefined }}>
       <Card>
-        <StudioPlayer url={asset.audioUrl} waveform={review.waveform} duration={asset.duration} />
+        <MasteringCompare audioUrl={asset.audioUrl} mastering={review.mastering} waveform={review.waveform}
+          duration={asset.duration} labels={{ mastered: 'Listening copy', original: 'As recorded' }} />
         {asset.originalAudioUrl ? (
           <Pressable onPress={() => void Linking.openURL(mediaUrl(asset.originalAudioUrl)!)}>
             <Text variant="small" color={colors.primary}>Original upload</Text>
@@ -143,6 +144,9 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
             review.qc.noiseFloorDb != null ? `noise ${review.qc.noiseFloorDb} dB` : null,
             review.qc.speechRatio != null ? `speech ${Math.round(review.qc.speechRatio * 100)}%` : null].filter(Boolean).join(' · ')}
         </Text>
+        <MasteringChoice mastering={review.mastering} busy={busy === 'mastering'} disabled={running}
+          onChoose={(choice) => void act('mastering', () => api(`/api/studio/review/${asset.id}/mastering`,
+            { method: 'POST', profile: false, body: { choice } }), () => { setMessage('Re-processing the audio; this page refreshes when it’s done.'); refetch(); })} />
       </Card>
       <Card>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
@@ -411,5 +415,41 @@ function Toggle({ label, value, onChange, highlight }: { label: string; value: b
       <Ionicons name={value ? 'checkbox' : 'square-outline'} size={22} color={highlight ? colors.danger : colors.primary} />
       <Text style={{ flex: 1 }} color={highlight ? colors.danger : undefined}>{label}</Text>
     </Pressable>
+  );
+}
+
+const LEVEL_TEXT: Record<string, string> = {
+  full: 'Cleaned up: noise removed, then polished',
+  light: 'Lightly polished: harsh “s” sounds softened, peaks caught, fades',
+  none: 'As recorded (loudness levelled only)',
+};
+const CHOICES = [['auto', 'Automatic'], ['full', 'Clean up'], ['light', 'Light polish'], ['none', 'As recorded']] as const;
+
+// P2-18: what mastering did, why, and the editor's per-story override. Words, pauses, and expression are
+// never edited: only steady background noise, harshness, peaks, and dead air at the very ends.
+function MasteringChoice({ mastering, busy, disabled, onChoose }: {
+  mastering: Review['mastering']; busy: boolean; disabled: boolean; onChoose: (choice: string) => void;
+}) {
+  const colors = useColors();
+  if (!mastering.level) return <Text variant="small" muted>Mastering: not run yet (re-process the audio to analyse it).</Text>;
+  const trimmed = (mastering.trimmedStart ?? 0) + (mastering.trimmedEnd ?? 0);
+  return (
+    <View style={{ gap: space.xs, marginTop: space.sm }}>
+      <Text variant="heading">Mastering: {LEVEL_TEXT[mastering.level] ?? mastering.level}</Text>
+      {mastering.reason ? <Text variant="small" muted>{mastering.reason}</Text> : null}
+      {mastering.fallback ? <Text variant="small" color={colors.accent}>{mastering.fallback}</Text> : null}
+      <Text variant="small" muted>
+        {[mastering.beforeDb != null && mastering.afterDb != null && mastering.level !== 'none'
+          ? `background ${mastering.beforeDb} → ${mastering.afterDb} dB` : null,
+          trimmed >= 0.5 ? `${trimmed.toFixed(1)} s of dead air trimmed at the ends` : null].filter(Boolean).join(' · ')}
+      </Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, alignItems: 'center' }}>
+        {CHOICES.map(([value, label]) => (
+          <Chip key={value} label={label} selected={mastering.choice === value}
+            onPress={() => { if (!busy && !disabled && value !== mastering.choice) onChoose(value); }} />
+        ))}
+        {busy || disabled ? <Text variant="small" muted>working…</Text> : null}
+      </View>
+    </View>
   );
 }
