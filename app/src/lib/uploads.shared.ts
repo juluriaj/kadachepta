@@ -1,4 +1,4 @@
-import { api, ApiError, authHeaders, API_BASE, refreshAfter401 } from './api';
+import { api, ApiError, authHeaders, getApiBase, refreshAfter401 } from './api';
 
 // Resumable uploads: the file goes up in 4 MB chunks; after a dropped connection the upload asks the
 // server how much it has and continues from there. Platform files supply the chunk reader.
@@ -23,9 +23,9 @@ export async function resumableUpload(
     try {
       const body = await read(offset, length);
       const headers = { 'Content-Type': 'application/octet-stream', ...(await authHeaders()) };
-      let response = await send(`${API_BASE}/api/uploads/${created.id}?offset=${offset}`, { method: 'PUT', headers, body });
+      let response = await send(`${getApiBase()}/api/uploads/${created.id}?offset=${offset}`, { method: 'PUT', headers, body });
       if (response.status === 401 && (await refreshAfter401())) {
-        response = await send(`${API_BASE}/api/uploads/${created.id}?offset=${offset}`,
+        response = await send(`${getApiBase()}/api/uploads/${created.id}?offset=${offset}`,
           { method: 'PUT', headers: { ...headers, ...(await authHeaders()) }, body });
       }
       const data = await response.json().catch(() => ({}));

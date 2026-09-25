@@ -112,7 +112,7 @@ of its own.
 
 ## Phase 0 — Foundation and replatform
 
-**Status (2026-09-23): built, awaiting your review** — checklist in
+**Status (2026-09-25): accepted** (reviewed by you) — checklist in
 [docs/phase-0-review.md](docs/phase-0-review.md). Deviations from the plan below:
 `app/` and `studio/` are created in Phases 1 and 2 (the prototype pages are served meanwhile);
 the Lightsail bucket storage backend (part of P0-06) moves to Phase 6 with hosting; the CI workflow
@@ -160,11 +160,11 @@ parity plus the platform capabilities later phases need, nothing else.
 
 ## Phase 1 — Listener app (iOS, Android, web)
 
-**Status (2026-09-23): built, awaiting your review** — checklist in
-[docs/phase-1-review.md](docs/phase-1-review.md). Done: P1-01, P1-03 to P1-08, P1-10 to P1-15, and P1-09
+**Status (2026-09-25): accepted on web; Android validation pending** — checklist in
+[docs/phase-1-review.md](docs/phase-1-review.md). Still to check on the Android build: items 6 (download), 10
+(locked-screen playback and lock-screen controls), and 11 (offline). Done: P1-01, P1-03 to P1-08, P1-10 to P1-15, and P1-09
 (downloads, native only). Deferred: Sign in with Apple/Google (P1-02) moves to Phase 6 with the store
-accounts; email codes work now. Not yet verified on a device: background playback, lock-screen
-controls, and offline downloads (need the Android build via `npm run app:apk`).
+accounts; email codes work now. The Android checks need the build from `npm run app:apk`.
 
 **Goal:** a family installs the Android review build (or uses mobile web on iPhone) and uses it daily
 with no help.
@@ -424,6 +424,32 @@ Languages will grow beyond Telugu, so language is designed in, never bolted on.
   fixture tests.
 - Release gates: no deploy with failing tests; database migrations reviewed;
   payment and earnings changes need a second approval (you).
+
+### Epic G — In-app guidance
+
+Listeners, narrators, and editors should find their way around the app with no
+outside help. Short guides throughout the app explain how it fits together, so
+each person learns the parts that matter to their role.
+
+- **Role overview:** a short first-run tour for each role. For listeners:
+  moments, profiles, player, bedtime/drive, and downloads. For narrators:
+  record or upload, submission, review status, and earnings. For editors:
+  queue, review screen, mastering, and publish. The tour can be skipped and
+  replayed from Help.
+- **Contextual hints:** one or two lines on each main screen (Home, player,
+  studio, review queue, review screen) explaining what the screen is for and
+  what to do next. Hints can be dismissed, stay dismissed, and appear again
+  when "Reset tips" is used.
+- **Empty states that guide:** every empty list (no favorites, no submissions,
+  empty queue) says how to fill it and links to the next step.
+- **"Where am I in the flow"** for narrators and editors: a small status
+  strip showing a story's path (recorded → submitted → in review → mastered →
+  published) with the current step highlighted.
+- **Help page per role** with keyboard shortcuts (review screen, arrow-key
+  browsing), glossary (moments, age bands, mastering), and links to the
+  guides.
+- Guide text lives in the i18n strings (Epic L) so it is translated with the
+  UI; children's profiles see no guides beyond playback basics (Epic S).
 
 ## Decisions needed from you
 

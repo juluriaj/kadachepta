@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { Button, Field, Screen, Text, useColors } from '@/components/ui';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, CAN_CHANGE_SERVER, getApiBase, setApiBase } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { radius, space } from '@/lib/theme';
@@ -122,6 +122,7 @@ export default function SignIn() {
           {step === 'email' || step === 'code' ? (
             <Button title={t('signin.staff')} kind="ghost" onPress={() => { setError(null); setStep('staff'); }} />
           ) : null}
+          {CAN_CHANGE_SERVER ? <ServerAddress onChanged={() => void refresh()} /> : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
@@ -133,4 +134,53 @@ export default function SignIn() {
       setStep('code');
     });
   }
+}
+
+// Review builds only: which desktop the app talks to, changeable when the desktop's address changes.
+function ServerAddress({ onChanged }: { onChanged: () => void }) {
+  const colors = useColors();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(getApiBase());
+  const [status, setStatus] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const save = async (url: string | null) => {
+    setBusy(true);
+    const base = await setApiBase(url);
+    setValue(base);
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 5000);
+    try {
+      const response = await fetch(`${base}/api/health`, { signal: abort.signal });
+      setStatus(response.ok ? `Connected to ${base}` : `${base} answered with HTTP ${response.status}`);
+    } catch {
+      setStatus(`Can't reach ${base}. Is the phone on the same Wi-Fi and the desktop running?`);
+    } finally {
+      clearTimeout(timer);
+    }
+    setBusy(false);
+    setEditing(false);
+    onChanged();
+  };
+
+  return (
+    <View style={{ gap: space.sm }}>
+      {editing ? (
+        <>
+          <Field label="Server address" value={value} onChangeText={setValue} autoCapitalize="none" autoCorrect={false}
+            keyboardType="url" placeholder="192.168.68.87:8080" onSubmitEditing={() => void save(value)} />
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <Button title="Save" loading={busy} onPress={() => void save(value)} />
+            <Button title="Use built-in" kind="ghost" onPress={() => void save(null)} />
+          </View>
+        </>
+      ) : (
+        <Pressable onPress={() => setEditing(true)} accessibilityRole="button" accessibilityLabel="Change server address"
+          style={{ alignSelf: 'center', padding: space.sm }}>
+          <Text variant="small" muted>Server: {getApiBase()} · <Text variant="small" color={colors.primary}>Change</Text></Text>
+        </Pressable>
+      )}
+      {status ? <Text variant="small" muted style={{ textAlign: 'center' }}>{status}</Text> : null}
+    </View>
+  );
 }

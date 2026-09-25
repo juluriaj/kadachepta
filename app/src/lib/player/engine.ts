@@ -218,7 +218,9 @@ export class PlayerEngine {
   };
 
   seekBy = (seconds: number) => void this.player.seekTo(Math.max(0, (this.player.currentTime || 0) + seconds));
-  seekTo = (seconds: number) => void this.player.seekTo(Math.max(0, seconds));
+  seekTo = (seconds: number) => {
+    if (Number.isFinite(seconds)) void this.player.seekTo(Math.max(0, seconds));
+  };
 
   setRate = (rate: number) => {
     this.player.setPlaybackRate(rate);
