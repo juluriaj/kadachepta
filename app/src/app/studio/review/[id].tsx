@@ -42,8 +42,8 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
   const [genres, setGenres] = useState<string[]>(meta.genres.length ? meta.genres : draft?.suggestions.genres ?? []);
   const [age, setAge] = useState(meta.audienceAgeRange ?? draft?.ageSuggestion ?? '');
   const [moral, setMoral] = useState(meta.moralTakeaway ?? '');
-  const [moments, setMoments] = useState<string[]>(meta.listeningContexts.length ? meta.listeningContexts
-    : draft?.suggestions.listeningContexts ?? []);
+  // Every listening moment starts ticked; the editor unticks what doesn't fit. A saved choice is kept.
+  const [moments, setMoments] = useState<string[]>(meta.listeningContexts.length ? meta.listeningContexts : [...MOMENTS]);
   const [keywords, setKeywords] = useState(listText(meta.keywords.length ? meta.keywords : draft?.suggestions.keywords));
   const [warnings, setWarnings] = useState(listText(meta.contentWarnings.length ? meta.contentWarnings : draft?.warnings));
   const [source, setSource] = useState(meta.sourceAdaptation ?? (asset.isSubmission ? '' : 'KathaChepta'));
@@ -59,8 +59,9 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
   });
   const [transcriptText, setTranscriptText] = useState(transcript?.text ?? '');
   const [transcriptOpen, setTranscriptOpen] = useState(!!transcript?.reviewRequired);
-  const [transcriptChecked, setTranscriptChecked] = useState(false);
-  const [captions, setCaptions] = useState(review.captionsEnabled);
+  // Ticked by default: the editor unticks if they didn't read it, or if captions shouldn't be shown.
+  const [transcriptChecked, setTranscriptChecked] = useState(!!transcript);
+  const [captions, setCaptions] = useState(review.captionsEnabled || (!!transcript && review.stage !== 'published'));
   const [rights, setRights] = useState<'owned' | 'attestation' | null>(
     review.rights.status === 'approved' ? null : asset.isSubmission ? null : 'owned');
   const [checklist, setChecklist] = useState<Set<string>>(new Set());
@@ -302,7 +303,14 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
       ) : null}
 
       <Card>
-        <Text variant="heading">Before publishing</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+          <Text variant="heading" style={{ flex: 1 }}>Before publishing</Text>
+          {checklist.size === review.policy.checklist.length ? (
+            <Button kind="ghost" title="Uncheck all" onPress={() => setChecklist(new Set())} />
+          ) : (
+            <Button kind="ghost" title="Check all" onPress={() => setChecklist(new Set(review.policy.checklist.map((item) => item.id)))} />
+          )}
+        </View>
         {review.policy.checklist.map((item) => (
           <Toggle key={item.id} label={item.text + (item.required ? '' : ' (optional)')} value={checklist.has(item.id)}
             onChange={(on) => setChecklist((current) => {

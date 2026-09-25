@@ -24,6 +24,7 @@ export type Story = {
 };
 
 export type StoryDetail = Story & {
+  readAlong?: boolean;
   themes: string[];
   ageSuggestion: string | null;
   waveform: number[];

@@ -45,3 +45,11 @@ def test_confidence_drops_for_loops_and_early_stops():
     assert looped < 0.6 and any("repeat" in reason for reason in quality["reasons"])
     stopped, quality = assess(good, 120, segments={"end_time_seconds": [10, 30]})
     assert stopped < 0.6 and any("stops" in reason for reason in quality["reasons"])
+
+
+def test_read_along_without_timings_is_plain_passages():
+    from app.services.transcripts import read_along
+
+    assert read_along("One. Two.", {}) == [{"start": None, "end": None, "text": "One."},
+                                           {"start": None, "end": None, "text": "Two."}]
+    assert read_along("", {"words": ["x"], "start_time_seconds": [0], "end_time_seconds": [1]}) == []

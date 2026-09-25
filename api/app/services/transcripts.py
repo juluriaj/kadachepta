@@ -72,3 +72,60 @@ def assess(text: str, duration_seconds: float, *, language_probability: float | 
         "charsPerSecond": round(rate, 1) if rate is not None else None, "coverage": coverage and round(coverage, 2),
         "repetition": round(repetition, 2), "languageProbability": language_probability, "reasons": reasons,
     }
+
+
+SENTENCE = re.compile(r"(?<=[.!?।॥])\s+|\n+")
+
+
+def timed_chunks(segments: Any) -> list[tuple[float, float, str]]:
+    """Sarvam's timestamps: parallel lists of text chunks with start and end seconds (about 15 s each)."""
+    if isinstance(segments, dict):
+        words = segments.get("words") or []
+        starts, ends = segments.get("start_time_seconds") or [], segments.get("end_time_seconds") or []
+        return [(float(s), float(e), str(w)) for w, s, e in zip(words, starts, ends, strict=False)]
+    if isinstance(segments, list):
+        return [(float(x["start"]), float(x["end"]), str(x.get("text", ""))) for x in segments
+                if isinstance(x, dict) and "start" in x and "end" in x]
+    return []
+
+
+def read_along(text: str, segments: Any, *, intro_removed: str | None = None,
+               offset: float = 0.0) -> list[dict[str, Any]]:
+    """Passages of the approved transcript with the time they are spoken, for listeners to read along.
+
+    The editor may have corrected the text, so it can't be matched word for word. Instead each sentence
+    goes to the timed chunk at the same relative position in the original transcription (after the channel
+    intro, which listeners don't see). ``offset`` is the silence mastering trimmed from the start.
+    """
+    sentences = [part.strip() for part in SENTENCE.split(text or "") if part and part.strip()]
+    chunks = timed_chunks(segments)
+    if not sentences:
+        return []
+    if not chunks:
+        return [{"start": None, "end": None, "text": sentence} for sentence in sentences]
+    sizes = [len(chunk) for _, _, chunk in chunks]
+    skip = len(intro_removed or "")
+    for index, size in enumerate(sizes):  # the intro is spoken but not shown: don't let it take up room
+        taken = min(size, skip)
+        sizes[index], skip = size - taken, skip - taken
+    total = sum(sizes) or 1
+    bounds, running = [], 0
+    for size in sizes:
+        running += size
+        bounds.append(running / total)
+    length = sum(len(sentence) for sentence in sentences) or 1
+    passages: list[dict[str, Any]] = []
+    position = 0
+    for sentence in sentences:
+        middle = (position + len(sentence) / 2) / length
+        position += len(sentence)
+        index = next((i for i, bound in enumerate(bounds) if middle <= bound), len(chunks) - 1)
+        start, end, _ = chunks[index]
+        start, end = max(0.0, start - offset), max(0.0, end - offset)
+        if passages and passages[-1]["chunk"] == index:
+            passages[-1]["text"] += " " + sentence
+        else:
+            passages.append({"chunk": index, "start": round(start, 2), "end": round(end, 2), "text": sentence})
+    for passage in passages:
+        del passage["chunk"]
+    return passages
