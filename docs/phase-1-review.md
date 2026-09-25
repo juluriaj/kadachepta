@@ -7,12 +7,19 @@ narrator pages as before.
 ## How to review
 
 **Web (phone or desktop browser):** `npm start`, then open http://localhost:8080. On a phone on the
-same Wi-Fi: http://192.168.68.63:8080 (the desktop's current address; Windows may ask to allow
+same Wi-Fi: http://192.168.68.87:8080 (the desktop's current address; Windows may ask to allow
 Docker through the firewall).
 
 **Android app:** run `npx eas-cli login` once (free Expo account), then `npm run app:apk`. Expo builds
-the APK in the cloud (about 15 minutes) and prints a link to install it on your phone. The build points
-at `http://192.168.68.63:8080`; if the desktop's address changes, update `app/eas.json`.
+the APK in the cloud (15–60 minutes on the free plan, mostly queue) and prints a link to install it on
+your phone; `npx eas-cli build:list` in `app/` shows the link again. The build starts out pointing at
+`http://192.168.68.87:8080`; if the desktop's address changes, tap **Server: … · Change** on the sign-in
+screen instead of rebuilding.
+
+**App updates without a rebuild:** `npm run app:update -- "what changed"` sends the current app code to
+installed review builds in a minute or two. Force-close and reopen the app (twice, if the first reopen
+still shows the old version). A new build is only needed when a native module is added or the app version
+in `app/app.json` changes.
 
 **iPhone:** the browser version until the Apple developer account exists (Phase 6).
 

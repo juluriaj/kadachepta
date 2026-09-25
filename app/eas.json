@@ -6,17 +6,22 @@
   "build": {
     "preview": {
       "distribution": "internal",
-      "android": { "buildType": "apk" },
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "KC_ALLOW_HTTP": "1",
-        "EXPO_PUBLIC_API_URL": "http://192.168.68.63:8080"
-      }
+        "EXPO_PUBLIC_API_URL": "http://192.168.68.87:8080",
+        "EXPO_PUBLIC_SERVER_PICKER": "1"
+      },
+      "channel": "preview"
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.kathachepta.com"
-      }
+      },
+      "channel": "production"
     }
   },
   "submit": {
