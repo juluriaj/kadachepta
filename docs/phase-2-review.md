@@ -34,6 +34,7 @@ artwork) until an editor reviews it on one screen and publishes with one action.
 | 16 | Editors see each narrator's contact details and preference | Studio → Narrators; review screen |
 | 17 | Mastering (P2-18): each story gets a background profile and a treatment (clean up, light polish, or as recorded); the review screen has a "Listening copy / As recorded" switch at equal loudness and a per-story choice | Review screen → sound check; narrator's submission page |
 | 18 | Re-mastering existing stories: summary of the catalog by background, and one button per scope (development set, whole catalog) | AI & processing → Mastering the catalog |
+| 19 | Editors queue mastering in bulk: select stories in any queue tab (filter by background, e.g. "steady noise" or "steady tone"), pick Automatic / Clean up / Light polish / As recorded, "Queue mastering"; rows show cleaned up / polished / as recorded / mastering… | Studio queue |
 
 ## What I tested
 

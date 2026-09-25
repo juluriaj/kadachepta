@@ -363,3 +363,27 @@ def test_admin_remasters_in_bulk_and_sees_the_summary(client, db):
     queued = db.scalars(select(Job).where(Job.job_type == "media.process")).all()
     assert {job.audio_asset_id for job in queued} == {"p" * 16, "c" * 16}
     assert all(job.priority == jobs.PRIORITY_BULK for job in queued)
+
+
+def test_editors_bulk_queue_mastering_and_filter_by_background(client, db):
+    make_user(db, "ed", "editor")
+    make_user(db, "kid", "listener")
+    make_asset(db, "a" * 16, media_status="ready", pipeline_stage="ready",
+               qc={"mastering": {"profile": "noise", "level": "full"}})
+    make_asset(db, "b" * 16, status="published", media_status="ready", pipeline_stage="published",
+               qc={"mastering": {"profile": "music", "level": "none"}})
+    make_asset(db, "c" * 16, pipeline_stage="ready")  # audio never processed
+    login(client, "kid")
+    assert client.post("/api/studio/audio/master", json={"assetIds": ["a" * 16]}).status_code == 403
+    login(client, "ed")
+    noisy = client.get("/api/studio/queue?view=review&mastering=noise").json()["items"]
+    assert [i["id"] for i in noisy] == ["a" * 16] and noisy[0]["mastering"]["level"] == "full"
+    result = client.post("/api/studio/audio/master",
+                         json={"assetIds": ["a" * 16, "b" * 16, "c" * 16], "choice": "light"}).json()
+    assert result["queued"] == 2 and [s["reason"] for s in result["skipped"]] == ["audio not processed yet"]
+    again = client.post("/api/studio/audio/master", json={"assetIds": ["a" * 16]}).json()
+    assert again == {"queued": 0, "skipped": [{"id": "a" * 16, "title": "Story aaaa", "reason": "already queued"}]}
+    db.expire_all()
+    assert db.get(AudioAsset, "b" * 16).audio_mastering == "light"
+    item = client.get("/api/studio/queue?view=published").json()["items"][0]
+    assert item["mastering"]["processing"] and item["mastering"]["choice"] == "light"

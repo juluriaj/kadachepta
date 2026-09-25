@@ -12,6 +12,7 @@ export type QueueItem = {
   readyForReviewAt: string | null; waitingHours: number | null; overdue: boolean; qcVerdict: string | null;
   safetyRating: string | null; teaser: string | null; hasTranscript: boolean; transcriptReviewRequired: boolean;
   artworkUrl: string | null; series: string | null; bulkEligible: boolean; bulkBlockers: string[]; publishedAt: string | null;
+  mastering: { choice: Mastering['choice']; profile: string | null; level: Mastering['level']; processing: boolean };
 };
 
 export type QueueResponse = { view: string; items: QueueItem[]; counts: Record<string, number>; slaHours: number };
@@ -79,6 +80,14 @@ export function listText(values: string[] | null | undefined) {
 export function parseList(text: string) {
   return [...new Set(text.split(',').map((part) => part.trim()).filter(Boolean))];
 }
+
+// P2-18: what the sound check found between the words, and the treatment each choice gives.
+export const BACKGROUND_LABELS: Record<string, string> = {
+  noise: 'steady noise', hum: 'hum', clean: 'quiet room', edited: 'edited pauses', music: 'music bed',
+  tonal: 'steady tone (listen)', unknown: 'too short', 'not-analysed': 'not analysed yet',
+};
+export const MASTERING_CHOICES = [['auto', 'Automatic'], ['full', 'Clean up'], ['light', 'Light polish'],
+  ['none', 'As recorded']] as const;
 
 export type MasteringSummary = {
   profiles: Record<string, number>; levels: Record<string, number>; editorChoices: number; running: number;
