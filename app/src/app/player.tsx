@@ -9,6 +9,7 @@ import { api, mediaUrl } from '@/lib/api';
 import { formatClock, useI18n } from '@/lib/i18n';
 import { usePlayer } from '@/lib/player/PlayerProvider';
 import { SLEEP_CHOICES, SPEEDS } from '@/lib/player/logic';
+import { pressFraction } from '@/lib/seek';
 import { useSession } from '@/lib/session';
 import { space, touch } from '@/lib/theme';
 import type { StoryDetail } from '@/lib/types';
@@ -85,7 +86,10 @@ export default function Player() {
         <View style={{ gap: space.sm }}>
           <Pressable
             onLayout={(e: LayoutChangeEvent) => setBarWidth(e.nativeEvent.layout.width || 1)}
-            onPress={(e) => player.seekTo((e.nativeEvent.locationX / barWidth) * player.duration)}
+            onPress={(e) => {
+              const fraction = pressFraction(e, barWidth);
+              if (fraction != null && player.duration) player.seekTo(fraction * player.duration);
+            }}
             accessibilityRole="adjustable" accessibilityLabel="Playback position"
             accessibilityValue={{ min: 0, max: Math.round(player.duration), now: Math.round(player.position), text: formatClock(player.position) }}
             accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}

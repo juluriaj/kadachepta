@@ -7,6 +7,7 @@ import { Text, useColors } from '@/components/ui';
 import { mediaUrl } from '@/lib/api';
 import { formatClock } from '@/lib/i18n';
 import { getEngine } from '@/lib/player/engine';
+import { pressFraction } from '@/lib/seek';
 import { space } from '@/lib/theme';
 
 const SPEEDS = [1, 1.25, 1.5, 2];
@@ -52,7 +53,10 @@ export function StudioPlayer({ url, waveform, duration }: { url: string | null; 
     <View style={{ gap: space.sm }}>
       <Pressable accessibilityRole="adjustable" accessibilityLabel="Seek in the recording"
         onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-        onPress={(event) => void player.seekTo((event.nativeEvent.locationX / width) * total)}
+        onPress={(event) => {
+          const fraction = pressFraction(event, width);
+          if (fraction != null) void player.seekTo(fraction * total);
+        }}
         style={{ flexDirection: 'row', alignItems: 'center', height: 64, gap: 1 }}>
         {bars.map((value, index) => (
           <View key={index} style={{ flex: 1, height: Math.max(2, value * 60), borderRadius: 1,
