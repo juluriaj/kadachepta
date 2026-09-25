@@ -35,6 +35,9 @@ artwork) until an editor reviews it on one screen and publishes with one action.
 | 17 | Mastering (P2-18): each story gets a background profile and a treatment (clean up, light polish, or as recorded); the review screen has a "Listening copy / As recorded" switch at equal loudness and a per-story choice | Review screen → sound check; narrator's submission page |
 | 18 | Re-mastering existing stories: summary of the catalog by background, and one button per scope (development set, whole catalog) | AI & processing → Mastering the catalog |
 | 19 | Editors queue mastering in bulk: select stories in any queue tab (filter by background, e.g. "steady noise" or "steady tone"), pick Automatic / Clean up / Light polish / As recorded, "Queue mastering"; rows show cleaned up / polished / as recorded / mastering… | Studio queue |
+| 20 | Listeners read along: in the player, stories with captions on (the editor read and approved the text) show a text button; the passage being spoken is highlighted and kept in view, and tapping a passage jumps there | Player (listener app) |
+| 21 | On a computer: shelf arrow buttons, and arrow keys move between stories (up/down between shelves, Enter opens); favorite from the player | Home, story page, player |
+| 22 | Review defaults: all listening moments, captions, and "I checked the transcript" start ticked; "Check all" for the pre-publish checklist | Review screen |
 
 ## What I tested
 

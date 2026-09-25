@@ -75,3 +75,31 @@ def test_listening_rejects_unpublished_story(client, db):
     make_user(db, "runner", "listener")
     login(client, "runner")
     assert client.post("/api/me/listening", json={"assetId": "d" * 16, "seconds": 5}).status_code == 404
+
+
+def test_read_along_only_when_captions_are_on_and_follows_the_audio(client, db):
+    from sqlalchemy import select
+
+    from app.models import AudioAsset, Transcript
+
+    make_asset(db, "r" * 16, ready_to_publish=True, status="published")
+    make_asset(db, "q" * 16, ready_to_publish=True, status="published")  # captions off
+    make_user(db, "kid", "listener")
+    transcript = db.scalars(select(Transcript).where(Transcript.audio_asset_id == "r" * 16)).one()
+    transcript.text = "ఒక కాకి ఉండేది. అది తెలివైనది.\nఒక రోజు దాహం వేసింది. నీళ్ళు తాగింది."
+    transcript.intro_removed = "కథచెప్తా.కామ్"
+    transcript.segments = {"words": ["కథచెప్తా.కామ్ ఒక కాకి ఉండేది. అది తెలివైనది.", "ఒక రోజు దాహం వేసింది. నీళ్ళు తాగింది."],
+                           "start_time_seconds": [0.0, 15.0], "end_time_seconds": [15.0, 29.5]}
+    asset = db.get(AudioAsset, "r" * 16)
+    asset.captions_enabled = True
+    asset.qc = {"mastering": {"trimmedStart": 1.5}}
+    db.commit()
+    login(client, "kid")
+    assert client.get(f"/api/stories/{'r' * 16}").json()["readAlong"] is True
+    assert client.get(f"/api/stories/{'q' * 16}").json()["readAlong"] is False
+    assert client.get(f"/api/stories/{'q' * 16}/read-along").status_code == 404
+    text = client.get(f"/api/stories/{'r' * 16}/read-along").json()
+    assert text["timed"] and text["passages"] == [
+        {"start": 0.0, "end": 13.5, "text": "ఒక కాకి ఉండేది. అది తెలివైనది."},
+        {"start": 13.5, "end": 28.0, "text": "ఒక రోజు దాహం వేసింది. నీళ్ళు తాగింది."},
+    ]

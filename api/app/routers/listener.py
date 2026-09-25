@@ -14,9 +14,13 @@ from starlette.concurrency import run_in_threadpool
 
 from ..auth import utcnow
 from ..db import get_db
-from ..models import AudioAsset, ListenerFavorite, ListeningDaily, ListeningProgress, Profile, TeaserDraft
+from ..models import (
+    AudioAsset, ListenerFavorite, ListeningDaily, ListeningProgress, Profile, TeaserDraft, Transcript,
+)
+from ..services import pipeline
 from ..services.assets import artwork_url, asset_payload, iso
 from ..services.households import MOMENTS, current_profile, suitable_for
+from ..services.transcripts import read_along
 
 router = APIRouter(tags=["listener"])
 
@@ -135,9 +139,33 @@ def story(asset_id: str, profile: Profile = Depends(current_profile), db: Sessio
     same_narrator = [(a, t) for a, t in stories if a.id != asset.id and a.narrator_user_id
                      and a.narrator_user_id == asset.narrator_user_id][:10]
     return {**card, "themes": teaser.themes, "ageSuggestion": teaser.age_suggestion,
+            "readAlong": _read_along_transcript(db, asset) is not None,
             "waveform": (asset.renditions or {}).get("waveform", []),
             "upNext": [story_card(a, t, profile, progress.get(a.id)) for a, t in (later or series)[:10]],
             "moreFromNarrator": [story_card(a, t, profile, progress.get(a.id)) for a, t in same_narrator]}
+
+
+def _read_along_transcript(db: Session, asset: AudioAsset) -> Transcript | None:
+    """Only when an editor turned captions on, which requires them to have read and approved the transcript."""
+    if not asset.captions_enabled:
+        return None
+    transcript = pipeline.latest_transcript(db, asset.id)
+    return transcript if transcript and transcript.status == "approved" and transcript.text else None
+
+
+@router.get("/api/stories/{asset_id}/read-along")
+def read_along_text(asset_id: str, profile: Profile = Depends(current_profile), db: Session = Depends(get_db)):
+    """The story's text in passages timed to the listening copy (P2-19)."""
+    asset = next((a for a, _ in published_stories(db, profile) if a.id == asset_id), None)
+    if not asset:
+        raise HTTPException(status_code=404, detail="This story isn't available for this listener.")
+    transcript = _read_along_transcript(db, asset)
+    if not transcript:
+        raise HTTPException(status_code=404, detail="There's no read-along text for this story.")
+    trimmed = float(((asset.qc or {}).get("mastering") or {}).get("trimmedStart") or 0)
+    passages = read_along(transcript.text, transcript.segments, intro_removed=transcript.intro_removed, offset=trimmed)
+    return {"language": transcript.language, "timed": any(p["start"] is not None for p in passages),
+            "passages": passages}
 
 
 def _episode_key(asset: AudioAsset) -> tuple[int, str]:
