@@ -25,7 +25,7 @@ from ..config import get_settings
 from ..db import get_db
 from ..models import AudioAsset, EditorialEvent, Job, TeaserDraft, Transcript, Worker
 from ..security import token_hash
-from ..services import pipeline, policy
+from ..services import pipeline, policy, titles
 from ..services import settings as app_settings
 from ..services.assets import as_list, normalize_language
 from ..storage import get_storage, media_url
@@ -90,6 +90,13 @@ def _inputs(db: Session, job: Job, request: Request) -> dict[str, Any]:
                     transcript=transcript.text if transcript else "",
                     outputLanguages=[asset.language, "en-IN"] if asset.language != "en-IN" else ["en-IN"],
                     series=asset.series.title if asset.series else None)
+    if job.job_type == "titles":
+        draft = pipeline.latest_draft(db, asset.id)
+        english = (draft.alternates or {}).get("en-IN", {}) if draft else {}
+        summary = english.get("short") or english.get("long") or (draft.short_text if draft else None)
+        base.update(sourceTitle=titles.clean_source(asset.title), summary=summary,
+                    languages=job.payload.get("languages") or titles.missing(asset),
+                    series=asset.series.title if asset.series else asset.album)
     if job.job_type == "artwork":
         draft = pipeline.latest_draft(db, asset.id)
         english = (draft.alternates or {}).get("en-IN", {}) if draft else {}
@@ -303,8 +310,17 @@ def apply_artwork(db: Session, job: Job, asset: AudioAsset, result: dict[str, An
                           notes=f"model={result.get('model')} seed={result.get('seed')}"))
 
 
+def apply_titles(db: Session, job: Job, asset: AudioAsset, result: dict[str, Any]) -> None:
+    if job.payload.get("test") or result.get("title") != asset.title:
+        return  # renamed while the job ran: the next pipeline pass asks again for the new title
+    current = titles.entries(asset)
+    for language, text in (result.get("titles") or {}).items():
+        if language in titles.UI_LANGUAGES and text and not current.get(language, {}).get("confirmed"):
+            titles.record(asset, language, str(text), f"ai:{result.get('model', 'unknown')}", confirmed=False)
+
+
 APPLIERS = {"media.process": apply_media, "transcription": apply_transcription,
-            "teaser": apply_teaser, "artwork": apply_artwork}
+            "teaser": apply_teaser, "artwork": apply_artwork, "titles": apply_titles}
 
 
 @router.post("/jobs/{job_id}/complete")

@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery } from '@tanstack/react-query';
-import { Redirect, router } from 'expo-router';
+import { Redirect, router, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 
-import { StageBadge } from '@/components/narrator';
+import { HowItWorks, StageBadge } from '@/components/narrator';
 import { Button, Card, Cover, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
 import { formatClock, useI18n } from '@/lib/i18n';
@@ -20,8 +21,11 @@ export default function NarratorStudio() {
   const updates = useQuery({ queryKey: ['notifications'], queryFn: () => api<{ items: AppNotification[]; unread: number }>(
     '/api/notifications', { profile: false }) });
 
+  const { refetch } = home;
+  useFocusEffect(useCallback(() => { void refetch(); }, [refetch]));
+
   if (home.isLoading) return <Loading />;
-  if (home.error) return <Screen><ErrorState error={home.error} onRetry={() => void home.refetch()} /></Screen>;
+  if (home.error) return <Screen tabs><ErrorState error={home.error} onRetry={() => void home.refetch()} /></Screen>;
   const data = home.data!;
   if (!data.profile?.onboarded) return <Redirect href="/narrate/apply" />;
   const attention = data.submissions.filter((s) => ATTENTION.has(s.stage));
@@ -29,7 +33,7 @@ export default function NarratorStudio() {
   const unread = (updates.data?.items ?? []).filter((n) => !n.read).slice(0, 3);
 
   return (
-    <Screen>
+    <Screen tabs>
       <ScrollView contentContainerStyle={{ gap: space.lg, paddingVertical: space.lg }}
         refreshControl={<RefreshControl refreshing={home.isRefetching} onRefresh={() => { void home.refetch(); void updates.refetch(); }} />}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
@@ -45,6 +49,8 @@ export default function NarratorStudio() {
         <Button title={t('narrate.new')} icon={<Ionicons name="mic" size={20} color={colors.onPrimary} />}
           onPress={() => router.push('/narrate/new')} />
         <Button kind="ghost" title={t('account.open')} onPress={() => router.push('/account')} />
+
+        <HowItWorks initiallyOpen={data.submissions.length === 0} />
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md }}>
           <Metric label={t('narrate.published')} value={data.totals.published} />

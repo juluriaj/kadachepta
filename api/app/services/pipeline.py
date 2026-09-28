@@ -19,6 +19,7 @@ from .. import jobs
 from ..auth import utcnow
 from ..models import AudioAsset, EditorialEvent, Job, TeaserDraft, Transcript
 from . import settings as app_settings
+from . import titles
 from .notify import notify
 from .transcripts import assess, strip_intro
 
@@ -42,7 +43,7 @@ IN_PROGRESS = ("checking", "awaiting-submit", "transcribing", "waiting-transcrip
                "ready", "failed")
 FINAL = ("published", "rejected")
 STEP_OF_JOB = {"media.process": "Audio check", "transcription": "Transcription", "teaser": "AI drafts",
-               "artwork": "Artwork"}
+               "titles": "Titles", "artwork": "Artwork"}
 STT_LANGUAGES = {"te-IN", "hi-IN", "ta-IN", "kn-IN", "ml-IN", "mr-IN", "bn-IN", "gu-IN", "pa-IN", "od-IN", "en-IN"}
 USABLE = ("needs-review", "approved", "accepted")
 
@@ -172,9 +173,15 @@ def advance(db: Session, asset: AudioAsset, *, actor: str = "pipeline", allow_tr
         _set_stage(db, asset, "drafting")
         return asset.pipeline_stage
 
+    # Title suggestions in each app language, for the editor to confirm (optional, like artwork).
+    if titles.missing(asset) and not _titles_tried(db, asset):
+        _enqueue(db, asset, "titles", actor, {"languages": titles.missing(asset), "title": asset.title})
+        _set_stage(db, asset, "drafting")
+        return asset.pipeline_stage
+
     provider = app_settings.get(db, "ai.artwork.provider")
     if not asset.artwork_key and provider != "disabled" and app_settings.get(db, "pipeline.autoArtwork"):
-        if not _artwork_gave_up(db, asset.id):
+        if not _gave_up(db, asset.id, "artwork"):
             _enqueue(db, asset, "artwork", actor)
             _set_stage(db, asset, "illustrating")
             return asset.pipeline_stage
@@ -189,11 +196,18 @@ def advance(db: Session, asset: AudioAsset, *, actor: str = "pipeline", allow_tr
     return asset.pipeline_stage
 
 
-def _artwork_gave_up(db: Session, asset_id: str) -> bool:
-    """Artwork is nice-to-have: after a dead artwork job, go to review without it rather than getting stuck."""
-    last = db.scalars(select(Job).where(Job.audio_asset_id == asset_id, Job.job_type == "artwork")
+def _gave_up(db: Session, asset_id: str, job_type: str) -> bool:
+    """Optional steps (titles, artwork): after a dead job, go to review without them rather than getting stuck."""
+    last = db.scalars(select(Job).where(Job.audio_asset_id == asset_id, Job.job_type == job_type)
                       .order_by(Job.id.desc())).first()
     return bool(last and last.status == "dead")
+
+
+def _titles_tried(db: Session, asset: AudioAsset) -> bool:
+    """Ask once per title: a finished or dead job for the current title means the editor fills any gap."""
+    last = db.scalars(select(Job).where(Job.audio_asset_id == asset.id, Job.job_type == "titles")
+                      .order_by(Job.id.desc())).first()
+    return bool(last and last.status in ("succeeded", "dead") and (last.payload or {}).get("title") == asset.title)
 
 
 def on_job_finished(db: Session, job: Job, asset: AudioAsset) -> None:
@@ -205,7 +219,7 @@ def on_job_finished(db: Session, job: Job, asset: AudioAsset) -> None:
 def on_job_dead(db: Session, job: Job, asset: AudioAsset) -> None:
     if (job.payload or {}).get("test") or asset.pipeline_stage in ("none", *FINAL):
         return
-    if job.job_type == "artwork":  # optional step: continue to review without artwork
+    if job.job_type in ("artwork", "titles"):  # optional steps: continue to review without them
         advance(db, asset)
         return
     step = STEP_OF_JOB.get(job.job_type, job.job_type)
@@ -214,14 +228,12 @@ def on_job_dead(db: Session, job: Job, asset: AudioAsset) -> None:
 
 
 def narrator_timeline(db: Session, asset: AudioAsset) -> list[dict]:
-    """Plain-language steps for the narrator's submission page."""
+    """Plain-language steps for the narrator's submission page, including the one step that is theirs (send)."""
     stage = asset.pipeline_stage
-    order = ["checking", "transcribing", "drafting", "ready", "published"]
-    position = {"none": -1, "checking": 0, "needs-fix": 0, "awaiting-submit": 0, "transcribing": 1,
-                "waiting-transcript": 1, "drafting": 2, "illustrating": 2, "ready": 3, "changes-requested": 3,
-                "failed": 1, "published": 4, "rejected": 3}.get(stage, 0)
-    labels = {"checking": "Sound check", "transcribing": "Transcription", "drafting": "Story details and artwork",
-              "ready": "Editor review", "published": "Published"}
+    order = ["checking", "submit", "transcribing", "drafting", "ready", "published"]
+    position = {"none": -1, "checking": 0, "needs-fix": 0, "awaiting-submit": 1, "transcribing": 2,
+                "waiting-transcript": 2, "drafting": 3, "illustrating": 3, "ready": 4, "changes-requested": 4,
+                "failed": 2, "published": 5, "rejected": 4}.get(stage, 0)
     steps = []
     for index, key in enumerate(order):
         state = "done" if index < position else "current" if index == position else "todo"
@@ -229,5 +241,5 @@ def narrator_timeline(db: Session, asset: AudioAsset) -> list[dict]:
             state = "blocked"
         if stage == "published":
             state = "done"
-        steps.append({"key": key, "label": labels[key], "state": state})
+        steps.append({"key": key, "state": state})
     return steps

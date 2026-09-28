@@ -57,6 +57,9 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
     }
     return texts;
   });
+  // Titles in each app language: prefilled with the AI suggestion; saving or publishing confirms them.
+  const [titleTe, setTitleTe] = useState(review.titleTranslations['te-IN']?.text ?? '');
+  const [titleEn, setTitleEn] = useState(review.titleTranslations['en-IN']?.text ?? draft?.suggestions.englishTitle ?? '');
   const [transcriptText, setTranscriptText] = useState(transcript?.text ?? '');
   const [transcriptOpen, setTranscriptOpen] = useState(!!transcript?.reviewRequired);
   // Ticked by default: the editor unticks if they didn't read it, or if captions shouldn't be shown.
@@ -76,6 +79,7 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
       keywords: parseList(keywords), contentWarnings: parseList(warnings), sourceAdaptation: source },
     teaser: teasers, transcript: { text: transcriptText, reviewed: transcriptChecked }, rights,
     checklist: [...checklist], captionsEnabled: captions,
+    titles: Object.fromEntries(Object.entries({ 'te-IN': titleTe, 'en-IN': titleEn }).filter(([, text]) => text.trim())),
   });
 
   const act = async (label: string, work: () => Promise<unknown>, after?: () => void) => {
@@ -246,7 +250,16 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
       <Card>
         <Text variant="heading">Details</Text>
         <Field label="Title" value={title} onChangeText={setTitle} style={{ fontFamily: fontFor(title) }} />
-        {draft?.suggestions.englishTitle ? <Text variant="small" muted>English title (AI): {draft.suggestions.englishTitle}</Text> : null}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md }}>
+          <View style={{ flex: 1, minWidth: 220 }}>
+            <Field label={`Title in Telugu${titleNote(review.titleTranslations['te-IN'])}`} value={titleTe} onChangeText={setTitleTe}
+              style={{ fontFamily: fontFor(titleTe) }} />
+          </View>
+          <View style={{ flex: 1, minWidth: 220 }}>
+            <Field label={`Title in English${titleNote(review.titleTranslations['en-IN'])}`} value={titleEn} onChangeText={setTitleEn} />
+          </View>
+        </View>
+        <Text variant="small" muted>Listeners see the title in the app language they choose. Saving or publishing confirms both.</Text>
         <Label>Genres</Label>
         <Chips options={GENRES} values={genres} onChange={setGenres} />
         <Label>Age range {draft?.ageSuggestion ? `(AI suggests ${draft.ageSuggestion})` : ''}</Label>
@@ -460,4 +473,9 @@ function MasteringChoice({ mastering, busy, disabled, onChoose }: {
       </View>
     </View>
   );
+}
+
+function titleNote(entry?: { by: string; confirmed: boolean }) {
+  if (!entry) return '';
+  return entry.by === 'original' ? ' (as recorded)' : entry.confirmed ? ' (confirmed)' : ' (AI suggestion: check it)';
 }

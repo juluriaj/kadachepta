@@ -9,7 +9,8 @@ import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useColors } from '@/components/ui';
-import { I18nProvider } from '@/lib/i18n';
+import { I18nProvider, useI18n } from '@/lib/i18n';
+import { getEngine } from '@/lib/player/engine';
 import { PlayerProvider, usePlayer } from '@/lib/player/PlayerProvider';
 import { SessionProvider } from '@/lib/session';
 
@@ -18,6 +19,8 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 function Navigator() {
   const colors = useColors();
   const { bedtime } = usePlayer();
+  const { language } = useI18n();
+  useEffect(() => getEngine().setUiLanguage(language), [language]);
   return (
     <>
       <StatusBar style={bedtime ? 'light' : 'dark'} />

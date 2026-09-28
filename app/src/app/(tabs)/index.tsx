@@ -47,7 +47,7 @@ export default function Home() {
 
   if (!profile || home.isLoading) return <Loading />;
   return (
-    <Screen padded={false}>
+    <Screen tabs padded={false}>
       <ScrollView contentContainerStyle={{ gap: space.xl, paddingBottom: space.xxl }}
         refreshControl={<RefreshControl refreshing={home.isRefetching} onRefresh={() => void home.refetch()} />}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, paddingTop: space.lg }}>

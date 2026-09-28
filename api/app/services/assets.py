@@ -9,6 +9,7 @@ from typing import Any
 
 from ..models import AudioAsset
 from ..storage import media_url
+from .titles import confirmed_titles
 
 METADATA_LIST_FIELDS = ("genres", "listeningContexts", "contentWarnings", "keywords")
 METADATA_TEXT_FIELDS = ("title", "album", "collection", "episodeNumber", "language",
@@ -131,6 +132,7 @@ def asset_payload(asset: AudioAsset, *, include_original: bool = False, **extra:
         "id": asset.id,
         "assetId": asset.id,
         "title": asset.title,
+        "titles": confirmed_titles(asset),  # by language; the app shows the one matching its UI language
         "album": asset.album,
         "collection": asset.collection,
         "narrator": narrator_label(asset),

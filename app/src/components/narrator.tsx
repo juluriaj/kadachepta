@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, View } from 'react-native';
 
 import { Chip, Text, useColors } from '@/components/ui';
 import { useI18n, type TranslationKey } from '@/lib/i18n';
@@ -47,6 +48,38 @@ export function Timeline({ steps }: { steps: SubmissionDetail['timeline'] }) {
           </View>
         );
       })}
+    </View>
+  );
+}
+
+// What is happening with a submission right now and what comes next, so the narrator never has to guess.
+export function StageGuide({ stage }: { stage: string }) {
+  const { t } = useI18n();
+  const colors = useColors();
+  const now = `guide.now.${stage}` as TranslationKey;
+  if (t(now) === now) return null;
+  return (
+    <View style={{ gap: space.sm, paddingTop: space.md, borderTopWidth: 1, borderColor: colors.border }}>
+      <Text><Text variant="label" color={colors.primary}>{t('guide.now')}: </Text>{t(now)}</Text>
+      <Text><Text variant="label" color={colors.primary}>{t('guide.next')}: </Text>{t(`guide.next.${stage}` as TranslationKey)}</Text>
+    </View>
+  );
+}
+
+// The whole journey from recording to published, open by default until the narrator has a story.
+export function HowItWorks({ initiallyOpen }: { initiallyOpen: boolean }) {
+  const { t } = useI18n();
+  const colors = useColors();
+  const [open, setOpen] = useState(initiallyOpen);
+  return (
+    <View style={{ padding: space.md, borderRadius: 14, backgroundColor: colors.surfaceAlt, gap: space.sm }}>
+      <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" accessibilityState={{ expanded: open }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
+        <Text variant="heading" style={{ flex: 1 }}>{t('guide.how')}</Text>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={colors.muted} />
+      </Pressable>
+      {open ? <Text style={{ lineHeight: 24 }}>{t('guide.howSteps')}</Text> : null}
     </View>
   );
 }

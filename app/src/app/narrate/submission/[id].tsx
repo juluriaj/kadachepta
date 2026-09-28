@@ -1,11 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Alert, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 
 import { MasteringCompare } from '@/components/MasteringCompare';
-import { QcList, StageBadge, Timeline } from '@/components/narrator';
+import { QcList, StageBadge, StageGuide, Timeline } from '@/components/narrator';
 import { Button, Card, Cover, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
 import { formatClock, formatListening, useI18n, type TranslationKey } from '@/lib/i18n';
@@ -33,6 +33,10 @@ export default function SubmissionStatus() {
     queryKey: ['submission', id], queryFn: () => api<SubmissionDetail>(`/api/narrator/submissions/${id}`),
     refetchInterval: (q) => (WORKING.has(q.state.data?.stage ?? '') ? 5_000 : false),
   });
+
+  // Refresh on return: artwork, an editor's decision, or listening numbers may have arrived meanwhile.
+  const { refetch } = query;
+  useFocusEffect(useCallback(() => { void refetch(); }, [refetch]));
 
   if (query.isLoading) return <Loading />;
   if (query.error) return <Screen><ErrorState error={query.error} onRetry={() => void query.refetch()} /></Screen>;
@@ -74,7 +78,7 @@ export default function SubmissionStatus() {
           </View>
         </View>
 
-        <Card><Timeline steps={s.timeline} /></Card>
+        <Card><Timeline steps={s.timeline} /><StageGuide stage={s.stage} /></Card>
 
         {s.changesRequested && s.stage === 'changes-requested' ? (
           <Card style={{ borderColor: colors.accent }}>

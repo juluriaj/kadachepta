@@ -99,6 +99,14 @@ const en = {
   'player.drive': 'Drive mode',
   'player.bedtime': 'Bedtime mode',
   'player.bedtimeOn': 'Bedtime mode is on: the screen stays dim and the story fades out at the timer.',
+  'queue.playNext': 'Play next',
+  'queue.add': 'Add to queue',
+  'queue.inQueue': 'In your queue',
+  'queue.title': 'Up next',
+  'queue.empty': 'Nothing queued. Open any story and tap “Add to queue”.',
+  'queue.remove': 'Remove from queue',
+  'queue.moveUp': 'Move up',
+  'queue.moveDown': 'Move down',
   'player.close': 'Close player',
   'player.goodnight': 'Goodnight. Sweet dreams.',
   'player.next': 'Next story',
@@ -230,6 +238,37 @@ const en = {
   'step.drafting': 'Details and artwork',
   'step.ready': 'Editor review',
   'step.published': 'Published',
+  'step.submit': 'You send it',
+  'guide.now': 'Now',
+  'guide.next': 'Next',
+  'guide.how': 'How it works',
+  'guide.howSteps': '1. Record or upload a story.\n2. We check the sound in a minute or two.\n3. You listen once and send it for review.\n4. We write out the words and prepare the teaser and artwork.\n5. An editor reviews it and publishes it or asks for changes.\nYou get a notification whenever something needs you.',
+  'guide.now.none': 'Not started yet.',
+  'guide.next.none': 'Record or upload the story to start.',
+  'guide.now.checking': 'We’re checking the sound quality. This takes a minute or two.',
+  'guide.next.checking': 'If it sounds good, you listen once and send it for review.',
+  'guide.now.needs-fix': 'The sound check found a problem listeners would notice (see below).',
+  'guide.next.needs-fix': 'Record again or replace the file. We check it again automatically.',
+  'guide.now.awaiting-submit': 'The sound check passed. Nothing more happens until you send it.',
+  'guide.next.awaiting-submit': 'Listen once, then tap “Send for review” below.',
+  'guide.now.transcribing': 'We’re writing out the words of your story. You don’t need to do anything.',
+  'guide.next.transcribing': 'We prepare the teaser, story details, and artwork, then an editor reviews it.',
+  'guide.now.waiting-transcript': 'Waiting for the team to start writing out the words. You don’t need to do anything.',
+  'guide.next.waiting-transcript': 'We prepare the teaser, story details, and artwork, then an editor reviews it.',
+  'guide.now.drafting': 'We’re preparing the teaser, story details, and artwork. You don’t need to do anything.',
+  'guide.next.drafting': 'An editor listens and reviews it. You get a notification when they decide.',
+  'guide.now.illustrating': 'We’re preparing the teaser, story details, and artwork. You don’t need to do anything.',
+  'guide.next.illustrating': 'An editor listens and reviews it. You get a notification when they decide.',
+  'guide.now.ready': 'An editor is reviewing your story.',
+  'guide.next.ready': 'They publish it or ask for changes. You get a notification either way.',
+  'guide.now.changes-requested': 'The editor asked for changes (see their note below).',
+  'guide.next.changes-requested': 'Make the changes, then tap “I made the changes: send again”.',
+  'guide.now.published': 'Your story is live and families can listen to it.',
+  'guide.next.published': 'Listening numbers appear below as families listen.',
+  'guide.now.rejected': 'The editor didn’t accept this story (see their note).',
+  'guide.next.rejected': 'You can record a new story any time.',
+  'guide.now.failed': 'Something went wrong on our side. The team has been told.',
+  'guide.next.failed': 'You don’t need to do anything. It continues once it’s fixed.',
   'qc.too-quiet': 'Move closer to the microphone (about a hand’s width) and raise the input level.',
   'qc.quiet': 'Next time, move a little closer to the microphone.',
   'qc.clipping': 'Lower the input level slightly or move back from the microphone during loud parts.',
@@ -384,6 +423,14 @@ const te: Partial<Dictionary> = {
   'player.play': 'వినండి',
   'player.pause': 'ఆపండి',
   'player.bedtimeOn': 'నిద్రవేళ మోడ్ ఆన్‌లో ఉంది: స్క్రీన్ మసకగా ఉంటుంది, టైమర్ ముగిసేటప్పుడు కథ మెల్లగా ఆగిపోతుంది.',
+  'queue.playNext': 'దీని తర్వాత వినిపించు',
+  'queue.add': 'క్యూలో చేర్చు',
+  'queue.inQueue': 'మీ క్యూలో ఉంది',
+  'queue.title': 'తర్వాత వచ్చేవి',
+  'queue.empty': 'క్యూలో ఏమీ లేదు. ఏదైనా కథ తెరిచి “క్యూలో చేర్చు” నొక్కండి.',
+  'queue.remove': 'క్యూ నుంచి తీసేయి',
+  'queue.moveUp': 'పైకి జరుపు',
+  'queue.moveDown': 'కిందికి జరుపు',
   'player.close': 'ప్లేయర్ మూసివేయండి',
   'player.next': 'తర్వాతి కథ',
   'player.previous': 'మునుపటి కథ',
@@ -505,6 +552,37 @@ const te: Partial<Dictionary> = {
   'step.drafting': 'వివరాలు, చిత్రం',
   'step.ready': 'ఎడిటర్ సమీక్ష',
   'step.published': 'ప్రచురణ',
+  'step.submit': 'మీరు పంపడం',
+  'guide.now': 'ఇప్పుడు',
+  'guide.next': 'తర్వాత',
+  'guide.how': 'ఇది ఎలా పనిచేస్తుంది',
+  'guide.howSteps': '1. కథను రికార్డ్ చేయండి లేదా అప్‌లోడ్ చేయండి.\n2. ఒకటి రెండు నిమిషాల్లో మేము శబ్దాన్ని పరిశీలిస్తాము.\n3. మీరు ఒకసారి విని సమీక్షకు పంపండి.\n4. మేము కథలోని మాటలను రాసి, పరిచయం, చిత్రం సిద్ధం చేస్తాము.\n5. ఎడిటర్ సమీక్షించి ప్రచురిస్తారు, లేదా మార్పులు అడుగుతారు.\nమీరు ఏదైనా చేయాల్సినప్పుడల్లా మీకు నోటిఫికేషన్ వస్తుంది.',
+  'guide.now.none': 'ఇంకా మొదలవలేదు.',
+  'guide.next.none': 'మొదలుపెట్టడానికి కథను రికార్డ్ చేయండి లేదా అప్‌లోడ్ చేయండి.',
+  'guide.now.checking': 'శబ్దం నాణ్యతను పరిశీలిస్తున్నాము. ఒకటి రెండు నిమిషాలు పడుతుంది.',
+  'guide.next.checking': 'శబ్దం బాగుంటే, మీరు ఒకసారి విని సమీక్షకు పంపండి.',
+  'guide.now.needs-fix': 'శబ్ద పరిశీలనలో శ్రోతలు గమనించే సమస్య కనిపించింది (కింద చూడండి).',
+  'guide.next.needs-fix': 'మళ్లీ రికార్డ్ చేయండి లేదా ఫైల్ మార్చండి. మేము మళ్లీ ఆటోమేటిక్‌గా పరిశీలిస్తాము.',
+  'guide.now.awaiting-submit': 'శబ్ద పరిశీలన పూర్తయింది. మీరు పంపే వరకు ఇంకేమీ జరగదు.',
+  'guide.next.awaiting-submit': 'ఒకసారి విని, కింద ఉన్న “సమీక్షకు పంపండి” నొక్కండి.',
+  'guide.now.transcribing': 'మీ కథలోని మాటలను రాస్తున్నాము. మీరు ఏమీ చేయనక్కర్లేదు.',
+  'guide.next.transcribing': 'పరిచయం, కథ వివరాలు, చిత్రం సిద్ధం చేస్తాము. తర్వాత ఎడిటర్ సమీక్షిస్తారు.',
+  'guide.now.waiting-transcript': 'మాటలు రాయడం మొదలుపెట్టడానికి టీమ్ కోసం వేచి ఉంది. మీరు ఏమీ చేయనక్కర్లేదు.',
+  'guide.next.waiting-transcript': 'పరిచయం, కథ వివరాలు, చిత్రం సిద్ధం చేస్తాము. తర్వాత ఎడిటర్ సమీక్షిస్తారు.',
+  'guide.now.drafting': 'పరిచయం, కథ వివరాలు, చిత్రం సిద్ధం చేస్తున్నాము. మీరు ఏమీ చేయనక్కర్లేదు.',
+  'guide.next.drafting': 'ఎడిటర్ విని సమీక్షిస్తారు. వారు నిర్ణయించగానే మీకు నోటిఫికేషన్ వస్తుంది.',
+  'guide.now.illustrating': 'పరిచయం, కథ వివరాలు, చిత్రం సిద్ధం చేస్తున్నాము. మీరు ఏమీ చేయనక్కర్లేదు.',
+  'guide.next.illustrating': 'ఎడిటర్ విని సమీక్షిస్తారు. వారు నిర్ణయించగానే మీకు నోటిఫికేషన్ వస్తుంది.',
+  'guide.now.ready': 'ఎడిటర్ మీ కథను సమీక్షిస్తున్నారు.',
+  'guide.next.ready': 'వారు ప్రచురిస్తారు, లేదా మార్పులు అడుగుతారు. ఏదైనా మీకు నోటిఫికేషన్ వస్తుంది.',
+  'guide.now.changes-requested': 'ఎడిటర్ మార్పులు అడిగారు (కింద వారి గమనిక చూడండి).',
+  'guide.next.changes-requested': 'మార్పులు చేసి, “మార్పులు చేశాను: మళ్లీ పంపండి” నొక్కండి.',
+  'guide.now.published': 'మీ కథ ప్రచురించబడింది, కుటుంబాలు వినవచ్చు.',
+  'guide.next.published': 'కుటుంబాలు వింటున్న కొద్దీ వినికిడి సంఖ్యలు కింద కనిపిస్తాయి.',
+  'guide.now.rejected': 'ఎడిటర్ ఈ కథను ఆమోదించలేదు (వారి గమనిక చూడండి).',
+  'guide.next.rejected': 'మీరు ఎప్పుడైనా కొత్త కథను రికార్డ్ చేయవచ్చు.',
+  'guide.now.failed': 'మా వైపు ఏదో పొరపాటు జరిగింది. టీమ్‌కు తెలియజేశాము.',
+  'guide.next.failed': 'మీరు ఏమీ చేయనక్కర్లేదు. సరిచేయగానే ముందుకు సాగుతుంది.',
   'qc.too-quiet': 'మైక్రోఫోన్‌కు దగ్గరగా (ఒక చేతి దూరం) రండి, ఇన్‌పుట్ స్థాయి పెంచండి.',
   'qc.quiet': 'తదుపరిసారి మైక్రోఫోన్‌కు కొంచెం దగ్గరగా రండి.',
   'qc.clipping': 'గట్టిగా మాట్లాడే చోట్ల ఇన్‌పుట్ స్థాయి తగ్గించండి లేదా మైక్రోఫోన్ నుండి కొంచెం దూరం జరగండి.',
@@ -561,7 +639,13 @@ export function translate(language: string, key: Key, vars?: Record<string, stri
 
 export type TranslationKey = Key;
 export type Translate = (key: Key, vars?: Record<string, string | number>) => string;
-type I18n = { language: UiLanguage; setLanguage: (language: UiLanguage) => void; t: Translate };
+// A story's title in the UI language, when an editor has confirmed one; otherwise the title as recorded.
+export function localTitle(story: { title: string; titles?: Record<string, string> }, language: string) {
+  return story.titles?.[`${language}-IN`] ?? story.title;
+}
+
+type I18n = { language: UiLanguage; setLanguage: (language: UiLanguage) => void; t: Translate;
+  title: (story: { title: string; titles?: Record<string, string> }) => string };
 
 const I18nContext = createContext<I18n | null>(null);
 
@@ -569,7 +653,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const device = getLocales()[0]?.languageCode === 'te' ? 'te' : 'en';
   const [language, setLanguage] = useState<UiLanguage>(device);
   const t = useCallback((key: Key, vars?: Record<string, string | number>) => translate(language, key, vars), [language]);
-  const value = useMemo(() => ({ language, setLanguage, t }), [language, t]);
+  const title = useCallback((story: { title: string; titles?: Record<string, string> }) => localTitle(story, language), [language]);
+  const value = useMemo(() => ({ language, setLanguage, t, title }), [language, t, title]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 

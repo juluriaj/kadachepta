@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -6,6 +7,7 @@ import { Pressable, ScrollView, View, type LayoutChangeEvent } from 'react-nativ
 
 import { Button, Chip, Cover, Screen, Text, useColors } from '@/components/ui';
 import { api, mediaUrl } from '@/lib/api';
+import { minutes } from '@/components/stories';
 import { formatClock, useI18n } from '@/lib/i18n';
 import { usePlayer } from '@/lib/player/PlayerProvider';
 import { SLEEP_CHOICES, SPEEDS } from '@/lib/player/logic';
@@ -14,12 +16,24 @@ import { useSession } from '@/lib/session';
 import { space, touch } from '@/lib/theme';
 import type { StoryDetail } from '@/lib/types';
 
+// Captions (read along) are on by default wherever a story has them; switching to the picture is remembered.
+const READ_ALONG = 'kc.readAlong';
+let readAlongPreferred = true;
+AsyncStorage.getItem(READ_ALONG).then((value) => {
+  if (value) readAlongPreferred = value === '1';
+}).catch(() => {});
+
 export default function Player() {
-  const { t } = useI18n();
+  const { t, title } = useI18n();
   const colors = useColors();
   const player = usePlayer();
   const [barWidth, setBarWidth] = useState(1);
-  const [reading, setReading] = useState(false);
+  const [reading, setReadingState] = useState(readAlongPreferred);
+  const setReading = (on: boolean) => {
+    readAlongPreferred = on;
+    setReadingState(on);
+    AsyncStorage.setItem(READ_ALONG, on ? '1' : '0').catch(() => {});
+  };
   const { story } = player;
   const detail = useStoryDetail(story?.id);
   const canRead = !!detail.data?.readAlong;
@@ -57,7 +71,7 @@ export default function Player() {
           {reading && canRead ? (
             <ReadAlong storyId={story.id} position={player.position} onSeek={player.seekTo} />
           ) : (
-            <Cover id={story.id} title={story.title} artworkUrl={mediaUrl(story.artworkUrl)} size={280} />
+            <Cover id={story.id} title={title(story)} artworkUrl={mediaUrl(story.artworkUrl)} size={280} />
           )}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
             {canRead ? (
@@ -68,7 +82,7 @@ export default function Player() {
               </Pressable>
             ) : <View style={{ width: 40 }} />}
             <View style={{ flexShrink: 1, alignItems: 'center', gap: space.xs }}>
-              <Text variant="title" style={{ textAlign: 'center' }}>{story.title}</Text>
+              <Text variant="title" style={{ textAlign: 'center' }}>{title(story)}</Text>
               <Text muted>{story.narrator}</Text>
             </View>
             <FavoriteButton storyId={story.id} fallback={!!story.favorite} />
@@ -116,6 +130,8 @@ export default function Player() {
           <Round icon="play-skip-forward" label={t('player.next')} onPress={player.next} disabled={!player.queue.length} />
         </View>
 
+        <UpNext />
+
         <Section title={t('player.sleep')} detail={player.sleepSecondsLeft != null
           ? t('player.sleepIn', { time: formatClock(player.sleepSecondsLeft) }) : undefined}>
           {SLEEP_CHOICES.map((mode) => (
@@ -138,6 +154,47 @@ export default function Player() {
         {player.bedtime ? <Text variant="small" muted>{t('player.bedtimeOn')}</Text> : null}
       </ScrollView>
     </Screen>
+  );
+}
+
+// The listener's queue: tap to play now, reorder, or remove. Stories join it from their page.
+function UpNext() {
+  const { t, title } = useI18n();
+  const colors = useColors();
+  const player = usePlayer();
+  const { queue } = player;
+  return (
+    <View style={{ gap: space.sm }}>
+      <Text variant="label" muted>{t('queue.title')}</Text>
+      {queue.length === 0 ? <Text variant="small" muted>{t('queue.empty')}</Text> : null}
+      {queue.map((item, index) => (
+        <View key={item.id} style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+          <Pressable onPress={() => player.playFromQueue(item.id)} accessibilityRole="button" accessibilityLabel={title(item)}
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touch }}>
+            <Cover id={item.id} title={title(item)} artworkUrl={item.artworkUrl} size={44} rounded={8} />
+            <View style={{ flex: 1 }}>
+              <Text numberOfLines={1}>{title(item)}</Text>
+              <Text variant="small" muted>{t('common.min', { n: minutes(item.duration) })}</Text>
+            </View>
+          </Pressable>
+          <QueueIcon icon="chevron-up" label={t('queue.moveUp')} disabled={index === 0} onPress={() => player.moveInQueue(item.id, -1)} />
+          <QueueIcon icon="chevron-down" label={t('queue.moveDown')} disabled={index === queue.length - 1}
+            onPress={() => player.moveInQueue(item.id, 1)} />
+          <QueueIcon icon="close" label={t('queue.remove')} onPress={() => player.removeFromQueue(item.id)} color={colors.muted} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function QueueIcon({ icon, label, onPress, disabled, color }: { icon: keyof typeof Ionicons.glyphMap; label: string;
+  onPress: () => void; disabled?: boolean; color?: string }) {
+  const colors = useColors();
+  return (
+    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={label} hitSlop={4}
+      style={{ width: 36, height: touch, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.3 : 1 }}>
+      <Ionicons name={icon} size={20} color={color ?? colors.text} />
+    </Pressable>
   );
 }
 
