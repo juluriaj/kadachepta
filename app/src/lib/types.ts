@@ -3,6 +3,7 @@ export type Teaser = { language: string; short: string | null; long: string | nu
 export type Story = {
   id: string;
   title: string;
+  titles?: Record<string, string>; // confirmed titles by language (te-IN, en-IN); see localTitle
   album: string | null;
   narrator: string;
   language: string;
@@ -75,7 +76,7 @@ export type Mastering = {
 };
 
 export type SubmissionDetail = Submission & {
-  timeline: { key: string; label: string; state: 'done' | 'current' | 'todo' | 'blocked' }[];
+  timeline: { key: string; state: 'done' | 'current' | 'todo' | 'blocked' }[];
   pipelineError: string | null;
   waveform: number[];
   mastering: Mastering;

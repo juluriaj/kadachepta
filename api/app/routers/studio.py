@@ -21,7 +21,7 @@ from ..db import get_db
 from ..models import (
     AssetRights, AudioAsset, EditorialEvent, Job, NarratorProfile, Notification, TeaserDraft, Transcript, User, Worker,
 )
-from ..services import pipeline, policy
+from ..services import pipeline, policy, titles
 from ..services import settings as app_settings
 from ..services.assets import apply_metadata, asset_payload, clean_metadata, iso, mastering_payload, metadata_of
 from ..services.notify import notify
@@ -193,6 +193,8 @@ def review_payload(db: Session, asset: AudioAsset) -> dict[str, Any]:
         "mastering": mastering_payload(asset),
         "waitingHours": round(waiting, 1) if waiting is not None else None,
         "overdue": waiting is not None and waiting > sla, "captionsEnabled": asset.captions_enabled,
+        "titleTranslations": {lang: {"text": e["text"], "by": e["by"], "confirmed": bool(e.get("confirmed"))}
+                              for lang, e in titles.entries(asset).items()},
         "changesRequested": asset.changes_requested or None, "sourceText": asset.source_text,
         "series": {"id": asset.series.id, "title": asset.series.title, "position": asset.series_position}
         if asset.series else None,
@@ -246,8 +248,16 @@ class PublishRequest(BaseModel):
     rights: Literal["owned", "attestation"] | None = None
     checklist: list[str] = Field(default_factory=list)
     captionsEnabled: bool | None = None
+    titles: dict[str, str] = Field(default_factory=dict)  # title per app language, confirmed by this editor
     seriesPosition: int | None = None
     notes: str | None = Field(default=None, max_length=2000)
+
+
+def _confirm_titles(asset: AudioAsset, texts: dict[str, str], actor: str) -> None:
+    """Record the editor's titles after any rename, so they belong to the title being published."""
+    for language, text in texts.items():
+        if language in titles.UI_LANGUAGES and text.strip():
+            titles.record(asset, language, text, f"editor:{actor}", confirmed=True)
 
 
 def _apply_review_edits(db: Session, asset: AudioAsset, payload: PublishRequest, actor: str) -> list[str]:
@@ -256,6 +266,7 @@ def _apply_review_edits(db: Session, asset: AudioAsset, payload: PublishRequest,
         merged = {**metadata_of(asset), **payload.metadata}
         apply_metadata(asset, clean_metadata(merged, fallback_title=asset.title))
     asset.metadata_review_status = "approved"
+    _confirm_titles(asset, payload.titles, actor)
     if payload.captionsEnabled is not None:
         asset.captions_enabled = payload.captionsEnabled
     if payload.seriesPosition is not None:
@@ -326,6 +337,7 @@ def save_draft(asset_id: str, payload: PublishRequest, identity: Identity = Depe
     asset = _asset(db, asset_id)
     if payload.metadata:
         apply_metadata(asset, clean_metadata({**metadata_of(asset), **payload.metadata}, fallback_title=asset.title))
+    _confirm_titles(asset, payload.titles, identity.username)
     draft = pipeline.latest_draft(db, asset.id)
     if draft and payload.teaser:
         alternates = dict(draft.alternates or {})
@@ -779,3 +791,69 @@ def read_notifications(identity: Identity = Depends(require_identity), db: Sessi
                                                      Notification.read_at.is_(None)).values(read_at=utcnow()))
     db.commit()
     return {"ok": True}
+
+
+# --- Titles in each app language (Epic L) ---
+
+@router.get("/titles")
+def title_list(scope: Literal["published", "all"] = "published", identity: Identity = Depends(require("content.publish")),
+               db: Session = Depends(get_db)):
+    """Stories with their titles per app language: AI suggestions waiting for an editor, and confirmed ones."""
+    query = select(AudioAsset).where(AudioAsset.status != "archived").order_by(AudioAsset.title)
+    if scope == "published":
+        query = query.where(AudioAsset.status == "published")
+    items = []
+    for asset in db.scalars(query):
+        current = titles.entries(asset)
+        items.append({
+            "id": asset.id, "title": asset.title, "status": asset.status, "album": asset.album,
+            "titles": {lang: {"text": e["text"], "by": e["by"], "confirmed": bool(e.get("confirmed"))}
+                       for lang, e in current.items()},
+            "pending": jobs.active_job(db, asset.id, "titles") is not None,
+            "done": all(current.get(lang, {}).get("confirmed") for lang in titles.UI_LANGUAGES),
+        })
+    return {"languages": list(titles.UI_LANGUAGES), "items": items}
+
+
+class TitleSuggest(BaseModel):
+    scope: Literal["published", "all"] = "published"
+    assetIds: list[str] | None = Field(default=None, max_length=1000)
+
+
+@router.post("/titles/suggest", status_code=202)
+def suggest_titles(payload: TitleSuggest, identity: Identity = Depends(require("content.publish")),
+                   db: Session = Depends(get_db)):
+    """Ask the local AI model for titles wherever a language has neither a confirmed title nor a suggestion."""
+    query = select(AudioAsset).where(AudioAsset.status != "archived")
+    if payload.assetIds:
+        query = query.where(AudioAsset.id.in_(payload.assetIds))
+    elif payload.scope == "published":
+        query = query.where(AudioAsset.status == "published")
+    queued = 0
+    for asset in db.scalars(query):
+        missing = titles.missing(asset)
+        if missing and not jobs.active_job(db, asset.id, "titles"):
+            jobs.enqueue(db, "titles", asset_id=asset.id, payload={"languages": missing, "title": asset.title},
+                         created_by=identity.username, priority=jobs.PRIORITY_BULK)
+            queued += 1
+    _event(db, "catalog", "titles:suggest", identity.username, f"{queued} stories")
+    db.commit()
+    return {"queued": queued}
+
+
+class TitleEdit(BaseModel):
+    titles: dict[str, str] = Field(default_factory=dict)  # by language; empty text removes that title
+
+
+@router.post("/titles/{asset_id}")
+def save_titles(asset_id: str, payload: TitleEdit, identity: Identity = Depends(require("content.publish")),
+                db: Session = Depends(get_db)):
+    """An editor confirms or corrects titles; confirmed titles are what listeners see."""
+    asset = _asset(db, asset_id)
+    for language, text in payload.titles.items():
+        if language not in titles.UI_LANGUAGES:
+            raise HTTPException(status_code=422, detail=f"Unsupported language {language}.")
+        titles.record(asset, language, text, f"editor:{identity.username}", confirmed=True)
+    _event(db, asset.id, "titles:confirmed", identity.username, ", ".join(sorted(payload.titles)))
+    db.commit()
+    return {"titles": titles.confirmed_titles(asset)}

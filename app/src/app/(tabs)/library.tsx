@@ -16,7 +16,7 @@ import type { Story } from '@/lib/types';
 type Tab = 'favorites' | 'downloads' | 'history';
 
 export default function Library() {
-  const { t } = useI18n();
+  const { t, title } = useI18n();
   const colors = useColors();
   const queryClient = useQueryClient();
   const { profile } = useSession();
@@ -47,7 +47,7 @@ export default function Library() {
   );
 
   return (
-    <Screen>
+    <Screen tabs>
       <ScrollView contentContainerStyle={{ gap: space.lg, paddingVertical: space.lg }}>
         <Text variant="title" accessibilityRole="header">{t('tabs.library')}</Text>
         <View style={{ flexDirection: 'row', gap: space.sm }}>
@@ -68,7 +68,7 @@ export default function Library() {
         {tab === 'downloads' && (!downloadsSupported ? empty(t('library.downloadsWebOnly'))
           : downloaded.length ? downloaded.map((entry) => (
             <StoryRow key={entry.story.id} story={entry.story} right={
-              <Pressable accessibilityRole="button" accessibilityLabel={`${t('library.remove')} ${entry.story.title}`} hitSlop={12}
+              <Pressable accessibilityRole="button" accessibilityLabel={`${t('library.remove')} ${title(entry.story)}`} hitSlop={12}
                 onPress={async () => { await removeDownload(entry.story.id); setDownloads(await listDownloads()); }}>
                 <Ionicons name="trash-outline" size={22} color={colors.muted} />
               </Pressable>

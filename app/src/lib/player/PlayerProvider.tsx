@@ -15,6 +15,10 @@ type PlayerState = PlayerSnapshot & {
   setBedtime: (on: boolean) => void;
   setDriveMode: (on: boolean) => void;
   setDataSaver: (on: boolean) => void;
+  enqueue: (story: Story, position?: 'next' | 'last') => void;
+  removeFromQueue: (storyId: string) => void;
+  moveInQueue: (storyId: string, offset: -1 | 1) => void;
+  playFromQueue: (storyId: string) => void;
   next: () => void;
   previous: () => void;
   stop: () => void;
@@ -37,7 +41,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     ...snapshot,
     play: engine.play, toggle: engine.toggle, seekBy: engine.seekBy, seekTo: engine.seekTo, setRate: engine.setRate,
     setSleep: engine.setSleep, setBedtime: engine.setBedtime, setDriveMode: engine.setDriveMode,
-    setDataSaver: engine.setDataSaver, next: engine.next, previous: engine.previous, stop: engine.stop,
+    setDataSaver: engine.setDataSaver, enqueue: engine.enqueue, removeFromQueue: engine.removeFromQueue,
+    moveInQueue: engine.moveInQueue, playFromQueue: engine.playFromQueue, next: engine.next, previous: engine.previous, stop: engine.stop,
     dismissGoodnight: engine.dismissGoodnight,
   }), [snapshot, engine]);
 

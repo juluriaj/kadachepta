@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { mediaUrl } from '@/lib/api';
 import { usePlayer } from '@/lib/player/PlayerProvider';
 import { coverColor, fontFor, fonts, palette, radius, space, touch, type Colors } from '@/lib/theme';
 
@@ -39,11 +40,14 @@ export function Text({ variant = 'body', muted, color, style, children, ...rest 
   );
 }
 
-export function Screen({ children, style, padded = true }: { children: ReactNode; style?: StyleProp<ViewStyle>; padded?: boolean }) {
+// Android draws edge to edge, so screens keep clear of the system navigation buttons themselves.
+// Tab screens skip the bottom edge: the tab bar already sits above those buttons.
+export function Screen({ children, style, padded = true, tabs = false }: { children: ReactNode; style?: StyleProp<ViewStyle>;
+  padded?: boolean; tabs?: boolean }) {
   const colors = useColors();
   return (
     <SafeAreaView style={[{ flex: 1, backgroundColor: colors.background }, padded && { paddingHorizontal: space.lg }, style]}
-      edges={['top', 'left', 'right']}>
+      edges={tabs ? ['top', 'left', 'right'] : ['top', 'left', 'right', 'bottom']}>
       {children}
     </SafeAreaView>
   );
@@ -108,7 +112,7 @@ export function Cover({ id, title, artworkUrl, size, rounded = radius.md }: { id
     <View style={{ width: size, height: size, borderRadius: rounded, overflow: 'hidden', backgroundColor: coverColor(id),
       alignItems: 'center', justifyContent: 'center' }}>
       {artworkUrl ? (
-        <Image source={{ uri: artworkUrl }} style={{ width: size, height: size }} contentFit="cover" transition={200}
+        <Image source={{ uri: mediaUrl(artworkUrl)! }} style={{ width: size, height: size }} contentFit="cover" transition={200}
           accessibilityIgnoresInvertColors />
       ) : (
         <RNText style={{ color: '#fff', fontSize: size * 0.34, fontFamily: fontFor(title, 'bold') }}>{title.trim().charAt(0)}</RNText>

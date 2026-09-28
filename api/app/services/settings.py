@@ -83,6 +83,7 @@ SPECS: dict[str, Spec] = {
 
 WORKER_KEYS = {
     "teaser": ("ai.llm.model", "ai.llm.modelByLanguage", "ai.drafts.promptVersion"),
+    "titles": ("ai.llm.model",),
     "artwork": ("ai.artwork.provider", "ai.artwork.steps"),
     "transcription": ("ai.stt.model",),
     "media.process": ("audio.mastering", "audio.masteringStrength"),

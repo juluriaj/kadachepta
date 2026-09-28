@@ -16,6 +16,7 @@ JOB_CAPABILITIES = {
     "media.process": "media",
     "transcription": "stt",
     "teaser": "llm",
+    "titles": "llm",
     "artwork": "image",
 }
 # Legacy UI vocabulary for job states.

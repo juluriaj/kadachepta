@@ -63,6 +63,7 @@ def narrate_to_review(client, db, token, **submission):
     run_job(client, token, "transcription", {"language": "te-IN", "text": TELUGU, "provider": "sarvam",
                                              "languageProbability": 0.97})
     run_job(client, token, "teaser", dict(DRAFTS))
+    run_job(client, token, "titles", {"title": body["title"], "titles": {"en-IN": "The Crow"}, "model": "qwen/qwen3-8b"})
     run_job(client, token, "artwork", {"key": "<cover.jpg>", "provider": "local-sdxl"}, {"cover.jpg": b"\xff\xd8\xff"})
     return asset_id
 
@@ -104,7 +105,7 @@ def test_submission_flows_through_the_pipeline_to_one_click_publish(client, db):
     home = client.get("/api/narrator/home").json()
     assert home["submissions"][0]["stageLabel"] == "With editor"
     detail = client.get(f"/api/narrator/submissions/{asset_id}").json()
-    assert [step["state"] for step in detail["timeline"]] == ["done", "done", "done", "current", "todo"]
+    assert [step["state"] for step in detail["timeline"]] == ["done", "done", "done", "done", "current", "todo"]
 
     make_user(db, "ed", "editor")
     login(client, "ed")
@@ -186,7 +187,7 @@ def test_changes_requested_then_resubmitted(client, db):
     assert response.json()["stage"] == "changes-requested"
     login(client, "narr")
     detail = client.get(f"/api/narrator/submissions/{asset_id}").json()
-    assert detail["changesRequested"]["note"] == "Fan noise at 2:10" and detail["timeline"][3]["state"] == "blocked"
+    assert detail["changesRequested"]["note"] == "Fan noise at 2:10" and detail["timeline"][4]["state"] == "blocked"
     assert client.post(f"/api/narrator/submissions/{asset_id}/submit").json()["stage"] == "ready"
 
 

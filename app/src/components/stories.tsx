@@ -16,21 +16,21 @@ export function minutes(seconds: number) {
 }
 
 export function StoryCard({ story, width = 150 }: { story: Story; width?: number }) {
-  const { t } = useI18n();
+  const { t, title } = useI18n();
   const colors = useColors();
   const progress = story.progress && !story.progress.completed && story.duration
     ? story.progress.position / story.duration : null;
   return (
     <Pressable
-      accessibilityRole="button" accessibilityLabel={`${story.title}, ${t('common.min', { n: minutes(story.duration) })}`}
+      accessibilityRole="button" accessibilityLabel={`${title(story)}, ${t('common.min', { n: minutes(story.duration) })}`}
       onPress={() => router.push(`/story/${story.id}`)} testID="story-card"
       style={(state) => ({ width, gap: space.sm, opacity: state.pressed ? 0.8 : 1, borderRadius: radius.md,
         // react-native-web reports keyboard focus: show where the arrow keys are
         ...(Platform.OS === 'web' ? { outlineStyle: 'solid', outlineOffset: 4, outlineColor: colors.primary,
           outlineWidth: (state as { focused?: boolean }).focused ? 3 : 0 } as object : {}) })}>
-      <Cover id={story.id} title={story.title} artworkUrl={mediaUrl(story.artworkUrl)} size={width} />
+      <Cover id={story.id} title={title(story)} artworkUrl={mediaUrl(story.artworkUrl)} size={width} />
       {progress !== null ? <ProgressBar value={progress} /> : null}
-      <Text variant="heading" numberOfLines={2} style={{ fontSize: 15, lineHeight: 21 }}>{story.title}</Text>
+      <Text variant="heading" numberOfLines={2} style={{ fontSize: 15, lineHeight: 21 }}>{title(story)}</Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         <Ionicons name="time-outline" size={13} color={colors.muted} />
         <Text variant="small" muted>{t('common.min', { n: minutes(story.duration) })}</Text>
@@ -136,13 +136,13 @@ export function Shelf({ title, items, onSeeAll }: { title: string; items: Story[
 }
 
 export function StoryRow({ story, right }: { story: Story; right?: React.ReactNode }) {
-  const { t } = useI18n();
+  const { t, title } = useI18n();
   return (
     <Pressable onPress={() => router.push(`/story/${story.id}`)} accessibilityRole="button"
       style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 72, opacity: pressed ? 0.8 : 1 })}>
-      <Cover id={story.id} title={story.title} artworkUrl={mediaUrl(story.artworkUrl)} size={56} rounded={radius.sm} />
+      <Cover id={story.id} title={title(story)} artworkUrl={mediaUrl(story.artworkUrl)} size={56} rounded={radius.sm} />
       <View style={{ flex: 1, gap: 2 }}>
-        <Text variant="heading" numberOfLines={1} style={{ fontSize: 15 }}>{story.title}</Text>
+        <Text variant="heading" numberOfLines={1} style={{ fontSize: 15 }}>{title(story)}</Text>
         <Text variant="small" muted numberOfLines={1}>{story.narrator} · {t('common.min', { n: minutes(story.duration) })}</Text>
       </View>
       {right}
@@ -154,7 +154,7 @@ export function StoryRow({ story, right }: { story: Story; right?: React.ReactNo
 export function MiniPlayer() {
   const player = usePlayer();
   const colors = useColors();
-  const { t } = useI18n();
+  const { t, title } = useI18n();
   if (!player.story) return null;
   const { story } = player;
   return (
@@ -162,9 +162,9 @@ export function MiniPlayer() {
       onPress={() => router.push('/player')} accessibilityRole="button" accessibilityLabel={t('player.nowPlaying')}
       style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.sm, paddingRight: space.md,
         backgroundColor: colors.surface, borderTopWidth: 1, borderColor: colors.border }}>
-      <Cover id={story.id} title={story.title} artworkUrl={mediaUrl(story.artworkUrl)} size={48} rounded={radius.sm} />
+      <Cover id={story.id} title={title(story)} artworkUrl={mediaUrl(story.artworkUrl)} size={48} rounded={radius.sm} />
       <View style={{ flex: 1 }}>
-        <Text variant="heading" numberOfLines={1} style={{ fontSize: 14 }}>{story.title}</Text>
+        <Text variant="heading" numberOfLines={1} style={{ fontSize: 14 }}>{title(story)}</Text>
         <ProgressBar value={player.duration ? player.position / player.duration : 0} />
       </View>
       <Pressable onPress={player.toggle} hitSlop={10} accessibilityRole="button"

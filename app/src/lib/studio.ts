@@ -33,6 +33,7 @@ export type Review = {
   qc: { verdict?: string; checks?: QcCheck[]; integratedLufs?: number; noiseFloorDb?: number; speechRatio?: number };
   mastering: Mastering;
   waitingHours: number | null; overdue: boolean; captionsEnabled: boolean; sourceText: string | null;
+  titleTranslations: Record<string, { text: string; by: string; confirmed: boolean }>;
   changesRequested: { reasons: string[]; texts: string[]; note: string; by: string; at: string } | null;
   series: { id: number; title: string; position: number | null } | null;
   narrator: { userId: number; name: string; trustLevel: string | null; sampleUrl: string | null; published?: number;

@@ -3,6 +3,7 @@ import { createAudioPlayer, setAudioModeAsync, type AudioPlayer, type AudioStatu
 import { AppState, Platform } from 'react-native';
 
 import { api, mediaUrl } from '../api';
+import { localTitle } from '../i18n';
 import { localUri } from '../downloads';
 import type { Story } from '../types';
 import {
@@ -55,6 +56,8 @@ export class PlayerEngine {
   private finishedFor: string | null = null;
   private pending = { storyId: null as string | null, seconds: 0, screenOff: 0, started: false, last: null as number | null };
   private completedListeners = new Set<() => void>();
+  private uiLanguage = 'en'; // for the lock-screen title
+  private userQueued = new Set<string>(); // ids the listener added with "Play next" / "Add to queue"
 
   constructor() {
     this.player = createAudioPlayer(null, { updateInterval: 500 });
@@ -169,7 +172,7 @@ export class PlayerEngine {
     this.set({ story, position: startAt, duration: story.duration });
     if (Platform.OS !== 'web') {
       this.player.setActiveForLockScreen(true, {
-        title: story.title, artist: story.narrator, albumTitle: story.album ?? 'KathaChepta',
+        title: localTitle(story, this.uiLanguage), artist: story.narrator, albumTitle: story.album ?? 'KathaChepta',
         artworkUrl: mediaUrl(story.artworkUrl) ?? undefined,
       }, { showSeekBackward: true, showSeekForward: true });
     }
@@ -203,8 +206,14 @@ export class PlayerEngine {
   }
 
   play = async (story: Story, options?: { queue?: Story[]; autoContinue?: boolean }) => {
-    this.autoContinue = options?.autoContinue ?? Boolean(options?.queue?.length);
-    this.set({ queue: options?.queue ?? [] });
+    // Stories the listener queued themselves survive starting another story; the series' next chapters go first.
+    const given = options?.queue ?? [];
+    const kept = this.snapshot.queue.filter((item) => this.userQueued.has(item.id) && item.id !== story.id
+      && !given.some((g) => g.id === item.id));
+    this.userQueued.delete(story.id);
+    this.autoContinue = options?.autoContinue ?? Boolean(given.length);
+    if (kept.length) this.autoContinue = true;
+    this.set({ queue: [...given, ...kept] });
     await this.load(story, resumePosition(story.progress, story.duration));
   };
 
@@ -242,9 +251,49 @@ export class PlayerEngine {
 
   setDriveMode = (on: boolean) => this.set({ driveMode: on });
 
+  setUiLanguage = (language: string) => {
+    this.uiLanguage = language;
+  };
+
   setDataSaver = (on: boolean) => {
     this.set({ dataSaver: on });
     this.savePrefs({ dataSaver: on });
+  };
+
+  // Listener-built queue: "Play next" goes to the front, "Add to queue" to the end. Queuing on purpose means
+  // "keep playing", so the queue continues (bedtime still stops after the current story).
+  enqueue = (story: Story, position: 'next' | 'last' = 'last') => {
+    if (!this.snapshot.story) {
+      void this.play(story);
+      return;
+    }
+    if (story.id === this.snapshot.story.id) return;
+    const rest = this.snapshot.queue.filter((item) => item.id !== story.id);
+    this.userQueued.add(story.id);
+    this.autoContinue = true;
+    this.set({ queue: position === 'next' ? [story, ...rest] : [...rest, story] });
+  };
+
+  removeFromQueue = (storyId: string) => {
+    this.userQueued.delete(storyId);
+    this.set({ queue: this.snapshot.queue.filter((item) => item.id !== storyId) });
+  };
+
+  moveInQueue = (storyId: string, offset: -1 | 1) => {
+    const queue = [...this.snapshot.queue];
+    const from = queue.findIndex((item) => item.id === storyId);
+    const to = from + offset;
+    if (from < 0 || to < 0 || to >= queue.length) return;
+    [queue[from], queue[to]] = [queue[to], queue[from]];
+    this.set({ queue });
+  };
+
+  playFromQueue = (storyId: string) => {
+    const index = this.snapshot.queue.findIndex((item) => item.id === storyId);
+    if (index < 0) return;
+    const story = this.snapshot.queue[index];
+    this.set({ queue: this.snapshot.queue.slice(index + 1) });
+    void this.load(story, resumePosition(story.progress, story.duration));
   };
 
   next = () => {
@@ -260,6 +309,7 @@ export class PlayerEngine {
     this.flush();
     this.player.pause();
     if (Platform.OS !== 'web') this.player.clearLockScreenControls();
+    this.userQueued.clear();
     this.set({ story: null, queue: [] });
   };
 

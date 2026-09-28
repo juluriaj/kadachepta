@@ -17,7 +17,7 @@ import type { StoryDetail } from '@/lib/types';
 
 export default function Story() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { t } = useI18n();
+  const { t, title } = useI18n();
   const colors = useColors();
   const player = usePlayer();
   const queryClient = useQueryClient();
@@ -67,8 +67,8 @@ export default function Story() {
       <ScrollView contentContainerStyle={{ gap: space.xl, paddingBottom: space.xxl }}>
         <View style={{ paddingHorizontal: space.lg }}><Back /></View>
         <View style={{ alignItems: 'center', gap: space.lg, paddingHorizontal: space.lg }}>
-          <Cover id={s.id} title={s.title} artworkUrl={mediaUrl(s.artworkUrl)} size={240} />
-          <Text variant="display" style={{ textAlign: 'center' }} accessibilityRole="header">{s.title}</Text>
+          <Cover id={s.id} title={title(s)} artworkUrl={mediaUrl(s.artworkUrl)} size={240} />
+          <Text variant="display" style={{ textAlign: 'center' }} accessibilityRole="header">{title(s)}</Text>
           <Text muted style={{ textAlign: 'center' }}>
             {t('story.narratedBy', { name: s.narrator })} · {t('common.min', { n: minutes(s.duration) })}
             {s.metadata.audienceAgeRange ? ` · ${s.metadata.audienceAgeRange}` : ''}
@@ -89,6 +89,20 @@ export default function Story() {
               }
             }}
           />
+          {player.story && !isCurrent ? (
+            player.queue.some((item) => item.id === s.id) ? (
+              <Button kind="secondary" title={t('queue.inQueue')} onPress={() => player.removeFromQueue(s.id)}
+                accessibilityHint={t('queue.remove')}
+                icon={<Ionicons name="checkmark-circle" size={18} color={colors.success} />} />
+            ) : (
+              <View style={{ flexDirection: 'row', gap: space.md }}>
+                <Button kind="secondary" title={t('queue.playNext')} style={{ flex: 1 }} onPress={() => player.enqueue(s, 'next')}
+                  icon={<Ionicons name="play-skip-forward-outline" size={18} color={colors.text} />} />
+                <Button kind="secondary" title={t('queue.add')} style={{ flex: 1 }} onPress={() => player.enqueue(s, 'last')}
+                  icon={<Ionicons name="list-outline" size={18} color={colors.text} />} />
+              </View>
+            )
+          ) : null}
           <View style={{ flexDirection: 'row', gap: space.md }}>
             <Button title={s.favorite ? t('story.removeFavorite') : t('story.addFavorite')} kind="secondary" style={{ flex: 1 }}
               icon={<Ionicons name={s.favorite ? 'heart' : 'heart-outline'} size={18} color={s.favorite ? colors.accent : colors.text} />}

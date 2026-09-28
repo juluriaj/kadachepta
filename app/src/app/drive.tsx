@@ -13,7 +13,7 @@ import { palette, radius, space } from '@/lib/theme';
 // Nothing here needs reading while driving; each button is a quarter of the screen.
 export default function Drive() {
   useKeepAwake();
-  const { t } = useI18n();
+  const { t, title } = useI18n();
   const player = usePlayer();
   const colors = palette.night;
 
@@ -25,7 +25,7 @@ export default function Drive() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', padding: space.lg }}>
-        <Text variant="title" color={colors.text} numberOfLines={1} style={{ flex: 1 }}>{player.story?.title ?? '—'}</Text>
+        <Text variant="title" color={colors.text} numberOfLines={1} style={{ flex: 1 }}>{player.story ? title(player.story) : '—'}</Text>
         <Pressable onPress={exit} accessibilityRole="button" accessibilityLabel={t('drive.exit')} hitSlop={16}
           style={{ padding: space.md, borderRadius: radius.pill, backgroundColor: colors.surface }}>
           <Ionicons name="close" size={28} color={colors.text} />

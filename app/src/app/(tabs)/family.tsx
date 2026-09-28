@@ -54,7 +54,7 @@ export default function Family() {
 
   if (!unlocked) {
     return (
-      <Screen>
+      <Screen tabs>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.lg }}>
           <Ionicons name="lock-closed-outline" size={40} color={colors.muted} />
           <Text variant="heading">{t('pin.enter')}</Text>
@@ -67,7 +67,7 @@ export default function Family() {
   if (!household) return <Loading />;
 
   return (
-    <Screen>
+    <Screen tabs>
       <ScrollView contentContainerStyle={{ gap: space.xl, paddingVertical: space.lg }}>
         <Text variant="title" accessibilityRole="header">{t('family.title')}</Text>
 

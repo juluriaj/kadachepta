@@ -98,6 +98,8 @@ class AudioAsset(Base):
     source_filename: Mapped[str | None] = mapped_column(Text)
     checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False)
+    # The title in each app language, drafted by AI and confirmed by an editor (services/titles.py)
+    title_translations: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
     album: Mapped[str | None] = mapped_column(Text)
     collection: Mapped[str | None] = mapped_column(Text, index=True)
     artist: Mapped[str | None] = mapped_column(Text)

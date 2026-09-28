@@ -7,6 +7,7 @@ import { space } from '@/lib/theme';
 
 const LINKS = [
   { href: '/studio', label: 'Queue', match: (path: string) => path === '/studio' || path.startsWith('/studio/review') },
+  { href: '/studio/titles', label: 'Titles' },
   { href: '/studio/narrators', label: 'Narrators' },
   { href: '/studio/activity', label: 'Activity' },
   { href: '/studio/settings', label: 'AI & processing', permission: 'jobs.manage' },
