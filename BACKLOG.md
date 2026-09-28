@@ -160,11 +160,10 @@ parity plus the platform capabilities later phases need, nothing else.
 
 ## Phase 1 — Listener app (iOS, Android, web)
 
-**Status (2026-09-25): accepted on web; Android validation pending** — checklist in
-[docs/phase-1-review.md](docs/phase-1-review.md). Still to check on the Android build: items 6 (download), 10
-(locked-screen playback and lock-screen controls), and 11 (offline). Done: P1-01, P1-03 to P1-08, P1-10 to P1-15, and P1-09
+**Status (2026-09-28): accepted** (reviewed by you on web and the Android build) — checklist in
+[docs/phase-1-review.md](docs/phase-1-review.md). Done: P1-01, P1-03 to P1-08, P1-10 to P1-15, and P1-09
 (downloads, native only). Deferred: Sign in with Apple/Google (P1-02) moves to Phase 6 with the store
-accounts; email codes work now. The Android checks need the build from `npm run app:apk`.
+accounts; email codes work now.
 
 **Goal:** a family installs the Android review build (or uses mobile web on iPhone) and uses it daily
 with no help.
