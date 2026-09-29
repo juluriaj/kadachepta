@@ -136,3 +136,7 @@ export type NarratorHome = {
 
 export type AppNotification = { id: number; kind: string; title: string; body: string | null; assetId: string | null;
   read: boolean; createdAt: string };
+
+export type PlaylistSummary = { id: number; name: string; count: number; storyIds: string[]; duration: number; covers: string[];
+  updatedAt: string };
+export type PlaylistDetail = PlaylistSummary & { stories: Story[] };

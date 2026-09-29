@@ -1,11 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
+import { NewPlaylist, usePlaylists } from '@/components/playlists';
 import { minutes, StoryRow } from '@/components/stories';
-import { Chip, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
+import { Button, Chip, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
 import { downloadsSupported, listDownloads, removeDownload, type DownloadEntry } from '@/lib/downloads';
 import { useI18n } from '@/lib/i18n';
@@ -13,7 +14,7 @@ import { useSession } from '@/lib/session';
 import { space } from '@/lib/theme';
 import type { Story } from '@/lib/types';
 
-type Tab = 'favorites' | 'downloads' | 'history';
+type Tab = 'playlists' | 'favorites' | 'downloads' | 'history';
 
 export default function Library() {
   const { t, title } = useI18n();
@@ -50,12 +51,15 @@ export default function Library() {
     <Screen tabs>
       <ScrollView contentContainerStyle={{ gap: space.lg, paddingVertical: space.lg }}>
         <Text variant="title" accessibilityRole="header">{t('tabs.library')}</Text>
-        <View style={{ flexDirection: 'row', gap: space.sm }}>
+        <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
+          <Chip label={t('playlist.title')} selected={tab === 'playlists'} onPress={() => setTab('playlists')} />
           <Chip label={t('library.favorites')} selected={tab === 'favorites'} onPress={() => setTab('favorites')} />
           <Chip label={t('library.downloads')} selected={tab === 'downloads'} onPress={() => setTab('downloads')} />
           <Chip label={t('library.history')} selected={tab === 'history'} onPress={() => setTab('history')} />
         </View>
         {catalog.error ? <ErrorState error={catalog.error} onRetry={() => void catalog.refetch()} /> : null}
+
+        {tab === 'playlists' ? <Playlists /> : null}
 
         {tab === 'favorites' && (favorites.length ? favorites.map((story) => <StoryRow key={story.id} story={story} />)
           : empty(t('library.noFavorites')))}
@@ -82,5 +86,48 @@ export default function Library() {
         ) : null}
       </ScrollView>
     </Screen>
+  );
+}
+
+function Playlists() {
+  const { t } = useI18n();
+  const colors = useColors();
+  const playlists = usePlaylists();
+  const [creating, setCreating] = useState(false);
+  const items = playlists.data?.items ?? [];
+  return (
+    <View style={{ gap: space.md }}>
+      {creating ? (
+        <NewPlaylist onCancel={() => setCreating(false)} onCreated={(playlist) => {
+          setCreating(false);
+          void playlists.refetch();
+          router.push(`/playlist/${playlist.id}`);
+        }} />
+      ) : (
+        <Button kind="secondary" title={t('playlist.new')} onPress={() => setCreating(true)}
+          icon={<Ionicons name="add" size={18} color={colors.text} />} />
+      )}
+      {playlists.error ? <ErrorState error={playlists.error} onRetry={() => void playlists.refetch()} /> : null}
+      {!items.length && !playlists.isLoading ? (
+        <View style={{ padding: space.xl, alignItems: 'center', gap: space.sm }}>
+          <Ionicons name="list-outline" size={36} color={colors.muted} />
+          <Text muted style={{ textAlign: 'center' }}>{t('playlist.empty')}</Text>
+        </View>
+      ) : null}
+      {items.map((playlist) => (
+        <Pressable key={playlist.id} onPress={() => router.push(`/playlist/${playlist.id}`)} accessibilityRole="button"
+          style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 64, opacity: pressed ? 0.8 : 1 })}>
+          <View style={{ width: 56, height: 56, borderRadius: 12, backgroundColor: colors.surfaceAlt, alignItems: 'center',
+            justifyContent: 'center' }}>
+            <Ionicons name="list" size={26} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text variant="heading" numberOfLines={1} style={{ fontSize: 15 }}>{playlist.name}</Text>
+            <Text variant="small" muted>{t('playlist.count', { n: playlist.count })} · {t('common.min', { n: minutes(playlist.duration) })}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+        </Pressable>
+      ))}
+    </View>
   );
 }

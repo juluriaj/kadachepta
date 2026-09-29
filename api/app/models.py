@@ -592,3 +592,27 @@ class CollectionItem(Base):
     collection_id: Mapped[int] = mapped_column(ForeignKey("collections.id", ondelete="CASCADE"), primary_key=True)
     audio_asset_id: Mapped[str] = mapped_column(ForeignKey("audio_assets.id", ondelete="CASCADE"), primary_key=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+
+
+class Playlist(Base):
+    """A listener's own list of stories, in their order."""
+
+    __tablename__ = "playlists"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+    created_at: Mapped[datetime] = now_column()
+    updated_at: Mapped[datetime] = now_column(onupdate=func.now())
+
+    items: Mapped[list[PlaylistItem]] = relationship(order_by="PlaylistItem.position", cascade="all, delete-orphan",
+                                                     passive_deletes=True)
+
+
+class PlaylistItem(Base):
+    __tablename__ = "playlist_items"
+
+    playlist_id: Mapped[int] = mapped_column(ForeignKey("playlists.id", ondelete="CASCADE"), primary_key=True)
+    audio_asset_id: Mapped[str] = mapped_column(ForeignKey("audio_assets.id", ondelete="CASCADE"), primary_key=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    added_at: Mapped[datetime] = now_column()
