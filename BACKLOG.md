@@ -201,7 +201,7 @@ with no help.
 
 ## Phase 2 — Narrator studio and automated pipeline
 
-**Status (2026-09-24): built, awaiting your review** — checklist in
+**Status (2026-09-29): accepted** (reviewed by you) — checklist in
 [docs/phase-2-review.md](docs/phase-2-review.md). All items P2-01 to P2-14 are in. Deviations: push
 notifications wait for the store builds (narrators get in-app updates and email now); background upload on
 mobile is "resume where it stopped while the app is open", not an OS background transfer; the editor studio
