@@ -19,6 +19,7 @@ from ..models import (
 from ..services.assets import (
     apply_metadata, asset_payload, clean_metadata, iso, missing_publication_metadata, rendition_keys,
 )
+from ..services import community
 from ..services.notify import notify
 from ..storage import get_storage
 
@@ -450,6 +451,8 @@ def mark_published(db: Session, asset: AudioAsset, actor: str, notes: str | None
     _event(db, "content", asset.id, "content:published", actor, notes)
     notify(db, asset.narrator_user_id, "published", f"“{asset.title}” is published",
            "Families can listen to it now. Thank you for narrating!", asset.id)
+    community.notify_published(db, asset)  # opt-in listener notifications (followers, series listeners)
+    community.ensure_ai_extras(db, asset, actor)  # recommendations and conversation starters
 
 
 @router.post("/narrator/review")

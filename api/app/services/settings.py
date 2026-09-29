@@ -49,6 +49,11 @@ SPECS: dict[str, Spec] = {
                                 choices=("local-sdxl", "pollinations", "disabled")),
     "ai.artwork.steps": Spec(8, "int", "Artwork steps",
                              "The local model is tuned for 8 steps; fewer is faster but rougher.", minimum=2, maximum=40),
+    "ai.embeddings.model": Spec(os.environ.get("KC_EMBEDDING_MODEL") or "text-embedding-nomic-embed-text-v1.5", "text",
+                                "Recommendation model",
+                                "LM Studio embedding model for \"Because you finished\" recommendations. It reads the "
+                                "English teaser and details, so an English-only model works for every story language. "
+                                "Changing it recomputes recommendations as stories are refreshed."),
     "ai.stt.model": Spec(os.environ.get("KC_STT_MODEL") or "saaras:v4", "text", "Speech-to-text model",
                          "Sarvam model used for transcription (billed per audio minute)."),
     "audio.mastering": Spec("auto", "choice", "Mastering",
@@ -73,6 +78,9 @@ SPECS: dict[str, Spec] = {
                                         minimum=0, maximum=1),
     "review.slaHours": Spec(24, "int", "Review time target (hours)",
                             "Stories waiting longer are marked overdue in the studio queue.", minimum=1, maximum=720),
+    "community.autoPublishReviews": Spec(True, "bool", "Publish reviews the automatic check passes",
+                                         "Off: every written review waits for an editor. Reviews the check holds, or "
+                                         "that listeners report, always wait for an editor.",),
     "narrators.newInProgressLimit": Spec(3, "int", "Submissions in progress for new narrators",
                                          "New narrators can have this many stories being prepared or reviewed at once.",
                                          minimum=1, maximum=100),
@@ -84,6 +92,9 @@ SPECS: dict[str, Spec] = {
 WORKER_KEYS = {
     "teaser": ("ai.llm.model", "ai.llm.modelByLanguage", "ai.drafts.promptVersion"),
     "titles": ("ai.llm.model",),
+    "prompts": ("ai.llm.model",),
+    "review.moderate": ("ai.llm.model",),
+    "embed": ("ai.embeddings.model",),
     "artwork": ("ai.artwork.provider", "ai.artwork.steps"),
     "transcription": ("ai.stt.model",),
     "media.process": ("audio.mastering", "audio.masteringStrength"),

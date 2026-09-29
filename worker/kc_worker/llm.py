@@ -77,3 +77,26 @@ def chat_json(messages: list[dict[str, str]], schema: dict[str, Any], *, model: 
     if usage.get("completion_tokens") and elapsed:
         stats["tokensPerSecond"] = round(usage["completion_tokens"] / elapsed, 1)
     return parsed, stats
+
+
+def embed(texts: list[str], *, model: str) -> tuple[list[list[float]], dict[str, Any]]:
+    """Embedding vectors from the OpenAI-compatible /embeddings endpoint (LM Studio loads the model on demand)."""
+    headers = {"Content-Type": "application/json"}
+    if os.environ.get("KC_LLM_API_KEY"):
+        headers["Authorization"] = f"Bearer {os.environ['KC_LLM_API_KEY']}"
+    request = urllib.request.Request(base_url() + "/embeddings", data=json.dumps({"model": model, "input": texts}).encode(),
+                                     headers=headers, method="POST")
+    started = time.monotonic()
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            payload = json.loads(response.read())
+    except urllib.error.HTTPError as error:
+        raise LlmError(f"Embedding model {model} returned HTTP {error.code}: "
+                       f"{error.read().decode('utf-8', 'replace')[:300]}. Is it downloaded in LM Studio?") from None
+    except OSError as error:
+        raise LlmError(f"Could not reach the LLM server at {base_url()}: {error}.") from None
+    vectors = [item["embedding"] for item in sorted(payload.get("data", []), key=lambda item: item.get("index", 0))]
+    if len(vectors) != len(texts) or not all(vectors):
+        raise LlmError(f"Embedding model {model} returned {len(vectors)} vectors for {len(texts)} texts.")
+    return vectors, {"model": payload.get("model", model), "seconds": round(time.monotonic() - started, 2),
+                     "dimensions": len(vectors[0])}

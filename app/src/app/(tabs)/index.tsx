@@ -10,7 +10,7 @@ import { api } from '@/lib/api';
 import { useI18n, type TranslationKey } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { space } from '@/lib/theme';
-import type { Shelf as ShelfType } from '@/lib/types';
+import type { Shelf as ShelfType, Updates } from '@/lib/types';
 
 const DURATIONS = [
   { id: 'any', max: Infinity },
@@ -25,7 +25,7 @@ function greetingKey(): TranslationKey {
 }
 
 export default function Home() {
-  const { t } = useI18n();
+  const { t, title, language } = useI18n();
   const colors = useColors();
   const { profile } = useSession();
   const [duration, setDuration] = useState('any');
@@ -43,6 +43,14 @@ export default function Home() {
       .filter((shelf) => shelf.items.length);
   }, [home.data, duration, moment]);
 
+  const updates = useQuery({ queryKey: ['updates', profile?.id], enabled: profile?.kind === 'adult',
+    queryFn: () => api<Updates>('/api/me/updates') });
+  const unread = updates.data?.unread ?? 0;
+  const shelfTitle = (shelf: ShelfType) => shelf.collection
+    ? shelf.collection.titles[`${language}-IN`] ?? Object.values(shelf.collection.titles)[0] ?? ''
+    : shelf.id === 'because' && shelf.basedOn ? t('shelf.because', { title: title(shelf.basedOn) })
+      : t(`shelf.${shelf.id}` as TranslationKey);
+
   const moments = (home.data?.shelves ?? []).filter((shelf) => shelf.moment).map((shelf) => shelf.moment!);
 
   if (!profile || home.isLoading) return <Loading />;
@@ -55,6 +63,20 @@ export default function Home() {
             <Text variant="small" muted>{t('app.tagline')}</Text>
             <Text variant="title" accessibilityRole="header">{t(greetingKey(), { name: profile.name })}</Text>
           </View>
+          <Pressable onPress={() => router.push('/search')} accessibilityRole="button" accessibilityLabel={t('home.search')}
+            hitSlop={8} style={{ padding: space.xs }}>
+            <Ionicons name="search" size={24} color={colors.text} />
+          </Pressable>
+          {profile.kind === 'adult' ? (
+            <Pressable onPress={() => router.push('/updates')} accessibilityRole="button" hitSlop={8} style={{ padding: space.xs }}
+              accessibilityLabel={unread ? `${t('home.updates')} (${unread})` : t('home.updates')}>
+              <Ionicons name="notifications-outline" size={24} color={colors.text} />
+              {unread ? (
+                <View style={{ position: 'absolute', top: 2, right: 2, width: 10, height: 10, borderRadius: 5,
+                  backgroundColor: colors.accent }} />
+              ) : null}
+            </Pressable>
+          ) : null}
           <Pressable onPress={() => router.push('/profiles')} accessibilityRole="button" accessibilityLabel={t('profiles.who')}>
             <Avatar avatar={profile.avatar} size={44} />
           </Pressable>
@@ -84,7 +106,7 @@ export default function Home() {
           </View>
         ) : null}
         {shelves.map((shelf) => (
-          <Shelf key={shelf.id} title={t(`shelf.${shelf.id}` as TranslationKey)} items={shelf.items} />
+          <Shelf key={shelf.id} title={shelfTitle(shelf)} items={shelf.items} />
         ))}
       </ScrollView>
     </Screen>

@@ -7,8 +7,10 @@ import { Pressable, ScrollView, View, type LayoutChangeEvent } from 'react-nativ
 
 import { Button, Chip, Cover, Screen, Text, useColors } from '@/components/ui';
 import { api, mediaUrl } from '@/lib/api';
+import { RatingCard } from '@/components/community';
 import { minutes } from '@/components/stories';
 import { formatClock, useI18n } from '@/lib/i18n';
+import { getEngine } from '@/lib/player/engine';
 import { usePlayer } from '@/lib/player/PlayerProvider';
 import { SLEEP_CHOICES, SPEEDS } from '@/lib/player/logic';
 import { pressFraction } from '@/lib/seek';
@@ -36,7 +38,18 @@ export default function Player() {
   };
   const { story } = player;
   const detail = useStoryDetail(story?.id);
+  const queryClient = useQueryClient();
+  const [ratingDismissed, setRatingDismissed] = useState<string | null>(null);
   const canRead = !!detail.data?.readAlong;
+
+  // Ask for a rating once most of the story has been heard (or it ended), never in bedtime mode (the screen is
+  // dimmed and nobody should be tapping stars at lights-out: they can rate later on the story page).
+  const heard = story && player.duration ? player.position / player.duration >= 0.6 || player.goodnight : false;
+  const showRating = !!story && heard && !player.bedtime && ratingDismissed !== story.id;
+  useEffect(() => {
+    if (!showRating || !story) return;
+    void getEngine().flushNow().then(() => queryClient.invalidateQueries({ queryKey: ['community', story.id] }));
+  }, [showRating, story, queryClient]);
 
   if (!story) {
     return (
@@ -129,6 +142,8 @@ export default function Player() {
           <Round icon="play-forward" label={t('player.forward30')} onPress={() => player.seekBy(30)} badge="30" />
           <Round icon="play-skip-forward" label={t('player.next')} onPress={player.next} disabled={!player.queue.length} />
         </View>
+
+        {showRating ? <RatingCard storyId={story.id} compact onDismiss={() => setRatingDismissed(story.id)} /> : null}
 
         <UpNext />
 

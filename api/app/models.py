@@ -12,11 +12,12 @@ from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
-    BigInteger, Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text,
-    UniqueConstraint, func, text,
+    BigInteger, Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, SmallInteger, String, Text,
+    UniqueConstraint, cast, func, text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import UserDefinedType
 
 from .db import Base
 
@@ -145,6 +146,8 @@ class AudioAsset(Base):
     # {"reasons": ["audio-noise", ...], "note": "...", "by": "...", "at": "..."} when an editor asks for changes
     changes_requested: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
     captions_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    # Conversation starters for parents (P3-07): {"texts": {"en-IN": [...], "te-IN": [...]}, "status", "by", "model"}
+    imagination_prompts: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
     audio_mastering: Mapped[str | None] = mapped_column(String(8))  # editor override: full | light | none
     source_text: Mapped[str | None] = mapped_column(Text)  # what the narrator read from (teleprompter), if given
     series_id: Mapped[int | None] = mapped_column(ForeignKey("series.id", ondelete="SET NULL"), index=True)
@@ -459,3 +462,133 @@ class AuditLog(Base):
     detail: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
     ip: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = now_column()
+
+
+class Vector(UserDefinedType):
+    """pgvector column, sent and read as '[1.0,2.0,...]' text so no extra driver package is needed."""
+
+    cache_ok = True
+
+    def get_col_spec(self, **kw: Any) -> str:
+        return "vector"
+
+    def bind_expression(self, bindvalue):
+        return cast(bindvalue, self)
+
+    def bind_processor(self, dialect):
+        return lambda value: None if value is None else "[" + ",".join(f"{float(x):.7g}" for x in value) + "]"
+
+    def result_processor(self, dialect, coltype):
+        return lambda value: None if value is None else [float(x) for x in str(value).strip("[]").split(",") if x]
+
+
+# --- Phase 3: ratings, reviews, follows, recommendations, collections ---
+
+class StoryRating(Base):
+    """One per listener per story: adults rate story and narration (1-5); children tap an emoji reaction."""
+
+    __tablename__ = "story_ratings"
+    __table_args__ = (UniqueConstraint("profile_id", "audio_asset_id", name="uq_story_ratings_profile_asset"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
+    household_id: Mapped[int] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), nullable=False)
+    audio_asset_id: Mapped[str] = mapped_column(ForeignKey("audio_assets.id", ondelete="CASCADE"), nullable=False)
+    story_rating: Mapped[int | None] = mapped_column(SmallInteger)
+    narration_rating: Mapped[int | None] = mapped_column(SmallInteger)
+    reaction: Mapped[str | None] = mapped_column(String(16))
+    weight: Mapped[float] = mapped_column(Float, nullable=False, server_default="1")  # rater trust, 0.2-1
+    excluded: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))  # brigading
+    created_at: Mapped[datetime] = now_column()
+    updated_at: Mapped[datetime] = now_column(onupdate=func.now())
+
+
+class RatingFlag(Base):
+    __tablename__ = "rating_flags"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    audio_asset_id: Mapped[str] = mapped_column(ForeignKey("audio_assets.id", ondelete="CASCADE"), nullable=False, index=True)
+    window_start: Mapped[datetime] = mapped_column(Timestamp, nullable=False)
+    details: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="open")  # open | cleared | confirmed
+    resolved_by: Mapped[str | None] = mapped_column(Text)
+    resolved_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    created_at: Mapped[datetime] = now_column()
+
+
+class Review(Base):
+    __tablename__ = "reviews"
+    __table_args__ = (UniqueConstraint("profile_id", "audio_asset_id", name="uq_reviews_profile_asset"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
+    household_id: Mapped[int] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), nullable=False)
+    audio_asset_id: Mapped[str] = mapped_column(ForeignKey("audio_assets.id", ondelete="CASCADE"), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    # pending (automatic check) | published | held (editor decides) | rejected | hidden
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="pending", index=True)
+    moderation: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    reply: Mapped[str | None] = mapped_column(Text)  # the narrator's answer
+    reply_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    created_at: Mapped[datetime] = now_column()
+    updated_at: Mapped[datetime] = now_column(onupdate=func.now())
+
+    profile: Mapped[Profile] = relationship()
+
+
+class ReviewReport(Base):
+    __tablename__ = "review_reports"
+
+    review_id: Mapped[int] = mapped_column(ForeignKey("reviews.id", ondelete="CASCADE"), primary_key=True)
+    household_id: Mapped[int] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), primary_key=True)
+    reason: Mapped[str] = mapped_column(String(24), nullable=False)
+    created_at: Mapped[datetime] = now_column()
+
+
+class NarratorFollow(Base):
+    """An account following a narrator (for opt-in "new story" notifications)."""
+
+    __tablename__ = "narrator_follows"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    narrator_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    created_at: Mapped[datetime] = now_column()
+
+
+class StoryEmbedding(Base):
+    __tablename__ = "story_embeddings"
+
+    audio_asset_id: Mapped[str] = mapped_column(ForeignKey("audio_assets.id", ondelete="CASCADE"), primary_key=True)
+    model: Mapped[str] = mapped_column(Text, nullable=False)
+    source_hash: Mapped[str] = mapped_column(String(64), nullable=False)  # the text it was made from
+    embedding: Mapped[list[float]] = mapped_column(Vector, nullable=False)
+    created_at: Mapped[datetime] = now_column()
+
+
+class Collection(Base):
+    """An editorial shelf (festival, theme, age) shown on Home while published and in season."""
+
+    __tablename__ = "collections"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, server_default="theme")
+    titles: Mapped[dict[str, str]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    descriptions: Mapped[dict[str, str]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    starts_on: Mapped[date | None] = mapped_column(Date)
+    ends_on: Mapped[date | None] = mapped_column(Date)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    published: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    created_by: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = now_column()
+    updated_at: Mapped[datetime] = now_column(onupdate=func.now())
+
+    items: Mapped[list[CollectionItem]] = relationship(order_by="CollectionItem.position", cascade="all, delete-orphan",
+                                                       passive_deletes=True)
+
+
+class CollectionItem(Base):
+    __tablename__ = "collection_items"
+
+    collection_id: Mapped[int] = mapped_column(ForeignKey("collections.id", ondelete="CASCADE"), primary_key=True)
+    audio_asset_id: Mapped[str] = mapped_column(ForeignKey("audio_assets.id", ondelete="CASCADE"), primary_key=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")

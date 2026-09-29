@@ -9,7 +9,7 @@ import { space } from '@/lib/theme';
 type Narrator = { userId: number; name: string; email: string | null; phone: string | null; contactChannel: string;
   contactNotes: string; languages: string[]; trustLevel: 'new' | 'trusted';
   onboardedAt: string | null; sampleUrl: string | null; published: number; rejected: number; inReview: number;
-  suggestTrust: boolean };
+  suggestTrust: boolean; narration: { score: number | null; count: number; weight: number } | null };
 
 export default function Narrators() {
   const colors = useColors();
@@ -43,6 +43,10 @@ export default function Narrators() {
               <Text variant="small">Prefers {narrator.contactChannel}{narrator.contactNotes ? ` · ${narrator.contactNotes}` : ''}</Text>
               <Text variant="small">
                 {narrator.published} published · {narrator.inReview} in progress · {narrator.rejected} rejected
+              </Text>
+              <Text variant="small">
+                Narration rating: {narrator.narration?.score != null ? `${narrator.narration.score.toFixed(2)} from ${narrator.narration.count} ratings`
+                  : `not enough ratings yet (${narrator.narration?.count ?? 0})`}
               </Text>
               {narrator.suggestTrust ? <Text variant="small" color={colors.success}>Clean track record: consider trusting.</Text> : null}
             </View>

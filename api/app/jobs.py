@@ -17,6 +17,9 @@ JOB_CAPABILITIES = {
     "transcription": "stt",
     "teaser": "llm",
     "titles": "llm",
+    "prompts": "llm",
+    "review.moderate": "llm",
+    "embed": "llm",
     "artwork": "image",
 }
 # Legacy UI vocabulary for job states.

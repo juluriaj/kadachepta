@@ -15,9 +15,9 @@ from starlette.concurrency import run_in_threadpool
 from ..auth import utcnow
 from ..db import get_db
 from ..models import (
-    AudioAsset, ListenerFavorite, ListeningDaily, ListeningProgress, Profile, TeaserDraft, Transcript,
+    AudioAsset, Collection, ListenerFavorite, ListeningDaily, ListeningProgress, Profile, TeaserDraft, Transcript,
 )
-from ..services import pipeline
+from ..services import pipeline, recommend
 from ..services.assets import artwork_url, asset_payload, iso
 from ..services.households import MOMENTS, current_profile, suitable_for
 from ..services.transcripts import read_along
@@ -47,6 +47,16 @@ def published_stories(db: Session, profile: Profile) -> list[tuple[AudioAsset, T
     return [(asset, teaser) for asset, teaser in rows if suitable_for(profile, asset)]
 
 
+def active_collections(db: Session) -> list[Collection]:
+    """Published editorial shelves in season (P3-08), in the editors' order."""
+    today = utcnow().date()
+    return list(db.scalars(select(Collection).options(selectinload(Collection.items))
+                           .where(Collection.published.is_(True),
+                                  (Collection.starts_on.is_(None)) | (Collection.starts_on <= today),
+                                  (Collection.ends_on.is_(None)) | (Collection.ends_on >= today))
+                           .order_by(Collection.position, Collection.id)))
+
+
 def teaser_for(teaser: TeaserDraft, languages: list[str]) -> dict[str, Any]:
     """Pick the teaser in the listener's preferred language, falling back to the original."""
     options = {teaser.language: {"short": teaser.short_text, "long": teaser.long_text}}
@@ -72,7 +82,7 @@ def moments_of(asset: AudioAsset) -> list[str]:
 def story_card(asset: AudioAsset, teaser: TeaserDraft, profile: Profile,
                progress: ListeningProgress | None = None, favorite: bool = False) -> dict[str, Any]:
     return asset_payload(
-        asset, teaser=teaser_for(teaser, profile.listening_languages or [asset.language]),
+        asset, narratorId=asset.narrator_user_id, teaser=teaser_for(teaser, profile.listening_languages or [asset.language]),
         shortText=teaser.short_text, longText=teaser.long_text, moments=moments_of(asset), favorite=favorite,
         progress={"position": round(progress.last_position), "completed": progress.completed,
                   "lastListenedAt": iso(progress.last_listened_at)} if progress else None,
@@ -108,6 +118,15 @@ def home(profile: Profile = Depends(current_profile), db: Session = Depends(get_
     shelves = []
     if continuing:
         shelves.append({"id": "continue", "items": [cards[row.audio_asset_id] for row in continuing[:10]]})
+    because = recommend.because_you_finished(db, profile.id, set(cards))
+    if because:
+        shelves.append({"id": "because", "basedOn": cards[because["basedOn"]], "items": [cards[a] for a in because["items"]]})
+    for collection in active_collections(db):
+        items = [cards[item.audio_asset_id] for item in collection.items if item.audio_asset_id in cards]
+        if items:
+            shelves.append({"id": f"collection-{collection.id}", "collection": {
+                "id": collection.id, "kind": collection.kind, "titles": collection.titles,
+                "descriptions": collection.descriptions}, "items": items[:20]})
     household_moments = profile.household.moments or list(MOMENTS)
     for moment in [m for m in MOMENTS if m in household_moments] + [m for m in MOMENTS if m not in household_moments]:
         items = [cards[asset_id] for asset_id in order if moment in cards[asset_id]["moments"]]
@@ -138,11 +157,18 @@ def story(asset_id: str, profile: Profile = Depends(current_profile), db: Sessio
     later = [pair for pair in series if _episode_key(pair[0]) > _episode_key(asset)]
     same_narrator = [(a, t) for a, t in stories if a.id != asset.id and a.narrator_user_id
                      and a.narrator_user_id == asset.narrator_user_id][:10]
+    by_id = {a.id: (a, t) for a, t in stories}
+    shown = {asset.id, *(a.id for a, _ in (later or series)[:10]), *(a.id for a, _ in same_narrator)}
+    alike = recommend.related(db, asset.id, set(by_id) - shown, limit=10)
+    prompts = asset.imagination_prompts or {}
     return {**card, "themes": teaser.themes, "ageSuggestion": teaser.age_suggestion,
             "readAlong": _read_along_transcript(db, asset) is not None,
             "waveform": (asset.renditions or {}).get("waveform", []),
             "upNext": [story_card(a, t, profile, progress.get(a.id)) for a, t in (later or series)[:10]],
-            "moreFromNarrator": [story_card(a, t, profile, progress.get(a.id)) for a, t in same_narrator]}
+            "moreFromNarrator": [story_card(a, t, profile, progress.get(a.id)) for a, t in same_narrator],
+            "moreLikeThis": [story_card(*by_id[a], profile, progress.get(a)) for a in alike],
+            # Conversation starters are for parents (P3-07): never on a child's profile.
+            "prompts": prompts.get("texts") if prompts.get("status") == "approved" and profile.kind == "adult" else None}
 
 
 def _read_along_transcript(db: Session, asset: AudioAsset) -> Transcript | None:

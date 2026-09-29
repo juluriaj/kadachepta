@@ -39,12 +39,15 @@ class Handler(Protocol):
     def describe(self) -> dict[str, Any]: ...
 
 
-from . import artwork, media, teaser, titles, transcription  # noqa: E402
+from . import artwork, community, media, teaser, titles, transcription  # noqa: E402
 
 HANDLERS: dict[str, Handler] = {
     "media.process": media.MediaHandler(),
     "transcription": transcription.TranscriptionHandler(),
     "teaser": teaser.TeaserHandler(),
     "titles": titles.TitlesHandler(),
+    "prompts": community.PromptsHandler(),
+    "review.moderate": community.ReviewModerationHandler(),
+    "embed": community.EmbedHandler(),
     "artwork": artwork.ArtworkHandler(),
 }

@@ -64,6 +64,8 @@ def narrate_to_review(client, db, token, **submission):
                                              "languageProbability": 0.97})
     run_job(client, token, "teaser", dict(DRAFTS))
     run_job(client, token, "titles", {"title": body["title"], "titles": {"en-IN": "The Crow"}, "model": "qwen/qwen3-8b"})
+    run_job(client, token, "prompts", {"texts": {"en-IN": ["What would you have done?"], "te-IN": ["నువ్వైతే ఏం చేసేవాడివి?"]},
+                                       "model": "qwen/qwen3-8b"})
     run_job(client, token, "artwork", {"key": "<cover.jpg>", "provider": "local-sdxl"}, {"cover.jpg": b"\xff\xd8\xff"})
     return asset_id
 
