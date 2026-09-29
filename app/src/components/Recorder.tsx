@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import {
-  RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, useAudioRecorderState,
+  RecordingPresets, requestRecordingPermissionsAsync, useAudioRecorder, useAudioRecorderState,
   type RecordingOptions,
 } from 'expo-audio';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -9,6 +9,7 @@ import { Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { Button, Text, useColors } from '@/components/ui';
 import { formatClock, useI18n } from '@/lib/i18n';
+import { setAudioMode } from '@/lib/player/audioMode';
 import { getEngine } from '@/lib/player/engine';
 import { levelFromDb, levelHint } from '@/lib/recording';
 import { radius, space } from '@/lib/theme';
@@ -50,7 +51,7 @@ export function Recorder({ takes, onChange, teleprompter, maxSeconds }: {
       return;
     }
     if (getEngine().getSnapshot().playing) getEngine().toggle(); // never record over a playing story
-    await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+    await setAudioMode({ allowsRecording: true });
     await recorder.prepareToRecordAsync();
     recorder.record(maxSeconds ? { forDuration: maxSeconds } : undefined);
     setActive(true);
@@ -66,7 +67,7 @@ export function Recorder({ takes, onChange, teleprompter, maxSeconds }: {
   const finish = async () => {
     const seconds = state.durationMillis / 1000;
     await recorder.stop();
-    await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+    await setAudioMode({ allowsRecording: false });
     setActive(false);
     setPaused(false);
     const uri = recorder.uri;

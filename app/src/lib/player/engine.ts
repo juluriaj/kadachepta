@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createAudioPlayer, setAudioModeAsync, type AudioPlayer, type AudioStatus } from 'expo-audio';
+import { createAudioPlayer, type AudioPlayer, type AudioStatus } from 'expo-audio';
 import { AppState, Platform } from 'react-native';
 
 import { api, mediaUrl } from '../api';
 import { localTitle } from '../i18n';
+import { setAudioMode } from './audioMode';
 import { localUri } from '../downloads';
 import type { Story } from '../types';
 import {
@@ -62,7 +63,7 @@ export class PlayerEngine {
   constructor() {
     this.player = createAudioPlayer(null, { updateInterval: 500 });
     this.player.addListener('playbackStatusUpdate', (status) => this.onStatus(status));
-    void setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' });
+    void setAudioMode();
     setInterval(() => this.tickSleep(), 1000);
     AppState.addEventListener('change', (state) => {
       if (state !== 'active') this.flush();
@@ -163,6 +164,8 @@ export class PlayerEngine {
       this.set({ error: 'This story has no audio yet.' });
       return;
     }
+    // Re-assert background playback before every story, in case anything changed the app-wide audio mode.
+    await setAudioMode().catch(() => {});
     this.player.replace({ uri: source });
     this.player.volume = 1;
     this.player.setPlaybackRate(rate);
