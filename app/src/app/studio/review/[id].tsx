@@ -14,6 +14,8 @@ import { useSession } from '@/lib/session';
 import { AGE_RANGES, GENRES, hoursLabel, listText, MOMENTS, parseList, type Review } from '@/lib/studio';
 import { fontFor, radius, space } from '@/lib/theme';
 
+const NEWLINE = String.fromCharCode(10); // one conversation starter per line
+
 export default function ReviewScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const query = useQuery({ queryKey: ['studio-review', id],
@@ -60,6 +62,9 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
   // Titles in each app language: prefilled with the AI suggestion; saving or publishing confirms them.
   const [titleTe, setTitleTe] = useState(review.titleTranslations['te-IN']?.text ?? '');
   const [titleEn, setTitleEn] = useState(review.titleTranslations['en-IN']?.text ?? draft?.suggestions.englishTitle ?? '');
+  // Conversation starters for parents: an AI draft until the editor saves or publishes (which approves them).
+  const [promptTexts, setPromptTexts] = useState<Record<string, string>>(() => Object.fromEntries(['en-IN', 'te-IN'].map(
+    (lang) => [lang, (review.imaginationPrompts.texts?.[lang] ?? []).join(NEWLINE)])));
   const [transcriptText, setTranscriptText] = useState(transcript?.text ?? '');
   const [transcriptOpen, setTranscriptOpen] = useState(!!transcript?.reviewRequired);
   // Ticked by default: the editor unticks if they didn't read it, or if captions shouldn't be shown.
@@ -80,6 +85,8 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
     teaser: teasers, transcript: { text: transcriptText, reviewed: transcriptChecked }, rights,
     checklist: [...checklist], captionsEnabled: captions,
     titles: Object.fromEntries(Object.entries({ 'te-IN': titleTe, 'en-IN': titleEn }).filter(([, text]) => text.trim())),
+    prompts: Object.values(promptTexts).some((text) => text.trim())
+      ? Object.fromEntries(Object.entries(promptTexts).map(([lang, text]) => [lang, text.split(NEWLINE)])) : undefined,
   });
 
   const act = async (label: string, work: () => Promise<unknown>, after?: () => void) => {
@@ -260,6 +267,17 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
           </View>
         </View>
         <Text variant="small" muted>Listeners see the title in the app language they choose. Saving or publishing confirms both.</Text>
+        <Label>Conversation starters for parents {review.imaginationPrompts.status === 'approved' ? '(approved)'
+          : review.imaginationPrompts.texts ? '(AI draft: check them)' : ''}</Label>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md }}>
+          {(['en-IN', 'te-IN'] as const).map((lang) => (
+            <View key={lang} style={{ flex: 1, minWidth: 220 }}>
+              <Field label={`${lang === 'en-IN' ? 'English' : 'Telugu'} (one question per line)`} value={promptTexts[lang]} multiline
+                onChangeText={(text) => setPromptTexts({ ...promptTexts, [lang]: text })}
+                style={{ minHeight: 80, paddingTop: space.md, fontFamily: fontFor(promptTexts[lang]) }} />
+            </View>
+          ))}
+        </View>
         <Label>Genres</Label>
         <Chips options={GENRES} values={genres} onChange={setGenres} />
         <Label>Age range {draft?.ageSuggestion ? `(AI suggests ${draft.ageSuggestion})` : ''}</Label>

@@ -43,7 +43,7 @@ IN_PROGRESS = ("checking", "awaiting-submit", "transcribing", "waiting-transcrip
                "ready", "failed")
 FINAL = ("published", "rejected")
 STEP_OF_JOB = {"media.process": "Audio check", "transcription": "Transcription", "teaser": "AI drafts",
-               "titles": "Titles", "artwork": "Artwork"}
+               "titles": "Titles", "prompts": "Conversation starters", "artwork": "Artwork"}
 STT_LANGUAGES = {"te-IN", "hi-IN", "ta-IN", "kn-IN", "ml-IN", "mr-IN", "bn-IN", "gu-IN", "pa-IN", "od-IN", "en-IN"}
 USABLE = ("needs-review", "approved", "accepted")
 
@@ -179,6 +179,12 @@ def advance(db: Session, asset: AudioAsset, *, actor: str = "pipeline", allow_tr
         _set_stage(db, asset, "drafting")
         return asset.pipeline_stage
 
+    # Conversation starters for parents (P3-07), drafted once for the editor to approve (optional).
+    if not (asset.imagination_prompts or {}).get("texts") and not tried_once(db, asset.id, "prompts"):
+        _enqueue(db, asset, "prompts", actor)
+        _set_stage(db, asset, "drafting")
+        return asset.pipeline_stage
+
     provider = app_settings.get(db, "ai.artwork.provider")
     if not asset.artwork_key and provider != "disabled" and app_settings.get(db, "pipeline.autoArtwork"):
         if not _gave_up(db, asset.id, "artwork"):
@@ -203,6 +209,12 @@ def _gave_up(db: Session, asset_id: str, job_type: str) -> bool:
     return bool(last and last.status == "dead")
 
 
+def tried_once(db: Session, asset_id: str, job_type: str) -> bool:
+    """A finished or dead job of this type exists: optional steps run once, and the editor fills any gap."""
+    return db.scalar(select(Job.id).where(Job.audio_asset_id == asset_id, Job.job_type == job_type,
+                                          Job.status.in_(("succeeded", "dead"))).limit(1)) is not None
+
+
 def _titles_tried(db: Session, asset: AudioAsset) -> bool:
     """Ask once per title: a finished or dead job for the current title means the editor fills any gap."""
     last = db.scalars(select(Job).where(Job.audio_asset_id == asset.id, Job.job_type == "titles")
@@ -219,7 +231,7 @@ def on_job_finished(db: Session, job: Job, asset: AudioAsset) -> None:
 def on_job_dead(db: Session, job: Job, asset: AudioAsset) -> None:
     if (job.payload or {}).get("test") or asset.pipeline_stage in ("none", *FINAL):
         return
-    if job.job_type in ("artwork", "titles"):  # optional steps: continue to review without them
+    if job.job_type in ("artwork", "titles", "prompts"):  # optional steps: continue to review without them
         advance(db, asset)
         return
     step = STEP_OF_JOB.get(job.job_type, job.job_type)

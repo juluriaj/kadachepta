@@ -48,6 +48,8 @@ export default function NarratorStudio() {
 
         <Button title={t('narrate.new')} icon={<Ionicons name="mic" size={20} color={colors.onPrimary} />}
           onPress={() => router.push('/narrate/new')} />
+        <Button kind="secondary" title={t('narrate.reviews')} onPress={() => router.push('/narrate/reviews')}
+          icon={<Ionicons name="star-outline" size={18} color={colors.text} />} />
         <Button kind="ghost" title={t('account.open')} onPress={() => router.push('/account')} />
 
         <HowItWorks initiallyOpen={data.submissions.length === 0} />

@@ -23,9 +23,9 @@ from .. import jobs
 from ..auth import utcnow
 from ..config import get_settings
 from ..db import get_db
-from ..models import AudioAsset, EditorialEvent, Job, TeaserDraft, Transcript, Worker
+from ..models import AudioAsset, EditorialEvent, Job, Review, StoryEmbedding, TeaserDraft, Transcript, Worker
 from ..security import token_hash
-from ..services import pipeline, policy, titles
+from ..services import community, pipeline, policy, recommend, titles
 from ..services import settings as app_settings
 from ..services.assets import as_list, normalize_language
 from ..storage import get_storage, media_url
@@ -97,6 +97,23 @@ def _inputs(db: Session, job: Job, request: Request) -> dict[str, Any]:
         base.update(sourceTitle=titles.clean_source(asset.title), summary=summary,
                     languages=job.payload.get("languages") or titles.missing(asset),
                     series=asset.series.title if asset.series else asset.album)
+    if job.job_type == "embed":
+        model = base["settings"].get("ai.embeddings.model") or ""
+        value = recommend.embedding_text(asset, pipeline.latest_draft(db, asset.id))
+        base.update(text=value, sourceHash=recommend.source_hash(model, value))
+    if job.job_type == "prompts":
+        draft = pipeline.latest_draft(db, asset.id)
+        english = (draft.alternates or {}).get("en-IN", {}) if draft else {}
+        transcript = pipeline.latest_transcript(db, asset.id)
+        base.update(englishTitle=titles.confirmed_titles(asset).get("en-IN") or
+                    ((draft.suggestions or {}).get("englishTitle") if draft else None) or asset.title,
+                    summary=english.get("long") or english.get("short"), moral=asset.moral_takeaway,
+                    themes=", ".join(draft.themes or []) if draft else None,
+                    excerpt=(transcript.text or "")[:1200] if transcript else None)
+    if job.job_type == "review.moderate":
+        review = db.get(Review, job.payload.get("reviewId"))
+        base.update(reviewId=review.id if review else None, reviewText=review.text if review else "",
+                    title=titles.confirmed_titles(asset).get("en-IN") or asset.title)
     if job.job_type == "artwork":
         draft = pipeline.latest_draft(db, asset.id)
         english = (draft.alternates or {}).get("en-IN", {}) if draft else {}
@@ -319,8 +336,37 @@ def apply_titles(db: Session, job: Job, asset: AudioAsset, result: dict[str, Any
             titles.record(asset, language, str(text), f"ai:{result.get('model', 'unknown')}", confirmed=False)
 
 
+def apply_embed(db: Session, job: Job, asset: AudioAsset, result: dict[str, Any]) -> None:
+    vector = result.get("vector") or []
+    if job.payload.get("test") or not vector:
+        return
+    current = db.get(StoryEmbedding, asset.id)
+    if current is None:
+        db.add(StoryEmbedding(audio_asset_id=asset.id, model=str(result.get("model")), source_hash=str(result.get("sourceHash")),
+                              embedding=[float(x) for x in vector]))
+    else:
+        current.model, current.source_hash = str(result.get("model")), str(result.get("sourceHash"))
+        current.embedding, current.created_at = [float(x) for x in vector], utcnow()
+
+
+def apply_prompts(db: Session, job: Job, asset: AudioAsset, result: dict[str, Any]) -> None:
+    if job.payload.get("test") or (asset.imagination_prompts or {}).get("status") == "approved":
+        return  # never overwrite what an editor approved
+    texts = {code: [str(q) for q in values][:3] for code, values in (result.get("texts") or {}).items() if values}
+    if texts:
+        asset.imagination_prompts = {"texts": texts, "status": "draft", "by": f"ai:{result.get('model', 'unknown')}"}
+
+
+def apply_review_moderation(db: Session, job: Job, asset: AudioAsset, result: dict[str, Any]) -> None:
+    review = db.get(Review, job.payload.get("reviewId"))
+    if review is None or review.status != "pending":
+        return  # edited, withdrawn, or already decided by an editor
+    community.apply_moderation(db, review, result)
+
+
 APPLIERS = {"media.process": apply_media, "transcription": apply_transcription,
-            "teaser": apply_teaser, "artwork": apply_artwork, "titles": apply_titles}
+            "teaser": apply_teaser, "artwork": apply_artwork, "titles": apply_titles, "embed": apply_embed,
+            "prompts": apply_prompts, "review.moderate": apply_review_moderation}
 
 
 @router.post("/jobs/{job_id}/complete")

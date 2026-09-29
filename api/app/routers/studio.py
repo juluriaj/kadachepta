@@ -21,7 +21,7 @@ from ..db import get_db
 from ..models import (
     AssetRights, AudioAsset, EditorialEvent, Job, NarratorProfile, Notification, TeaserDraft, Transcript, User, Worker,
 )
-from ..services import pipeline, policy, titles
+from ..services import pipeline, policy, ratings, titles
 from ..services import settings as app_settings
 from ..services.assets import apply_metadata, asset_payload, clean_metadata, iso, mastering_payload, metadata_of
 from ..services.notify import notify
@@ -195,6 +195,7 @@ def review_payload(db: Session, asset: AudioAsset) -> dict[str, Any]:
         "overdue": waiting is not None and waiting > sla, "captionsEnabled": asset.captions_enabled,
         "titleTranslations": {lang: {"text": e["text"], "by": e["by"], "confirmed": bool(e.get("confirmed"))}
                               for lang, e in titles.entries(asset).items()},
+        "imaginationPrompts": asset.imagination_prompts or {},
         "changesRequested": asset.changes_requested or None, "sourceText": asset.source_text,
         "series": {"id": asset.series.id, "title": asset.series.title, "position": asset.series_position}
         if asset.series else None,
@@ -249,8 +250,19 @@ class PublishRequest(BaseModel):
     checklist: list[str] = Field(default_factory=list)
     captionsEnabled: bool | None = None
     titles: dict[str, str] = Field(default_factory=dict)  # title per app language, confirmed by this editor
+    prompts: dict[str, list[str]] | None = None  # conversation starters per language; saving approves them
     seriesPosition: int | None = None
     notes: str | None = Field(default=None, max_length=2000)
+
+
+def _approve_prompts(asset: AudioAsset, texts: dict[str, list[str]] | None, actor: str) -> None:
+    """The editor's conversation starters; an empty list for every language removes them."""
+    if texts is None:
+        return
+    cleaned = {lang: [" ".join(q.split())[:200] for q in questions if q.strip()][:3]
+               for lang, questions in texts.items() if lang in titles.UI_LANGUAGES}
+    cleaned = {lang: questions for lang, questions in cleaned.items() if questions}
+    asset.imagination_prompts = {"texts": cleaned, "status": "approved", "by": f"editor:{actor}"} if cleaned else {}
 
 
 def _confirm_titles(asset: AudioAsset, texts: dict[str, str], actor: str) -> None:
@@ -267,6 +279,7 @@ def _apply_review_edits(db: Session, asset: AudioAsset, payload: PublishRequest,
         apply_metadata(asset, clean_metadata(merged, fallback_title=asset.title))
     asset.metadata_review_status = "approved"
     _confirm_titles(asset, payload.titles, actor)
+    _approve_prompts(asset, payload.prompts, actor)
     if payload.captionsEnabled is not None:
         asset.captions_enabled = payload.captionsEnabled
     if payload.seriesPosition is not None:
@@ -338,6 +351,7 @@ def save_draft(asset_id: str, payload: PublishRequest, identity: Identity = Depe
     if payload.metadata:
         apply_metadata(asset, clean_metadata({**metadata_of(asset), **payload.metadata}, fallback_title=asset.title))
     _confirm_titles(asset, payload.titles, identity.username)
+    _approve_prompts(asset, payload.prompts, identity.username)
     draft = pipeline.latest_draft(db, asset.id)
     if draft and payload.teaser:
         alternates = dict(draft.alternates or {})
@@ -655,7 +669,8 @@ def narrators(identity: Identity = Depends(require("content.publish")), db: Sess
                                              .group_by(AudioAsset.narrator_user_id, AudioAsset.status)):
         counts.setdefault(user_id, {})[status] = count
     needed = int(app_settings.get(db, "narrators.trustAfterPublished"))
-    return {"items": [{"userId": user.id, "name": profile.display_name or user.handle, "email": user.email,
+    scores = ratings.narrator_scores(db, [user.id for user, _ in rows])
+    return {"items": [{"userId": user.id, "narration": scores.get(user.id), "name": profile.display_name or user.handle, "email": user.email,
                        "phone": user.phone, "contactChannel": (user.contact_preferences or {}).get("channel") or "email",
                        "contactNotes": (user.contact_preferences or {}).get("notes") or "",
                        "languages": profile.languages, "trustLevel": profile.trust_level,

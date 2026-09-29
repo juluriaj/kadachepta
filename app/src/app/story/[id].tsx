@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
+import { StoryCommunity, TalkAboutIt } from '@/components/community';
 import { minutes, Shelf } from '@/components/stories';
 import { Button, Chip, Cover, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
 import { api, mediaUrl } from '@/lib/api';
@@ -70,7 +71,10 @@ export default function Story() {
           <Cover id={s.id} title={title(s)} artworkUrl={mediaUrl(s.artworkUrl)} size={240} />
           <Text variant="display" style={{ textAlign: 'center' }} accessibilityRole="header">{title(s)}</Text>
           <Text muted style={{ textAlign: 'center' }}>
-            {t('story.narratedBy', { name: s.narrator })} · {t('common.min', { n: minutes(s.duration) })}
+            {s.narratorId ? (
+              <Text muted onPress={() => router.push(`/narrator/${s.narratorId}`)} accessibilityRole="link"
+                style={{ textDecorationLine: 'underline' }}>{t('story.narratedBy', { name: s.narrator })}</Text>
+            ) : t('story.narratedBy', { name: s.narrator })} · {t('common.min', { n: minutes(s.duration) })}
             {s.metadata.audienceAgeRange ? ` · ${s.metadata.audienceAgeRange}` : ''}
           </Text>
         </View>
@@ -136,8 +140,13 @@ export default function Story() {
           </View>
         ) : null}
 
+        {s.prompts ? <View style={{ paddingHorizontal: space.lg }}><TalkAboutIt prompts={s.prompts} /></View> : null}
+
         {s.upNext.length ? <Shelf title={t('story.upNext')} items={s.upNext} /> : null}
+        {s.moreLikeThis.length ? <Shelf title={t('story.moreLikeThis')} items={s.moreLikeThis} /> : null}
         {s.moreFromNarrator.length ? <Shelf title={t('story.moreFromNarrator')} items={s.moreFromNarrator} /> : null}
+
+        <View style={{ paddingHorizontal: space.lg }}><StoryCommunity storyId={s.id} /></View>
       </ScrollView>
     </Screen>
   );

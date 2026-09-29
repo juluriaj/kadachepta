@@ -131,9 +131,9 @@ export class PlayerEngine {
     this.tickSleep();
   }
 
-  private flush(completed = false) {
+  private flush(completed = false): Promise<void> {
     const pending = this.pending;
-    if (!pending.storyId || (!pending.seconds && !pending.started && !completed)) return;
+    if (!pending.storyId || (!pending.seconds && !pending.started && !completed)) return Promise.resolve();
     const body = {
       assetId: pending.storyId, seconds: Math.round(pending.seconds * 10) / 10,
       screenOffSeconds: Math.round(pending.screenOff * 10) / 10, position: this.player.currentTime || 0,
@@ -142,7 +142,7 @@ export class PlayerEngine {
     pending.seconds = 0;
     pending.screenOff = 0;
     pending.started = false;
-    api('/api/me/listening', { method: 'POST', body }).then(() => {
+    return api('/api/me/listening', { method: 'POST', body }).then(() => {
       if (completed) this.completedListeners.forEach((listener) => listener());
     }).catch(() => {
       // Offline: keep the time so it goes out with the next report for the same story.
@@ -152,6 +152,9 @@ export class PlayerEngine {
       }
     });
   }
+
+  // Send pending listening time now (before rating: the server checks how much of the story was heard).
+  flushNow = () => this.flush();
 
   private async load(story: Story, startAt: number) {
     this.flush();

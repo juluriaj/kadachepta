@@ -4,6 +4,7 @@ export type Story = {
   id: string;
   title: string;
   titles?: Record<string, string>; // confirmed titles by language (te-IN, en-IN); see localTitle
+  narratorId?: number | null; // community narrators have a public page
   album: string | null;
   narrator: string;
   language: string;
@@ -31,9 +32,40 @@ export type StoryDetail = Story & {
   waveform: number[];
   upNext: Story[];
   moreFromNarrator: Story[];
+  moreLikeThis: Story[];
+  prompts: Record<string, string[]> | null; // conversation starters for parents (never on child profiles)
 };
 
-export type Shelf = { id: string; moment?: string; items: Story[] };
+export type Collection = { id: number; kind: string; titles: Record<string, string>; descriptions: Record<string, string> };
+
+export type Shelf = { id: string; moment?: string; basedOn?: Story; collection?: Collection; items: Story[] };
+
+// --- Phase 3: ratings, reviews, narrator pages, updates ---
+
+export type Score = { score: number | null; count: number; weight: number };
+
+export type Review = { id: number; text: string; author: string; createdAt: string; reply: string | null;
+  replyAt: string | null; mine: boolean; status?: 'pending' | 'published' | 'held' | 'rejected' | 'hidden' };
+
+export type Reaction = 'love' | 'like' | 'okay' | 'sleepy';
+
+export type Community = {
+  kind: 'adult' | 'child';
+  eligible: boolean;
+  ownWork: boolean;
+  mine: { story: number | null; narration: number | null; reaction: Reaction | null } | null;
+  reactions: Partial<Record<Reaction, number>>;
+  story?: Score;
+  narration?: Score;
+  reviews?: Review[];
+  myReview?: Review | null;
+};
+
+export type NarratorPage = { id: number; name: string; biography: string | null; languages: string[]; since: string | null;
+  stories: Story[]; narration: Score | null; followers: number; following: boolean; canFollow: boolean };
+
+export type Updates = { items: { id: number; kind: string; read: boolean; createdAt: string; story: Story }[]; unread: number;
+  settings: { followed: boolean; series: boolean } | null };
 
 export type Stats = {
   totalSeconds: number;

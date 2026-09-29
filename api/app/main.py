@@ -23,7 +23,10 @@ from .auth import SESSION_COOKIE, Identity, optional_identity
 from .config import get_settings
 from .db import get_db, get_sessionmaker
 from .models import Worker
-from .routers import account, admin, auth, editorial, household, listener, media, narrator, studio, uploads, worker
+from .routers import (
+    account, admin, auth, community, editorial, household, listener, media, narrator, studio, studio_community, uploads,
+    worker,
+)
 from .security import STAFF_ROLES, token_hash
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -83,7 +86,8 @@ async def validation_error(request: Request, error: RequestValidationError):
                                                   "problems": problems})
 
 
-for module in (auth, account, listener, household, media, narrator, uploads, editorial, studio, worker, admin):
+for module in (auth, account, listener, community, household, media, narrator, uploads, editorial, studio,
+               studio_community, worker, admin):
     app.include_router(module.router)
 app.include_router(studio.me_router)
 

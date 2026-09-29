@@ -244,6 +244,14 @@ minutes of effort; an editor makes a publish decision in under 5 minutes.
 
 ## Phase 3 — Ratings, discovery, and community
 
+**Status (2026-09-29): built, awaiting your review** — checklist in
+[docs/phase-3-review.md](docs/phase-3-review.md). All items P3-01 to P3-09 are in. Deviations: search runs in
+memory over one "loose Latin" form instead of PostgreSQL full-text (better for mixed Telugu/English titles);
+the local model drafts conversation starters in English only (its Telugu was ungrammatical) and never rejects
+reviews on its own (it only publishes; doubts go to editors); notifications are in-app until push arrives with
+the store builds. Added beyond plan: a pattern check that holds reviews naming a child's school, and "More like
+this" on the story page.
+
 **Goal:** listener ratings produce trustworthy quality signals for stories and
 narrators, and discovery gets better with use.
 
