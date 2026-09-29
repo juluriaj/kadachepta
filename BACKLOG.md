@@ -249,8 +249,8 @@ minutes of effort; an editor makes a publish decision in under 5 minutes.
 memory over one "loose Latin" form instead of PostgreSQL full-text (better for mixed Telugu/English titles);
 the local model drafts conversation starters in English only (its Telugu was ungrammatical) and never rejects
 reviews on its own (it only publishes; doubts go to editors); notifications are in-app until push arrives with
-the store builds. Added beyond plan: a pattern check that holds reviews naming a child's school, and "More like
-this" on the story page.
+the store builds. Added beyond plan: a pattern check that holds reviews naming a child's school, "More like
+this" on the story page, and listener playlists (requested 2026-09-29).
 
 **Goal:** listener ratings produce trustworthy quality signals for stories and
 narrators, and discovery gets better with use.

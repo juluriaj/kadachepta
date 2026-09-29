@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { StoryCommunity, TalkAboutIt } from '@/components/community';
+import { AddToPlaylist } from '@/components/playlists';
 import { minutes, Shelf } from '@/components/stories';
 import { Button, Chip, Cover, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
 import { api, mediaUrl } from '@/lib/api';
@@ -118,6 +119,7 @@ export default function Story() {
                 onPress={() => void download()} />
             ) : null}
           </View>
+          <AddToPlaylist storyId={s.id} />
           {note ? <Text variant="small" color={colors.danger}>{note}</Text> : null}
         </View>
 

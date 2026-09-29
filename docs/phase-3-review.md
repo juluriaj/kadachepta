@@ -34,6 +34,7 @@ learns from listening ("Because you finished…") and from editors (collections)
 | 14 | Collections: create a festival or theme shelf with dates, order, and stories; it appears on Home in season, titled in the app language | Studio → Collections; Home |
 | 15 | Updates (bell on Home, grown-ups only): turn on new stories from followed narrators and the next chapter of a series; nothing is sent until you turn them on; no streak nudges | Home → bell |
 | 16 | Editors see each narrator's narration rating (the number payouts will weight by) | Studio → Narrators |
+| 17 | Playlists per listener: create in Library → Playlists or from any story (“Add to playlist”, also in the player); tick to add or take out; Play all or Shuffle (the rest becomes the queue); reorder, rename, delete. A child's playlist only shows stories for their age | Library, story page, player |
 
 ## Decisions and limits worth knowing
 

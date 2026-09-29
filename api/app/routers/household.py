@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 from ..auth import SESSION_COOKIE, Identity, audit, require, utcnow
 from ..db import get_db
 from ..models import (
-    AuthSession, Household, ListenerFavorite, ListeningDaily, ListeningProgress, Profile, User,
+    AuthSession, Household, ListenerFavorite, ListeningDaily, ListeningProgress, NarratorFollow, Playlist, Profile, Review,
+    StoryRating, User,
 )
 from ..services.assets import iso, normalize_language
 from ..services.households import (
@@ -236,6 +237,16 @@ def export_data(x_parent_pin: str | None = Header(None), identity: Identity = De
                       for p in db.scalars(select(ListeningProgress).where(ListeningProgress.profile_id.in_(ids)))],
         "dailyListening": [{"profileId": d.profile_id, "day": d.day.isoformat(), "seconds": round(d.seconds)}
                            for d in db.scalars(select(ListeningDaily).where(ListeningDaily.profile_id.in_(ids)))],
+        "playlists": [{"profileId": p.profile_id, "name": p.name, "storyIds": [i.audio_asset_id for i in p.items],
+                       "createdAt": iso(p.created_at)}
+                      for p in db.scalars(select(Playlist).where(Playlist.profile_id.in_(ids)))],
+        "ratings": [{"profileId": r.profile_id, "storyId": r.audio_asset_id, "story": r.story_rating,
+                     "narration": r.narration_rating, "reaction": r.reaction, "ratedAt": iso(r.updated_at)}
+                    for r in db.scalars(select(StoryRating).where(StoryRating.profile_id.in_(ids)))],
+        "reviews": [{"profileId": r.profile_id, "storyId": r.audio_asset_id, "text": r.text, "status": r.status,
+                     "writtenAt": iso(r.created_at)}
+                    for r in db.scalars(select(Review).where(Review.profile_id.in_(ids)))],
+        "following": [f.narrator_user_id for f in db.scalars(select(NarratorFollow).where(NarratorFollow.user_id == user.id))],
     }
 
 

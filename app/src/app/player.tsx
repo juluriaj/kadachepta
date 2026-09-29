@@ -8,6 +8,7 @@ import { Pressable, ScrollView, View, type LayoutChangeEvent } from 'react-nativ
 import { Button, Chip, Cover, Screen, Text, useColors } from '@/components/ui';
 import { api, mediaUrl } from '@/lib/api';
 import { RatingCard } from '@/components/community';
+import { AddToPlaylist } from '@/components/playlists';
 import { minutes } from '@/components/stories';
 import { formatClock, useI18n } from '@/lib/i18n';
 import { getEngine } from '@/lib/player/engine';
@@ -144,6 +145,8 @@ export default function Player() {
         </View>
 
         {showRating ? <RatingCard storyId={story.id} compact onDismiss={() => setRatingDismissed(story.id)} /> : null}
+
+        <AddToPlaylist storyId={story.id} />
 
         <UpNext />
 
