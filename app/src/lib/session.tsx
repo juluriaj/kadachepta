@@ -3,9 +3,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { Platform } from 'react-native';
 
 import {
-  api, clientKind, forgetParentPin, getProfileId, loadStoredSession, onSignedOut, setProfileId, storeTokens,
+  api, clientKind, forgetParentPin, getProfileId, loadStoredSession, markSignedIn, onSignedOut, setProfileId, storeTokens,
 } from './api';
 import { useI18n, type UiLanguage } from './i18n';
+import { getEngine } from './player/engine';
 
 export type Session = {
   authenticated: boolean;
@@ -70,6 +71,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     queryFn: () => api<Session>('/api/session', { profile: false }),
   });
   const session = useMemo<Session>(() => sessionQuery.data ?? { authenticated: false }, [sessionQuery.data]);
+  useEffect(() => {
+    if (session.authenticated) markSignedIn();  // a restored session re-arms the one-time sign-out notice
+  }, [session.authenticated]);
   const isStaff = STAFF_ROLES.has(session.role ?? '');
   const householdQuery = useQuery({
     queryKey: ['household'], enabled: session.authenticated && !isStaff,
@@ -110,13 +114,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         body.code ? '/api/auth/otp/verify' : '/api/login',
         { method: 'POST', body: { ...body, client: clientKind }, profile: false });
       if (result.accessToken && result.refreshToken) await storeTokens(result.accessToken, result.refreshToken);
+      markSignedIn();
       queryClient.setQueryData(['session'], result);
       await queryClient.invalidateQueries({ queryKey: ['household'] });
       return result;
     },
     signOut: async () => {
+      getEngine().stop();  // don't keep playing someone's story after they sign out
       try {
         await api('/api/logout', { method: 'POST', profile: false });
+      } catch {
+        // Offline or already signed out: signing out locally is what matters.
       } finally {
         await clearAll();
         if (Platform.OS === 'web') window.location.assign('/');

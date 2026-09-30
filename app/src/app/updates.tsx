@@ -18,7 +18,7 @@ export default function Updates() {
   const colors = useColors();
   const { profile } = useSession();
   const queryClient = useQueryClient();
-  const updates = useQuery({ queryKey: ['updates', profile?.id],
+  const updates = useQuery({ queryKey: ['updates', profile?.id], enabled: !!profile,
     queryFn: () => api<UpdatesData>('/api/me/updates') });
 
   const unread = updates.data?.unread ?? 0;

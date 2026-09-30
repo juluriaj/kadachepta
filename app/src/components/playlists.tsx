@@ -12,7 +12,7 @@ import type { PlaylistDetail, PlaylistSummary } from '@/lib/types';
 
 export function usePlaylists() {
   const { profile } = useSession();
-  return useQuery({ queryKey: ['playlists', profile?.id],
+  return useQuery({ queryKey: ['playlists', profile?.id], enabled: !!profile,
     queryFn: () => api<{ items: PlaylistSummary[] }>('/api/me/playlists') });
 }
 

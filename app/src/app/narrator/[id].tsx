@@ -20,10 +20,10 @@ export default function Narrator() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useI18n();
   const colors = useColors();
-  const { profile } = useSession();
+  const { profile, session } = useSession();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
-  const page = useQuery({ queryKey: ['narrator', id, profile?.id], enabled: !!id,
+  const page = useQuery({ queryKey: ['narrator', id, profile?.id], enabled: !!id && session.authenticated,
     queryFn: () => api<NarratorPage>(`/api/narrators/${id}`) });
 
   if (page.isLoading) return <Loading />;
