@@ -4,7 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
-import { StoryCommunity, TalkAboutIt } from '@/components/community';
+import { StoryRatings, StoryReviews, TalkAboutIt } from '@/components/community';
 import { AddToPlaylist } from '@/components/playlists';
 import { minutes, Shelf } from '@/components/stories';
 import { Button, Chip, Cover, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
@@ -121,6 +121,7 @@ export default function Story() {
           </View>
           <AddToPlaylist storyId={s.id} />
           {note ? <Text variant="small" color={colors.danger}>{note}</Text> : null}
+          <StoryRatings storyId={s.id} />
         </View>
 
         {s.teaser?.long || s.teaser?.short ? (
@@ -148,7 +149,7 @@ export default function Story() {
         {s.moreLikeThis.length ? <Shelf title={t('story.moreLikeThis')} items={s.moreLikeThis} /> : null}
         {s.moreFromNarrator.length ? <Shelf title={t('story.moreFromNarrator')} items={s.moreFromNarrator} /> : null}
 
-        <View style={{ paddingHorizontal: space.lg }}><StoryCommunity storyId={s.id} /></View>
+        <View style={{ paddingHorizontal: space.lg }}><StoryReviews storyId={s.id} /></View>
       </ScrollView>
     </Screen>
   );

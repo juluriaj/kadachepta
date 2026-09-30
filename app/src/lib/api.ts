@@ -23,6 +23,12 @@ let profileId: string | null = null;
 let parentPin: { pin: string; until: number } | null = null;
 let refreshing: Promise<boolean> | null = null;
 const signedOutListeners = new Set<() => void>();
+// Sign-out is announced once: clearing the app's data makes mounted screens refetch, and each of those 401s
+// would otherwise announce it again (a loop that froze the tab). Signing in resets it.
+let signedOut = false;
+export function markSignedIn() {
+  signedOut = false;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -160,7 +166,10 @@ export async function api<T = any>(path: string, { method = 'GET', body, profile
     data = { error: text.slice(0, 200) };
   }
   if (!response.ok) {
-    if (response.status === 401) signedOutListeners.forEach((listener) => listener());
+    if (response.status === 401 && !signedOut) {
+      signedOut = true;
+      signedOutListeners.forEach((listener) => listener());
+    }
     if (response.status === 404 && data.error?.includes?.('profile')) await setProfileId(null);
     throw new ApiError(response.status, data, method, path, response.headers.get('x-request-id'));
   }

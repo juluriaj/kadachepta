@@ -16,7 +16,7 @@ import type { Story } from '@/lib/types';
 export default function Search() {
   const { t } = useI18n();
   const colors = useColors();
-  const { profile } = useSession();
+  const { profile, session } = useSession();
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function Search() {
     return () => clearTimeout(timer);
   }, [text]);
   const results = useQuery({
-    queryKey: ['search', query, profile?.id], enabled: !!query, placeholderData: keepPreviousData,
+    queryKey: ['search', query, profile?.id], enabled: !!query && session.authenticated, placeholderData: keepPreviousData,
     queryFn: () => api<{ items: Story[] }>(`/api/search?q=${encodeURIComponent(query)}`),
   });
   const items = query ? results.data?.items ?? [] : [];

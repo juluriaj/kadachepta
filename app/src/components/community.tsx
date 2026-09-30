@@ -120,10 +120,10 @@ export function RatingCard({ storyId, compact, onDismiss }: { storyId: string; c
   );
 }
 
-// The story page's community section: scores, children's reactions, and reviews (grown-ups only).
-export function StoryCommunity({ storyId }: { storyId: string }) {
+// Near the top of the story page, right under Play: rate it (once most of it was heard) and see the scores.
+// It used to sit at the bottom of the page, below the shelves, where few listeners scrolled.
+export function StoryRatings({ storyId }: { storyId: string }) {
   const { t } = useI18n();
-  const colors = useColors();
   const community = useCommunity(storyId);
   const data = community.data;
   if (!data) return null;
@@ -145,10 +145,18 @@ export function StoryCommunity({ storyId }: { storyId: string }) {
           ) : null}
         </View>
       ) : null}
-      {data.kind === 'adult' ? <Reviews storyId={storyId} data={data} /> : null}
-      {community.error ? <Text variant="small" color={colors.danger}>{String(community.error)}</Text> : null}
     </View>
   );
+}
+
+// Reviews, lower on the story page (grown-ups only; children never see reviews).
+export function StoryReviews({ storyId }: { storyId: string }) {
+  const colors = useColors();
+  const community = useCommunity(storyId);
+  const data = community.data;
+  if (community.error) return <Text variant="small" color={colors.danger}>{String(community.error)}</Text>;
+  if (!data || data.kind !== 'adult') return null;
+  return <Reviews storyId={storyId} data={data} />;
 }
 
 function Reviews({ storyId, data }: { storyId: string; data: Community }) {
