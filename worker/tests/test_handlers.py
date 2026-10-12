@@ -128,3 +128,33 @@ def test_qc_does_not_call_music_or_edited_pauses_background_noise():
     assert qc(noiseFloorDb=-40, profile="edited")["checks"] == []
     assert [c["code"] for c in qc(noiseFloorDb=-40, profile="noise", mastered=True)["checks"]] == ["background-sound"]
     assert [c["code"] for c in qc(profile="tonal")["checks"]] == ["tonal-background"]
+
+
+def test_sarvam_rate_limits_are_waited_out():
+    from kc_worker.handlers.transcription import with_backoff
+
+    class RateLimited(Exception):
+        status_code = 429
+
+    class Context:
+        lines: list = []
+
+        def log(self, line):
+            self.lines.append(line)
+
+    calls = []
+
+    def flaky():
+        calls.append(1)
+        if len(calls) < 3:
+            raise RateLimited()
+        return "ok"
+
+    context = Context()
+    assert with_backoff(context, flaky, waits=(0, 0, 0)) == "ok" and len(calls) == 3 and len(context.lines) == 2
+    try:
+        with_backoff(context, lambda: (_ for _ in ()).throw(RateLimited()), waits=(0,))
+    except RateLimited:
+        pass
+    else:
+        raise AssertionError("gives up after the last wait")

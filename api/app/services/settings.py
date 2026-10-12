@@ -71,6 +71,10 @@ SPECS: dict[str, Spec] = {
     "pipeline.dailyTranscriptionMinutes": Spec(240, "int", "Daily transcription limit (minutes)",
                                                "Protects the Sarvam bill. Jobs beyond the limit wait for the next day.",
                                                minimum=0, maximum=100000),
+    "pipeline.transcriptionConcurrency": Spec(3, "int", "Transcriptions at once",
+                                             "How many stories are sent to Sarvam at the same time. Sarvam rejects "
+                                             "requests beyond its rate limit; jobs over this number wait their turn.",
+                                             minimum=1, maximum=20),
     "pipeline.introPatterns": Spec(DEFAULT_INTRO_PATTERNS, "patterns", "Channel intro patterns",
                                    "Regular expressions per language, removed from the start of transcripts."),
     "review.transcriptConfidence": Spec(0.6, "float", "Transcript confidence needed to skip review",

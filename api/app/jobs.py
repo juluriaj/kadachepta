@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from .auth import utcnow
@@ -54,11 +54,15 @@ def active_job(db: Session, asset_id: str, job_type: str) -> Job | None:
 
 
 def lease(db: Session, worker_name: str, capabilities: list[str], lease_seconds: int,
-          prefer: str | None = None) -> Job | None:
-    types = [job_type for job_type, capability in JOB_CAPABILITIES.items() if capability in capabilities]
+          prefer: str | None = None, limits: dict[str, int] | None = None) -> Job | None:
+    """The next job this worker can run. `limits` caps how many jobs of a type run at once (the provider's rate limit)."""
+    now = utcnow()
+    full = {job_type for job_type, limit in (limits or {}).items() if db.scalar(
+        select(func.count()).select_from(Job).where(Job.job_type == job_type, Job.status == "leased",
+                                                    Job.lease_until >= now)) >= limit}
+    types = [job_type for job_type, capability in JOB_CAPABILITIES.items() if capability in capabilities and job_type not in full]
     if not types:
         return None
-    now = utcnow()
     candidate = db.scalars(
         select(Job)
         .where(

@@ -138,7 +138,9 @@ def lease(payload: LeaseRequest, request: Request, worker: Worker = Depends(curr
     if payload.info and payload.info != worker.info:
         db.execute(update(Worker).where(Worker.id == worker.id).values(info=payload.info))
         db.commit()
-    job = jobs.lease(db, worker.name, capabilities, get_settings().job_lease_seconds, prefer=payload.preferType)
+    limits = {"transcription": int(app_settings.get(db, "pipeline.transcriptionConcurrency"))}
+    job = jobs.lease(db, worker.name, capabilities, get_settings().job_lease_seconds, prefer=payload.preferType,
+                     limits=limits)
     if not job:
         return Response(status_code=204)
     return {"id": job.id, "type": job.job_type, "attempt": job.attempts, "payload": job.payload,
