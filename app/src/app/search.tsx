@@ -1,6 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { FlatList, Pressable, TextInput, View } from 'react-native';
 
@@ -42,12 +41,8 @@ export default function Search() {
   const narrators = (people.data?.items ?? []).filter((person) => person.name.toLocaleLowerCase().includes(needle));
 
   return (
-    <Screen>
+    <Screen back>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: space.md }}>
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} accessibilityRole="button"
-          accessibilityLabel={t('common.back')} hitSlop={12}>
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
-        </Pressable>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: touch, borderRadius: radius.md,
           borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: space.md }}>
           <Ionicons name="search" size={18} color={colors.muted} />

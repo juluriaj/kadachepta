@@ -49,13 +49,9 @@ export default function Updates() {
   };
 
   return (
-    <Screen>
+    <Screen back>
       <ScrollView contentContainerStyle={{ gap: space.lg, paddingVertical: space.lg, maxWidth: 640, width: '100%', alignSelf: 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-          <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} accessibilityRole="button"
-            accessibilityLabel={t('common.back')} hitSlop={12}>
-            <Ionicons name="chevron-back" size={26} color={colors.text} />
-          </Pressable>
           <Text variant="title" accessibilityRole="header">{t('updates.title')}</Text>
         </View>
         {settings ? (

@@ -110,8 +110,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     ready: loaded && !sessionQuery.isLoading && (!session.authenticated || isStaff || !householdQuery.isLoading),
     session, household: householdQuery.data, profile, isStaff, isNarrator: session.role === 'narrator',
     selectProfile: async (id) => {
-      await setProfileId(id);
+      // State first: setProfileId makes the id visible to the start screen at once, and if the tabs saw it before this
+      // state they would send everyone straight back there, round and round (a single-profile household on a new device).
       setSelected(id);
+      await setProfileId(id);
       await queryClient.invalidateQueries({ predicate: (q) => !['session', 'household'].includes(String(q.queryKey[0])) });
     },
     signIn: async (body) => {

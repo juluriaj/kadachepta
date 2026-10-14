@@ -48,11 +48,8 @@ export default function ApplyToNarrate() {
   };
 
   return (
-    <Screen>
+    <Screen back>
       <ScrollView contentContainerStyle={{ gap: space.lg, paddingVertical: space.lg }} keyboardShouldPersistTaps="handled">
-        <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
-        </Pressable>
         <Text variant="title" accessibilityRole="header">{t('apply.title')}</Text>
         <Field label={t('apply.name')} value={name} onChangeText={setName} autoComplete="name" />
         <Field label={t('apply.bio')} value={bio} onChangeText={setBio} multiline style={{ minHeight: 72, paddingTop: space.md }} />

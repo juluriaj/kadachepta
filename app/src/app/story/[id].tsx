@@ -32,7 +32,7 @@ export default function Story() {
 
   if (story.isLoading) return <Loading />;
   if (story.error || !story.data) {
-    return <Screen><Back /><ErrorState error={story.error ?? t('story.notAvailable')} onRetry={() => void story.refetch()} /></Screen>;
+    return <Screen back><ErrorState error={story.error ?? t('story.notAvailable')} onRetry={() => void story.refetch()} /></Screen>;
   }
   const s = story.data;
   // In the app language when there is one; otherwise the listening-language teaser and the English moral.
@@ -49,9 +49,8 @@ export default function Story() {
   };
 
   return (
-    <Screen padded={false}>
+    <Screen padded={false} back>
       <ScrollView contentContainerStyle={{ gap: space.xl, paddingBottom: space.xxl }}>
-        <View style={{ paddingHorizontal: space.lg }}><Back /></View>
         <View style={{ alignItems: 'center', gap: space.lg, paddingHorizontal: space.lg }}>
           <Cover id={s.id} title={title(s)} artworkUrl={mediaUrl(s.artworkUrl)} size={240} />
           <Text variant="display" style={{ textAlign: 'center' }} accessibilityRole="header">{title(s)}</Text>
@@ -153,17 +152,6 @@ function PartOf({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap
       <Ionicons name={icon} size={16} color={colors.primary} />
       <Text variant="small" color={colors.primary} style={{ flexShrink: 1 }}>{label}</Text>
       <Ionicons name="chevron-forward" size={14} color={colors.primary} />
-    </Pressable>
-  );
-}
-
-function Back() {
-  const { t } = useI18n();
-  const colors = useColors();
-  return (
-    <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} accessibilityRole="button"
-      accessibilityLabel={t('common.back')} hitSlop={12} style={{ paddingVertical: space.md, alignSelf: 'flex-start' }}>
-      <Ionicons name="chevron-back" size={26} color={colors.text} />
     </Pressable>
   );
 }

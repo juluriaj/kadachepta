@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
-import { FlatList, Pressable, View } from 'react-native';
+import { FlatList, View } from 'react-native';
 
 import { setTitle, shuffled } from '@/components/sets';
 import { minutes, StoryRow } from '@/components/stories';
@@ -26,7 +26,7 @@ export default function CollectionScreen() {
 
   if (page.isLoading) return <Loading />;
   if (page.error || !page.data) {
-    return <Screen><Back /><ErrorState error={page.error} onRetry={() => void page.refetch()} /></Screen>;
+    return <Screen back><ErrorState error={page.error} onRetry={() => void page.refetch()} /></Screen>;
   }
   const set = page.data;
   const name = setTitle(set, language);
@@ -40,7 +40,6 @@ export default function CollectionScreen() {
 
   const header = (
     <View style={{ gap: space.lg, paddingBottom: space.md }}>
-      <Back />
       <View style={{ alignItems: 'center', gap: space.md }}>
         <Cover id={`set-${set.id}`} title={name} artworkUrl={set.artworkUrl} size={200} />
         <Text variant="display" style={{ textAlign: 'center' }} accessibilityRole="header">{name}</Text>
@@ -61,7 +60,7 @@ export default function CollectionScreen() {
   );
 
   return (
-    <Screen>
+    <Screen back>
       <FlatList data={set.stories} keyExtractor={(story) => story.id} ListHeaderComponent={header} initialNumToRender={12}
         contentContainerStyle={{ paddingVertical: space.lg, maxWidth: 640, width: '100%', alignSelf: 'center' }}
         renderItem={({ item }) => <StoryRow story={item} right={<Heard story={item} />} />} />
@@ -80,15 +79,4 @@ function Heard({ story }: { story: Story }) {
     return <Text variant="small" muted>{t('book.left', { min: minutes(story.duration - story.progress.position) })}</Text>;
   }
   return null;
-}
-
-function Back() {
-  const { t } = useI18n();
-  const colors = useColors();
-  return (
-    <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} accessibilityRole="button"
-      accessibilityLabel={t('common.back')} hitSlop={12} style={{ alignSelf: 'flex-start' }}>
-      <Ionicons name="chevron-back" size={26} color={colors.text} />
-    </Pressable>
-  );
 }
