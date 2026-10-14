@@ -13,6 +13,7 @@ import { I18nProvider, useI18n } from '@/lib/i18n';
 import { getEngine } from '@/lib/player/engine';
 import { PlayerProvider, usePlayer } from '@/lib/player/PlayerProvider';
 import { SessionProvider } from '@/lib/session';
+import { useApplyUpdateAtStartup } from '@/lib/updates';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -21,6 +22,7 @@ function Navigator() {
   const { bedtime } = usePlayer();
   const { language } = useI18n();
   useEffect(() => getEngine().setUiLanguage(language), [language]);
+  useApplyUpdateAtStartup();
   return (
     <>
       <StatusBar style={bedtime ? 'light' : 'dark'} />
