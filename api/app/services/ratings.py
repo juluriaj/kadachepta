@@ -136,6 +136,12 @@ def narrator_scores(db: Session, narrator_ids: list[int] | None = None) -> dict[
     return {narrator: _score(collected.get(narrator, []), prior) for narrator in narrators}
 
 
+def narration_score(db: Session, asset_ids: list[str]) -> dict[str, Any]:
+    """Narration quality across a set of stories: for narrators credited by name, with no account to key on."""
+    prior = catalog_mean(db, StoryRating.narration_rating)
+    return _score([(r.narration_rating, r.weight) for r in _counted(db, asset_ids) if r.narration_rating], prior)
+
+
 def check_spike(db: Session, asset_id: str) -> RatingFlag | None:
     """Flag a burst: many ratings in 48 hours, far above the story's usual pace, that shift its average."""
     now = utcnow()

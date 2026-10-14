@@ -9,7 +9,7 @@ import { Button, Chip, Cover, Screen, Text, useColors } from '@/components/ui';
 import { api, mediaUrl } from '@/lib/api';
 import { RatingCard } from '@/components/community';
 import { AddToPlaylist } from '@/components/playlists';
-import { minutes } from '@/components/stories';
+import { DownloadButton, minutes, NarratorLinks } from '@/components/stories';
 import { formatClock, useI18n } from '@/lib/i18n';
 import { getEngine } from '@/lib/player/engine';
 import { usePlayer } from '@/lib/player/PlayerProvider';
@@ -41,6 +41,7 @@ export default function Player() {
   const detail = useStoryDetail(story?.id);
   const queryClient = useQueryClient();
   const [ratingDismissed, setRatingDismissed] = useState<string | null>(null);
+  const [downloadNote, setDownloadNote] = useState<{ storyId: string; message: string | null } | null>(null);
   const canRead = !!detail.data?.readAlong;
 
   // Ask for a rating once most of the story has been heard (or it ended), never in bedtime mode (the screen is
@@ -97,7 +98,7 @@ export default function Player() {
             ) : <View style={{ width: 40 }} />}
             <View style={{ flexShrink: 1, alignItems: 'center', gap: space.xs }}>
               <Text variant="title" style={{ textAlign: 'center' }}>{title(story)}</Text>
-              <Text muted>{story.narrator}</Text>
+              <Text muted style={{ textAlign: 'center' }}><NarratorLinks story={story} /></Text>
             </View>
             <FavoriteButton storyId={story.id} fallback={!!story.favorite} />
           </View>
@@ -146,7 +147,13 @@ export default function Player() {
 
         {showRating ? <RatingCard storyId={story.id} compact onDismiss={() => setRatingDismissed(story.id)} /> : null}
 
-        <AddToPlaylist storyId={story.id} />
+        <View style={{ gap: space.md }}>
+          <DownloadButton story={story} onError={(message) => setDownloadNote({ storyId: story.id, message })} />
+          <AddToPlaylist storyId={story.id} />
+          {downloadNote?.storyId === story.id && downloadNote.message ? (
+            <Text variant="small" color={colors.danger}>{downloadNote.message}</Text>
+          ) : null}
+        </View>
 
         <UpNext />
 

@@ -5,6 +5,7 @@ export type Story = {
   title: string;
   titles?: Record<string, string>; // confirmed titles by language (te-IN, en-IN); see localTitle
   narratorId?: number | null; // community narrators have a public page
+  narrators?: NarratorCredit[]; // everyone credited, each with a page (older saved downloads don't have this)
   album: string | null;
   narrator: string;
   language: string;
@@ -64,7 +65,12 @@ export type Community = {
   myReview?: Review | null;
 };
 
-export type NarratorPage = { id: number; name: string; biography: string | null; languages: string[]; since: string | null;
+// A narrator with an account has an id; catalog narrators are credited by name only.
+export type NarratorCredit = { name: string; id: number | null };
+
+export type NarratorSummary = NarratorCredit & { stories: number; languages: string[] };
+
+export type NarratorPage = { id: number | null; name: string; biography: string | null; languages: string[]; since: string | null;
   stories: Story[]; narration: Score | null; followers: number; following: boolean; canFollow: boolean };
 
 export type Updates = { items: { id: number; kind: string; read: boolean; createdAt: string; story: Story }[]; unread: number;

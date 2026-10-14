@@ -4,15 +4,16 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { FlatList, Pressable, TextInput, View } from 'react-native';
 
-import { StoryRow } from '@/components/stories';
+import { NarratorRow, StoryRow } from '@/components/stories';
 import { Screen, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { fontFor, radius, space, touch } from '@/lib/theme';
-import type { Story } from '@/lib/types';
+import type { NarratorSummary, Story } from '@/lib/types';
 
 // Search in Telugu script or English letters (P3-05): "kaaki", "kaki", "కాకి", and "crow" all find the same story.
+// Narrators are listed too (all of them before typing), so a voice the family likes leads to the rest of its stories.
 export default function Search() {
   const { t } = useI18n();
   const colors = useColors();
@@ -28,6 +29,12 @@ export default function Search() {
     queryFn: () => api<{ items: Story[] }>(`/api/search?q=${encodeURIComponent(query)}`),
   });
   const items = query ? results.data?.items ?? [] : [];
+  const people = useQuery({
+    queryKey: ['narrators', profile?.id], enabled: session.authenticated, staleTime: 5 * 60_000,
+    queryFn: () => api<{ items: NarratorSummary[] }>('/api/narrators'),
+  });
+  const needle = query.toLocaleLowerCase();
+  const narrators = (people.data?.items ?? []).filter((person) => person.name.toLocaleLowerCase().includes(needle));
 
   return (
     <Screen>
@@ -51,11 +58,22 @@ export default function Search() {
       </View>
       <FlatList data={items} keyExtractor={(item) => item.id} keyboardShouldPersistTaps="handled"
         renderItem={({ item }) => <StoryRow story={item} />}
-        ListEmptyComponent={
+        ListHeaderComponent={
+          <View style={{ gap: space.md, paddingBottom: space.md }}>
+            {!query ? <Text muted style={{ paddingTop: space.lg }}>{t('search.hint')}</Text> : null}
+            {narrators.length ? (
+              <View>
+                <Text variant="label" muted style={{ paddingTop: space.md }}>{t('search.narrators')}</Text>
+                {narrators.map((person) => <NarratorRow key={`${person.id ?? person.name}`} person={person} />)}
+              </View>
+            ) : null}
+            {narrators.length && items.length ? <Text variant="label" muted>{t('narrator.stories')}</Text> : null}
+          </View>}
+        ListEmptyComponent={query && !narrators.length ? (
           <Text muted style={{ paddingVertical: space.lg }}>
-            {!query ? t('search.hint') : results.error ? String(results.error) : results.isFetching ? ''
-              : t('search.empty', { q: query })}
-          </Text>} />
+            {results.error ? String(results.error) : results.isFetching ? '' : t('search.empty', { q: query })}
+          </Text>
+        ) : null} />
     </Screen>
   );
 }

@@ -18,7 +18,7 @@ from ..models import (
     AudioAsset, Collection, ListenerFavorite, ListeningDaily, ListeningProgress, Profile, TeaserDraft, Transcript,
 )
 from ..services import morals, pipeline, recommend
-from ..services.assets import artwork_url, asset_payload, iso
+from ..services.assets import artwork_url, asset_payload, iso, narrator_people, person_key
 from ..services.households import MOMENTS, current_profile, suitable_for
 from ..services.transcripts import read_along
 
@@ -89,7 +89,8 @@ def moments_of(asset: AudioAsset) -> list[str]:
 def story_card(asset: AudioAsset, teaser: TeaserDraft, profile: Profile,
                progress: ListeningProgress | None = None, favorite: bool = False) -> dict[str, Any]:
     return asset_payload(
-        asset, narratorId=asset.narrator_user_id, teaser=teaser_for(teaser, profile.listening_languages or [asset.language]),
+        asset, narratorId=asset.narrator_user_id, narrators=narrator_people(asset),
+        teaser=teaser_for(teaser, profile.listening_languages or [asset.language]),
         shortText=teaser.short_text, longText=teaser.long_text, moments=moments_of(asset), favorite=favorite,
         progress={"position": round(progress.last_position), "completed": progress.completed,
                   "lastListenedAt": iso(progress.last_listened_at)} if progress else None,
@@ -162,8 +163,9 @@ def story(asset_id: str, profile: Profile = Depends(current_profile), db: Sessio
         same = [(a, t) for a, t in stories if a.album and a.album == asset.album and a.id != asset.id]
     series = sorted(same, key=lambda pair: (_episode_key(pair[0]), pair[0].title))
     later = [pair for pair in series if _episode_key(pair[0]) > _episode_key(asset)]
-    same_narrator = [(a, t) for a, t in stories if a.id != asset.id and a.narrator_user_id
-                     and a.narrator_user_id == asset.narrator_user_id][:10]
+    narrators = {person_key(person) for person in narrator_people(asset)}
+    same_narrator = [(a, t) for a, t in stories if a.id != asset.id
+                     and narrators & {person_key(person) for person in narrator_people(a)}][:10]
     by_id = {a.id: (a, t) for a, t in stories}
     shown = {asset.id, *(a.id for a, _ in (later or series)[:10]), *(a.id for a, _ in same_narrator)}
     alike = recommend.related(db, asset.id, set(by_id) - shown, limit=10)

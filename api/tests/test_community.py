@@ -197,6 +197,37 @@ def test_follow_and_opt_in_notifications_on_publish(client, db):
     assert client.get("/api/me/updates", headers=kid).json()["items"] == []
 
 
+def test_narrators_credited_by_name_have_a_page_of_their_stories(client, db):
+    narrator = make_user(db, "narr", "narrator")
+    make_asset(db, STORY, ready_to_publish=True, status="published", narrator_name="Vimala Mare, Leo Tolstoy")
+    make_asset(db, "b" * 16, ready_to_publish=True, status="published", narrator_name="vimala  mare")
+    make_asset(db, "c" * 16, ready_to_publish=True, status="published", narrator_name="Sahiti Sagar & Chaitanya Sagar")
+    make_asset(db, "d" * 16, ready_to_publish=True, status="published", narrator=narrator)
+    make_asset(db, "e" * 16, ready_to_publish=True, status="draft", narrator_name="Vimala Mare")  # not published
+    headers = {"X-Profile-Id": str(family(client, db)["mom"]["id"])}
+
+    story = client.get(f"/api/stories/{STORY}", headers=headers).json()
+    assert story["narrators"] == [{"name": "Vimala Mare", "id": None}, {"name": "Leo Tolstoy", "id": None}]
+    assert [s["id"] for s in story["moreFromNarrator"]] == ["b" * 16]  # same person, without an account
+    account = client.get(f"/api/stories/{'d' * 16}", headers=headers).json()
+    assert account["narrators"] == [{"name": "narr", "id": narrator.id}]
+
+    people = client.get("/api/narrators", headers=headers).json()["items"]
+    assert [(p["name"], p["id"], p["stories"]) for p in people] == [
+        ("Vimala Mare", None, 2), ("Chaitanya Sagar", None, 1), ("Leo Tolstoy", None, 1), ("narr", narrator.id, 1),
+        ("Sahiti Sagar", None, 1)]
+
+    page = client.get("/api/narrators/named/VIMALA MARE", headers=headers).json()
+    assert page["name"] == "Vimala Mare" and not page["canFollow"] and page["languages"] == ["te-IN"]
+    assert sorted(s["id"] for s in page["stories"]) == [STORY, "b" * 16]
+    assert client.get("/api/narrators/named/Sahiti Sagar", headers=headers).json()["stories"][0]["id"] == "c" * 16
+    assert client.get("/api/narrators/named/narr", headers=headers).status_code == 404  # has an account page instead
+    assert client.get("/api/narrators/named/Nobody", headers=headers).status_code == 404
+    for path in ("/narrator/Vimala Mare", "/narrator/Dr. Rao", f"/narrator/{narrator.id}"):  # reloads and shared links
+        response = client.get(path)
+        assert response.status_code == 200 and response.headers["content-type"].startswith("text/html"), path
+
+
 def test_recommendations_blend_meaning_and_listening(client, db):
     for asset_id, vector in (("a" * 16, [1, 0, 0]), ("b" * 16, [0.9, 0.1, 0]), ("c" * 16, [0, 0, 1])):
         make_asset(db, asset_id, ready_to_publish=True, status="published")
