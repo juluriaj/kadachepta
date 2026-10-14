@@ -82,7 +82,7 @@ ENTRIES = [
     Entry("owl", ("గుడ్లగూబ",), ("owl",), ("gudlaguba",)),
     Entry("sparrow", ("పిచ్చుక",), ("sparrow",), ("pichuka", "pichchuka")),
     Entry("myna", ("గోరింక", "గోరువంక"), ("myna", "mynah"), ("gorinka", "goruvanka")),
-    Entry("cuckoo", ("కోకిల",), ("cuckoo", "koel"), ("kokila",)),
+    Entry("cuckoo", ("కోకిల", "కోయిల"), ("cuckoo", "koel"), ("kokila", "koyila")),
     Entry("duck", ("బాతు",), ("duck",), ("baathu", "bathu")),
     Entry("hen (rooster)", ("కోడి", "కోళ్", "పుంజు"), ("hen", "rooster", "chicken"), ("kodi", "kollu", "kodipunju")),
     Entry("woodpecker", ("వడ్రంగిపిట్ట",), ("woodpecker",), ("vadrangipitta",)),
