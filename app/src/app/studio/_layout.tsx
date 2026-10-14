@@ -1,7 +1,7 @@
 import { Redirect, router, Stack, usePathname } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
-import { Loading, Text, useColors } from '@/components/ui';
+import { BrandMark, Loading, Text, useColors } from '@/components/ui';
 import { useGuardSession } from '@/lib/session';
 import { space } from '@/lib/theme';
 
@@ -32,7 +32,10 @@ export default function StudioLayout() {
       <View accessibilityRole="header" style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.lg,
         paddingHorizontal: space.xl, paddingVertical: space.md, borderBottomWidth: 1, borderColor: colors.border,
         backgroundColor: colors.surface }}>
-        <Text variant="heading" color={colors.primary}>KathaChepta Studio</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+          <BrandMark size={30} href="/studio" />
+          <Text variant="heading" muted>Studio</Text>
+        </View>
         {LINKS.filter((link) => !('permission' in link) || permissions.has(link.permission)).map((link) => {
           const active = 'match' in link ? link.match(path) : path.startsWith(link.href);
           return (

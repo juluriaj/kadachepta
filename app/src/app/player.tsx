@@ -78,18 +78,14 @@ export default function Player() {
     mode === 'off' ? t('player.sleepOff') : mode === 'end' ? t('player.sleepEnd') : t('common.min', { n: mode });
 
   return (
-    <Screen>
+    <Screen back backIcon="chevron-down" actions={
+      <Pressable onPress={() => { player.setDriveMode(true); router.push('/drive'); }} hitSlop={12} accessibilityRole="button"
+        accessibilityLabel={t('player.drive')}>
+        <Ionicons name="car-outline" size={26} color={colors.text} />
+      </Pressable>
+    }>
       <ScrollView contentContainerStyle={{ gap: space.xl, paddingVertical: space.lg, maxWidth: 520, width: '100%', alignSelf: 'center' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel={t('player.close')}>
-            <Ionicons name="chevron-down" size={28} color={colors.text} />
-          </Pressable>
-          <Text variant="label" muted style={{ flex: 1, textAlign: 'center' }}>{t('player.nowPlaying')}</Text>
-          <Pressable onPress={() => { player.setDriveMode(true); router.push('/drive'); }} hitSlop={12} accessibilityRole="button"
-            accessibilityLabel={t('player.drive')}>
-            <Ionicons name="car-outline" size={26} color={colors.text} />
-          </Pressable>
-        </View>
+        <Text variant="label" muted style={{ textAlign: 'center', marginBottom: -space.md }}>{t('player.nowPlaying')}</Text>
 
         <View style={{ alignItems: 'center', gap: space.md }}>
           {reading && canRead ? (

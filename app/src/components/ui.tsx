@@ -1,4 +1,6 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
+import { router, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator, Pressable, Text as RNText, TextInput, View, type PressableProps, type StyleProp,
@@ -7,6 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { mediaUrl } from '@/lib/api';
+import { useI18n } from '@/lib/i18n';
 import { usePlayer } from '@/lib/player/PlayerProvider';
 import { coverColor, fontFor, fonts, palette, radius, space, touch, type Colors } from '@/lib/theme';
 
@@ -42,14 +45,71 @@ export function Text({ variant = 'body', muted, color, style, children, ...rest 
 
 // Android draws edge to edge, so screens keep clear of the system navigation buttons themselves.
 // Tab screens skip the bottom edge: the tab bar already sits above those buttons.
-export function Screen({ children, style, padded = true, tabs = false }: { children: ReactNode; style?: StyleProp<ViewStyle>;
-  padded?: boolean; tabs?: boolean }) {
+// Every screen opens with the brand bar (logo and name, which lead home), the way YouTube's sits on every page:
+// `back` adds a back button (a route, for when there's no history to go back to) and `actions` sit on the right.
+export function Screen({ children, style, padded = true, tabs = false, brand = true, back, backIcon, actions }: {
+  children: ReactNode; style?: StyleProp<ViewStyle>; padded?: boolean; tabs?: boolean; brand?: boolean;
+  back?: Href | true; backIcon?: 'chevron-back' | 'chevron-down'; actions?: ReactNode }) {
   const colors = useColors();
   return (
     <SafeAreaView style={[{ flex: 1, backgroundColor: colors.background }, padded && { paddingHorizontal: space.lg }, style]}
       edges={tabs ? ['top', 'left', 'right'] : ['top', 'left', 'right', 'bottom']}>
+      {brand ? <BrandBar back={back} backIcon={backIcon} actions={actions} style={!padded && { paddingHorizontal: space.lg }} /> : null}
       {children}
     </SafeAreaView>
+  );
+}
+
+const LOGO = require('../../assets/images/logo.png');
+
+export function Logo({ size = 32 }: { size?: number }) {
+  return <Image source={LOGO} style={{ width: size, height: size, borderRadius: size / 2 }} accessibilityIgnoresInvertColors />;
+}
+
+// The name is always written the same way, in Latin letters, whatever the app language (like a logo).
+export function Wordmark({ size = 20 }: { size?: number }) {
+  const colors = useColors();
+  return (
+    <RNText style={{ fontFamily: fonts.bold, fontSize: size, lineHeight: size * 1.25, letterSpacing: -0.4, color: colors.text }}>
+      Katha<RNText style={{ color: colors.primary }}>Chepta</RNText>
+    </RNText>
+  );
+}
+
+export function BrandMark({ size = 32, href = '/(tabs)' }: { size?: number; href?: Href | null }) {
+  const { t } = useI18n();
+  const mark = (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+      <Logo size={size} />
+      <Wordmark size={Math.round(size * 0.62)} />
+    </View>
+  );
+  if (!href) return mark;
+  return (
+    <Pressable accessibilityRole="link" accessibilityLabel={`${t('app.name')}, ${t('tabs.home')}`} hitSlop={8}
+      onPress={() => router.navigate(href)}>
+      {mark}
+    </Pressable>
+  );
+}
+
+export function BrandBar({ back, backIcon = 'chevron-back', actions, style }: { back?: Href | true;
+  backIcon?: 'chevron-back' | 'chevron-down'; actions?: ReactNode; style?: StyleProp<ViewStyle> }) {
+  const colors = useColors();
+  const { t } = useI18n();
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace(back && back !== true ? back : '/'));
+  return (
+    <View style={[{ flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 56 }, style]}>
+      {back ? (
+        <Pressable onPress={goBack} accessibilityRole="button" accessibilityLabel={t('common.back')} hitSlop={12}
+          style={{ marginLeft: -space.xs }}>
+          <Ionicons name={backIcon} size={26} color={colors.text} />
+        </Pressable>
+      ) : null}
+      <BrandMark />
+      <View style={{ flex: 1 }} />
+      {actions}
+    </View>
   );
 }
 

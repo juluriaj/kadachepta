@@ -92,11 +92,8 @@ export default function NewSubmission() {
   };
 
   return (
-    <Screen>
+    <Screen back>
       <ScrollView contentContainerStyle={{ gap: space.lg, paddingVertical: space.lg }} keyboardShouldPersistTaps="handled">
-        <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
-        </Pressable>
         <Text variant="title" accessibilityRole="header">{replace ? t('status.replace') : t('narrate.new')}</Text>
 
         {!replace ? (

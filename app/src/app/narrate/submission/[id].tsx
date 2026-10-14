@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { Alert, Platform, RefreshControl, ScrollView, View } from 'react-native';
 
 import { MasteringCompare } from '@/components/MasteringCompare';
 import { QcList, StageBadge, StageGuide, Timeline } from '@/components/narrator';
@@ -59,13 +59,9 @@ export default function SubmissionStatus() {
   };
 
   return (
-    <Screen>
+    <Screen back="/(tabs)/narrate">
       <ScrollView contentContainerStyle={{ gap: space.lg, paddingVertical: space.lg }}
         refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} />}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} hitSlop={12}
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/narrate'))}>
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
-        </Pressable>
         <View style={{ flexDirection: 'row', gap: space.md, alignItems: 'center' }}>
           <Cover id={s.id} title={s.title} artworkUrl={s.artworkUrl} size={88} />
           <View style={{ flex: 1, gap: space.xs }}>

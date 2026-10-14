@@ -67,12 +67,8 @@ export default function Playlist() {
   };
 
   return (
-    <Screen>
+    <Screen back="/(tabs)/library">
       <ScrollView contentContainerStyle={{ gap: space.lg, paddingVertical: space.lg, maxWidth: 640, width: '100%', alignSelf: 'center' }}>
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/library'))}
-          accessibilityRole="button" accessibilityLabel={t('common.back')} hitSlop={12}>
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
-        </Pressable>
         {renaming !== null ? (
           <View style={{ gap: space.sm }}>
             <Field label={t('playlist.name')} value={renaming} onChangeText={setRenaming} maxLength={80} autoFocus />

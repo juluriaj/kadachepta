@@ -1,8 +1,7 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { ReviewItem, Stars } from '@/components/community';
 import { Button, Card, ErrorState, Field, Loading, Screen, Text, useColors } from '@/components/ui';
@@ -16,7 +15,6 @@ type NarratorReview = Review & { storyId: string; storyTitle: string; story: Sco
 // What families say about a narrator's stories, with one reply per review (P3-03, right of reply).
 export default function NarratorReviews() {
   const { t } = useI18n();
-  const colors = useColors();
   const query = useQuery({ queryKey: ['narrator-reviews'],
     queryFn: () => api<{ narration: Score; items: NarratorReview[] }>('/api/narrator/reviews', { profile: false }) });
 
@@ -24,13 +22,9 @@ export default function NarratorReviews() {
   if (query.error || !query.data) return <Screen><ErrorState error={query.error} onRetry={() => void query.refetch()} /></Screen>;
   const { narration, items } = query.data;
   return (
-    <Screen>
+    <Screen back="/(tabs)/narrate">
       <ScrollView contentContainerStyle={{ gap: space.lg, paddingVertical: space.lg, maxWidth: 640, width: '100%', alignSelf: 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-          <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/narrate'))}
-            accessibilityRole="button" accessibilityLabel={t('common.back')} hitSlop={12}>
-            <Ionicons name="chevron-back" size={26} color={colors.text} />
-          </Pressable>
           <Text variant="title" accessibilityRole="header">{t('narrate.reviews')}</Text>
         </View>
         <Card>

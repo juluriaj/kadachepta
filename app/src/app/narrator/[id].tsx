@@ -1,8 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { FlatList, Pressable, View } from 'react-native';
+import { FlatList, View } from 'react-native';
 
 import { Stars } from '@/components/community';
 import { StoryRow } from '@/components/stories';
@@ -30,7 +30,7 @@ export default function Narrator() {
       : `/api/narrators/named/${encodeURIComponent(id)}`) });
 
   if (page.isLoading) return <Loading />;
-  if (page.error || !page.data) return <Screen><ErrorState error={page.error} onRetry={() => void page.refetch()} /></Screen>;
+  if (page.error || !page.data) return <Screen back><ErrorState error={page.error} onRetry={() => void page.refetch()} /></Screen>;
   const n = page.data;
 
   const toggleFollow = async () => {
@@ -47,10 +47,6 @@ export default function Narrator() {
 
   const header = (
     <View style={{ gap: space.lg, paddingBottom: space.sm }}>
-      <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} accessibilityRole="button"
-        accessibilityLabel={t('common.back')} hitSlop={12}>
-        <Ionicons name="chevron-back" size={26} color={colors.text} />
-      </Pressable>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
         <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primary, alignItems: 'center',
           justifyContent: 'center' }}>
@@ -89,7 +85,7 @@ export default function Narrator() {
   );
 
   return (
-    <Screen>
+    <Screen back>
       <FlatList data={n.stories} keyExtractor={(story) => story.id} renderItem={({ item }) => <StoryRow story={item} />}
         ListHeaderComponent={header} initialNumToRender={12}
         contentContainerStyle={{ paddingVertical: space.lg, maxWidth: 640, width: '100%', alignSelf: 'center' }} />

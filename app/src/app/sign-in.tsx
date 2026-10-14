@@ -3,11 +3,11 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { LanguageSwitch } from '@/components/LanguageSwitch';
-import { Button, Field, Screen, Text, useColors } from '@/components/ui';
+import { Button, Field, Logo, Screen, Text, useColors, Wordmark } from '@/components/ui';
 import { api, ApiError, CAN_CHANGE_SERVER, getApiBase, setApiBase } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
-import { radius, space } from '@/lib/theme';
+import { space } from '@/lib/theme';
 
 type Step = 'email' | 'code' | 'staff' | 'mfa';
 
@@ -49,20 +49,15 @@ export default function SignIn() {
   });
 
   return (
-    <Screen>
+    <Screen brand={false}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', gap: space.xl, paddingVertical: space.xxl,
           maxWidth: 440, width: '100%', alignSelf: 'center' }} keyboardShouldPersistTaps="handled">
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-            <View style={{ width: 48, height: 48, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center',
-              justifyContent: 'center' }}>
-              <Text variant="title" color={colors.onPrimary}>క</Text>
-            </View>
-            <View>
-              <Text variant="heading">కథాచెప్టా</Text>
-              <Text variant="small" muted>{t('app.tagline')}</Text>
-            </View>
-            <View style={{ marginLeft: 'auto' }}><LanguageSwitch /></View>
+          <View style={{ alignItems: 'center', gap: space.sm }}>
+            <View style={{ alignSelf: 'flex-end' }}><LanguageSwitch /></View>
+            <Logo size={128} />
+            <Wordmark size={30} />
+            <Text muted>{t('app.tagline')}</Text>
           </View>
 
           {step === 'email' || step === 'code' ? (

@@ -26,7 +26,7 @@ export default function BookScreen() {
 
   if (page.isLoading) return <Loading />;
   if (page.error || !page.data) {
-    return <Screen><Back /><ErrorState error={page.error} onRetry={() => void page.refetch()} /></Screen>;
+    return <Screen back><ErrorState error={page.error} onRetry={() => void page.refetch()} /></Screen>;
   }
   const book = page.data;
   const playFrom = (index: number) => {
@@ -41,7 +41,6 @@ export default function BookScreen() {
 
   const header = (
     <View style={{ gap: space.lg, paddingBottom: space.md }}>
-      <Back />
       <View style={{ alignItems: 'center', gap: space.md }}>
         <Cover id={`book-${book.id}`} title={book.title} artworkUrl={book.artworkUrl} size={220} />
         <Text variant="display" style={{ textAlign: 'center' }} accessibilityRole="header">{book.title}</Text>
@@ -64,7 +63,7 @@ export default function BookScreen() {
   );
 
   return (
-    <Screen>
+    <Screen back>
       <FlatList data={book.chapters} keyExtractor={(chapter) => chapter.id} ListHeaderComponent={header} initialNumToRender={15}
         contentContainerStyle={{ paddingVertical: space.lg, maxWidth: 640, width: '100%', alignSelf: 'center' }}
         renderItem={({ item, index }) => (
@@ -101,17 +100,6 @@ function ChapterRow({ chapter, number, current, onPress }: { chapter: Story; num
       </View>
       {finished ? <Ionicons name="checkmark-circle" size={22} color={colors.success} />
         : partial ? <Ionicons name="pie-chart-outline" size={20} color={colors.accent} /> : null}
-    </Pressable>
-  );
-}
-
-function Back() {
-  const { t } = useI18n();
-  const colors = useColors();
-  return (
-    <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} accessibilityRole="button"
-      accessibilityLabel={t('common.back')} hitSlop={12} style={{ alignSelf: 'flex-start' }}>
-      <Ionicons name="chevron-back" size={26} color={colors.text} />
     </Pressable>
   );
 }

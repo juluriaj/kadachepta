@@ -59,34 +59,37 @@ export default function Home() {
 
   if (!profile || home.isLoading) return <Loading />;
   return (
-    <Screen tabs padded={false}>
+    <Screen tabs padded={false} actions={
+      <>
+        <Pressable onPress={() => router.push('/search')} accessibilityRole="button" accessibilityLabel={t('home.search')}
+          hitSlop={8} style={{ padding: space.xs }}>
+          <Ionicons name="search" size={24} color={colors.text} />
+        </Pressable>
+        {profile.kind === 'adult' ? (
+          <Pressable onPress={() => router.push('/updates')} accessibilityRole="button" hitSlop={8} style={{ padding: space.xs }}
+            accessibilityLabel={unread ? `${t('home.updates')} (${unread})` : t('home.updates')}>
+            <Ionicons name="notifications-outline" size={24} color={colors.text} />
+            {unread ? (
+              <View style={{ position: 'absolute', top: 2, right: 2, width: 10, height: 10, borderRadius: 5,
+                backgroundColor: colors.accent }} />
+            ) : null}
+          </Pressable>
+        ) : null}
+        <Pressable onPress={() => router.push('/profiles')} accessibilityRole="button" accessibilityLabel={t('profiles.who')}>
+          <Avatar avatar={profile.avatar} size={36} />
+        </Pressable>
+      </>
+    }>
       <ScrollView contentContainerStyle={{ gap: space.xl, paddingBottom: space.xxl }}
         refreshControl={<RefreshControl refreshing={home.isRefetching} onRefresh={() => void home.refetch()} />}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, paddingTop: space.lg,
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, paddingTop: space.sm,
           marginBottom: -space.md }}>
           <Text variant="small" muted style={{ flex: 1 }}>{t('app.tagline')}</Text>
           <LanguageSwitch />
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg }}>
-          <Text variant="title" accessibilityRole="header" style={{ flex: 1 }}>{t(greetingKey(), { name: profile.name })}</Text>
-          <Pressable onPress={() => router.push('/search')} accessibilityRole="button" accessibilityLabel={t('home.search')}
-            hitSlop={8} style={{ padding: space.xs }}>
-            <Ionicons name="search" size={24} color={colors.text} />
-          </Pressable>
-          {profile.kind === 'adult' ? (
-            <Pressable onPress={() => router.push('/updates')} accessibilityRole="button" hitSlop={8} style={{ padding: space.xs }}
-              accessibilityLabel={unread ? `${t('home.updates')} (${unread})` : t('home.updates')}>
-              <Ionicons name="notifications-outline" size={24} color={colors.text} />
-              {unread ? (
-                <View style={{ position: 'absolute', top: 2, right: 2, width: 10, height: 10, borderRadius: 5,
-                  backgroundColor: colors.accent }} />
-              ) : null}
-            </Pressable>
-          ) : null}
-          <Pressable onPress={() => router.push('/profiles')} accessibilityRole="button" accessibilityLabel={t('profiles.who')}>
-            <Avatar avatar={profile.avatar} size={44} />
-          </Pressable>
-        </View>
+        <Text variant="title" accessibilityRole="header" style={{ paddingHorizontal: space.lg }}>
+          {t(greetingKey(), { name: profile.name })}
+        </Text>
 
         {moments.length ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm, paddingHorizontal: space.lg }}>
