@@ -1,15 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
+import { useStudioCollections } from '@/components/StudioCollections';
 import { Button, Card, Chip, ErrorState, Field, Loading, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
+import type { StudioCollection } from '@/lib/studio';
 import { space } from '@/lib/theme';
 
-type Collection = { id: number; kind: 'festival' | 'theme' | 'age'; titles: Record<string, string>;
-  descriptions: Record<string, string>; startsOn: string | null; endsOn: string | null; position: number; published: boolean;
-  stories: { id: string; title: string; status: string }[] };
-type Draft = Omit<Collection, 'id' | 'stories'> & { id?: number; assetIds: string[] };
+type Draft = Omit<StudioCollection, 'id' | 'stories'> & { id?: number; assetIds: string[] };
 
 const EMPTY: Draft = { kind: 'theme', titles: {}, descriptions: {}, startsOn: null, endsOn: null, position: 0, published: false,
   assetIds: [] };
@@ -17,8 +15,7 @@ const EMPTY: Draft = { kind: 'theme', titles: {}, descriptions: {}, startsOn: nu
 // Editorial shelves on Home (P3-08): festivals with dates, themes, and age collections.
 export default function Collections() {
   const colors = useColors();
-  const query = useQuery({ queryKey: ['studio-collections'],
-    queryFn: () => api<{ items: Collection[]; stories: { id: string; title: string }[] }>('/api/studio/collections', { profile: false }) });
+  const query = useStudioCollections();
   const [editing, setEditing] = useState<Draft | null>(null);
 
   if (query.isLoading) return <Loading />;

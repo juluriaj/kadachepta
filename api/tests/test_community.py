@@ -269,6 +269,35 @@ def test_collections_show_in_season_and_prompts_are_for_parents(client, db):
     assert client.get(f"/api/stories/{STORY}", headers={"X-Profile-Id": str(profiles["Anu"]["id"])}).json()["prompts"] is None
 
 
+def test_editors_add_stories_to_a_collection_from_anywhere(client, db):
+    for asset_id in (STORY, "b" * 16, "c" * 16):
+        make_asset(db, asset_id, ready_to_publish=True, status="published")
+    make_user(db, "ed", "editor")
+    login(client, "ed")
+    created = client.post("/api/studio/collections", json={"titles": {"en-IN": "Animals"}, "assetIds": [STORY]}).json()
+    url = f"/api/studio/collections/{created['id']}/stories"
+
+    added = client.post(url, json={"assetIds": [STORY, "b" * 16, "c" * 16, "b" * 16, "missing"]}).json()
+    assert (added["added"], added["already"]) == (2, 1)
+    stories = lambda: [s["id"] for s in client.get("/api/studio/collections").json()["items"][0]["stories"]]  # noqa: E731
+    assert stories() == [STORY, "b" * 16, "c" * 16]  # appended in the order given
+    history = client.get(f"/api/studio/review/{'b' * 16}").json()["history"]
+    assert history[0]["action"] == "collection:added" and history[0]["notes"] == "Animals"
+
+    assert client.delete(f"{url}/{'b' * 16}").json() == {"ok": True}
+    assert stories() == [STORY, "c" * 16]
+    client.post(url, json={"assetIds": ["b" * 16]})
+    removed = client.post(f"{url}/remove", json={"assetIds": [STORY, "b" * 16, "missing"]}).json()
+    assert removed["removed"] == 2 and stories() == ["c" * 16]  # the rest keep their order
+    assert client.get(f"/api/studio/review/{STORY}").json()["history"][0]["action"] == "collection:removed"
+    assert client.post("/api/studio/collections/999/stories", json={"assetIds": [STORY]}).status_code == 404
+    client.post("/api/logout")
+    make_user(db, "narr", "narrator")
+    login(client, "narr")
+    assert client.post(url, json={"assetIds": ["b" * 16]}).status_code == 403
+    assert client.post(f"{url}/remove", json={"assetIds": ["c" * 16]}).status_code == 403
+
+
 def test_embed_and_prompt_jobs_store_their_results(client, db):
     asset = make_asset(db, STORY, ready_to_publish=True, status="published", moral_takeaway="Be kind to everyone.")
     token = make_worker(db)

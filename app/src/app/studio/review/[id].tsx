@@ -7,6 +7,7 @@ import { Linking, Platform, Pressable, ScrollView, TextInput, useWindowDimension
 
 import { QcList } from '@/components/narrator';
 import { MasteringCompare } from '@/components/MasteringCompare';
+import { StoryCollections } from '@/components/StudioCollections';
 import { Button, Card, Chip, ErrorState, Field, Loading, Text, useColors } from '@/components/ui';
 import { api, ApiError, mediaUrl } from '@/lib/api';
 import { formatClock, LANGUAGE_LABELS } from '@/lib/i18n';
@@ -212,8 +213,13 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
     </View>
   );
 
+  // Shelves matter most once a story is live, so its collections come first then; before that, after the details.
+  const published = review.stage === 'published';
+  const collections = <StoryCollections assetId={asset.id} published={published} />;
+
   const right = (
     <View style={{ gap: space.lg, flex: wide ? 1 : undefined }}>
+      {published ? collections : null}
       <Card>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
           <Text variant="heading" style={{ flex: 1 }}>Safety pre-check</Text>
@@ -304,6 +310,7 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
         <Field label="Source or adaptation" value={source} onChangeText={setSource} />
         {review.series ? <Text variant="small" muted>Series: {review.series.title} · chapter {review.series.position ?? '?'}</Text> : null}
       </Card>
+      {published ? null : collections}
 
       <Card>
         <Text variant="heading">Rights: {review.rights.status}</Text>
