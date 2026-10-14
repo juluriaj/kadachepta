@@ -36,6 +36,18 @@ export default function Updates() {
     await updates.refetch();
   };
 
+  type Followed = NonNullable<UpdatesData['following']>[number];
+  const unfollow = async (item: Followed) => {
+    queryClient.setQueryData(['updates', profile?.id], { ...updates.data,
+      following: (updates.data.following ?? []).filter((other) => other.key !== item.key) });
+    await (item.narratorId != null
+      ? api(`/api/narrators/${item.narratorId}/follow`, { method: 'POST', body: { following: false } })
+      : api('/api/me/follows/remove', { method: 'POST', body: { kind: item.kind === 'series' ? 'series' : 'narrators', key: item.key } }));
+    await updates.refetch();
+    void queryClient.invalidateQueries({ queryKey: ['narrator'] });
+    void queryClient.invalidateQueries({ queryKey: ['community'] });
+  };
+
   return (
     <Screen>
       <ScrollView contentContainerStyle={{ gap: space.lg, paddingVertical: space.lg, maxWidth: 640, width: '100%', alignSelf: 'center' }}>
@@ -52,6 +64,26 @@ export default function Updates() {
             <Setting label={t('updates.settingFollowed')} value={settings.followed} onChange={(v) => void change('followed', v)} />
             <Setting label={t('updates.settingSeries')} value={settings.series} onChange={(v) => void change('series', v)} />
             <Text variant="small" muted>{t('updates.note')}</Text>
+          </Card>
+        ) : null}
+        {updates.data.following ? (
+          <Card>
+            <Text variant="heading">{t('updates.following')}</Text>
+            {!updates.data.following.length ? <Text variant="small" muted>{t('updates.followingEmpty')}</Text> : null}
+            {updates.data.following.map((item) => (
+              <View key={item.key} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 44 }}>
+                <Ionicons name={item.kind === 'series' ? 'albums-outline' : 'mic-outline'} size={20} color={colors.muted} />
+                <Pressable style={{ flex: 1 }} disabled={item.kind === 'series'} accessibilityRole={item.kind === 'series' ? 'text' : 'link'}
+                  onPress={() => router.push(`/narrator/${item.narratorId ?? encodeURIComponent(item.name)}`)}>
+                  <Text>{item.name}</Text>
+                  <Text variant="small" muted>{t(item.kind === 'series' ? 'updates.seriesLabel' : 'updates.narratorLabel')}</Text>
+                </Pressable>
+                <Pressable onPress={() => void unfollow(item)} hitSlop={8} accessibilityRole="button"
+                  accessibilityLabel={t('updates.unfollow', { name: item.name })}>
+                  <Ionicons name="close-circle-outline" size={22} color={colors.muted} />
+                </Pressable>
+              </View>
+            ))}
           </Card>
         ) : null}
         {!items.length ? <Text muted>{t('updates.empty')}</Text> : null}

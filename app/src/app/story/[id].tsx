@@ -4,7 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
-import { StoryRatings, StoryReviews, TalkAboutIt } from '@/components/community';
+import { FollowSeries, StoryRatings, StoryReviews, TalkAboutIt } from '@/components/community';
 import { AddToPlaylist } from '@/components/playlists';
 import { DownloadButton, minutes, NarratedBy, Shelf } from '@/components/stories';
 import { Button, Chip, Cover, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
@@ -121,6 +121,7 @@ export default function Story() {
         {s.prompts ? <View style={{ paddingHorizontal: space.lg }}><TalkAboutIt prompts={s.prompts} /></View> : null}
 
         {s.upNext.length ? <Shelf title={t('story.upNext')} items={s.upNext} /> : null}
+        <View style={{ paddingHorizontal: space.lg }}><FollowSeries storyId={s.id} /></View>
         {s.moreLikeThis.length ? <Shelf title={t('story.moreLikeThis')} items={s.moreLikeThis} /> : null}
         {s.moreFromNarrator.length ? <Shelf title={t('story.moreFromNarrator')} items={s.moreFromNarrator} /> : null}
 

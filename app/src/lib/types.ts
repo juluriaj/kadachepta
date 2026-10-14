@@ -63,6 +63,7 @@ export type Community = {
   narration?: Score;
   reviews?: Review[];
   myReview?: Review | null;
+  series?: { title: string; following: boolean } | null; // the story's series or album, to follow (grown-ups)
 };
 
 // A narrator with an account has an id; catalog narrators are credited by name only.
@@ -74,7 +75,9 @@ export type NarratorPage = { id: number | null; name: string; biography: string 
   stories: Story[]; narration: Score | null; followers: number; following: boolean; canFollow: boolean };
 
 export type Updates = { items: { id: number; kind: string; read: boolean; createdAt: string; story: Story }[]; unread: number;
-  settings: { followed: boolean; series: boolean } | null };
+  settings: { followed: boolean; series: boolean } | null;
+  // Narrators (with an account: narratorId) and series this account follows; absent for children.
+  following?: { kind: 'narrator' | 'series'; key: string; name: string; narratorId?: number }[] };
 
 export type Stats = {
   totalSeconds: number;

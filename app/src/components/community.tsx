@@ -149,6 +149,36 @@ export function StoryRatings({ storyId }: { storyId: string }) {
   );
 }
 
+// Follow the story's series (an audiobook, or an album of chapters) to hear about its next chapter (grown-ups only).
+export function FollowSeries({ storyId }: { storyId: string }) {
+  const { t } = useI18n();
+  const colors = useColors();
+  const queryClient = useQueryClient();
+  const community = useCommunity(storyId);
+  const [busy, setBusy] = useState(false);
+  const series = community.data?.series;
+  if (!series) return null;
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      await api(`/api/stories/${storyId}/series/follow`, { method: 'POST', body: { following: !series.following } });
+      await queryClient.invalidateQueries({ queryKey: ['community', storyId] });
+      void queryClient.invalidateQueries({ queryKey: ['updates'] });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <View style={{ gap: space.xs }}>
+      <Text variant="label" muted>{series.title}</Text>
+      <Button kind="secondary" loading={busy} onPress={() => void toggle()}
+        title={series.following ? t('series.following') : t('series.follow')}
+        icon={<Ionicons name={series.following ? 'checkmark' : 'add'} size={18} color={colors.text} />} />
+      {series.following ? <Text variant="small" muted>{t('series.followHint')}</Text> : null}
+    </View>
+  );
+}
+
 // Reviews, lower on the story page (grown-ups only; children never see reviews).
 export function StoryReviews({ storyId }: { storyId: string }) {
   const colors = useColors();

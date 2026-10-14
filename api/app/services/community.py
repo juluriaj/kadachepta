@@ -23,8 +23,9 @@ from ..auth import utcnow
 from ..models import (
     AudioAsset, Household, Job, ListeningProgress, NarratorFollow, Notification, Profile, Review, ReviewReport, User,
 )
-from . import morals, pipeline, recommend, titles
+from . import follows, morals, pipeline, recommend, titles
 from . import settings as app_settings
+from .assets import narrator_people, person_key
 
 PERSONAL = re.compile(r"(\+?\d[\d\s-]{8,}\d|[\w.+-]+@[\w-]+\.[a-z]{2,}|https?://|www\.)", re.I)
 # A child's school or class, which the local model let through in testing: always an editor's call (Epic S).
@@ -100,13 +101,17 @@ def notify_published(db: Session, asset: AudioAsset) -> int:
     """Opt-in listener notifications when a story is published. Returns how many were sent."""
     sent: set[int] = set()
     title = titles.confirmed_titles(asset).get("en-IN") or asset.title
+    fans: set[int] = set()
     if asset.narrator_user_id:
-        followers = set(db.scalars(select(NarratorFollow.user_id).where(
+        fans |= set(db.scalars(select(NarratorFollow.user_id).where(
             NarratorFollow.narrator_user_id == asset.narrator_user_id)))
-        for user_id in _wants(db, followers, "followed") - {asset.narrator_user_id}:
-            db.add(Notification(user_id=user_id, kind="new-from-followed", title=f"New story: {title}",
-                                audio_asset_id=asset.id))
-            sent.add(user_id)
+    for person in narrator_people(asset):  # narrators the catalog credits by name only
+        if person["id"] is None:
+            fans |= follows.followers(db, "narrators", person_key(person))
+    for user_id in _wants(db, fans, "followed") - {asset.narrator_user_id}:
+        db.add(Notification(user_id=user_id, kind="new-from-followed", title=f"New story: {title}",
+                            audio_asset_id=asset.id))
+        sent.add(user_id)
     same_series = (AudioAsset.series_id == asset.series_id) if asset.series_id else (
         AudioAsset.album == asset.album if asset.album else None)
     if same_series is not None:
@@ -115,6 +120,9 @@ def notify_published(db: Session, asset: AudioAsset) -> int:
                                 .join(ListeningProgress, ListeningProgress.profile_id == Profile.id)
                                 .where(ListeningProgress.audio_asset_id.in_(earlier),
                                        or_(ListeningProgress.completed.is_(True), ListeningProgress.seconds_listened >= 300))))
+        key = follows.series_key(asset)
+        if key:  # followed from a story page, perhaps before listening to any chapter
+            owners |= follows.followers(db, "series", key)
         for user_id in _wants(db, owners, "series") - sent - {asset.narrator_user_id}:
             db.add(Notification(user_id=user_id, kind="series-next", title=f"Next in the series: {title}",
                                 audio_asset_id=asset.id))
