@@ -11,7 +11,6 @@
     "ios": {
       "bundleIdentifier": "com.kathachepta.app",
       "supportsTablet": true,
-      "icon": "./assets/expo.icon",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -19,10 +18,8 @@
     "android": {
       "package": "com.kathachepta.app",
       "adaptiveIcon": {
-        "backgroundColor": "#315747",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#2A1C10",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -46,9 +43,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#315747",
+          "backgroundColor": "#2A1C10",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 200
         }
       ],
       [
