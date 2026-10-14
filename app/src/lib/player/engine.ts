@@ -178,7 +178,8 @@ export class PlayerEngine {
     this.set({ story, position: startAt, duration: story.duration });
     if (Platform.OS !== 'web') {
       this.player.setActiveForLockScreen(true, {
-        title: localTitle(story, this.uiLanguage), artist: story.narrator, albumTitle: story.album ?? 'KathaChepta',
+        title: localTitle(story, this.uiLanguage), artist: story.narrator,
+        albumTitle: story.book?.title ?? story.album ?? 'KathaChepta',
         artworkUrl: mediaUrl(story.artworkUrl) ?? undefined,
       }, { showSeekBackward: true, showSeekForward: true });
     }

@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactElement } from 'react';
 import { FlatList, Platform, Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { mediaUrl } from '@/lib/api';
@@ -16,25 +16,31 @@ export function minutes(seconds: number) {
   return Math.max(1, Math.round((seconds || 0) / 60));
 }
 
-export function StoryCard({ story, width = 150 }: { story: Story; width?: number }) {
+// A chapter on a shelf stands for its book ("Barister Parvateesam · Ch 12 of 58") and opens the book, except in a
+// list of the book's own chapters (chapterView), where each card is that chapter.
+export function StoryCard({ story, width = 150, chapterView }: { story: Story; width?: number; chapterView?: boolean }) {
   const { t, title } = useI18n();
   const colors = useColors();
   const progress = story.progress && !story.progress.completed && story.duration
     ? story.progress.position / story.duration : null;
+  const book = chapterView ? null : story.book;
+  const name = book ? book.title : title(story);
+  const detail = book ? t('book.chShort', { n: book.chapter, total: book.chapters })
+    : story.book ? t('book.chapter', { n: story.book.chapter }) : t('common.min', { n: minutes(story.duration) });
   return (
     <Pressable
-      accessibilityRole="button" accessibilityLabel={`${title(story)}, ${t('common.min', { n: minutes(story.duration) })}`}
-      onPress={() => router.push(`/story/${story.id}`)} testID="story-card"
+      accessibilityRole="button" accessibilityLabel={`${name}, ${detail}`}
+      onPress={() => router.push(book ? `/book/${book.id}` : `/story/${story.id}`)} testID="story-card"
       style={(state) => ({ width, gap: space.sm, opacity: state.pressed ? 0.8 : 1, borderRadius: radius.md,
         // react-native-web reports keyboard focus: show where the arrow keys are
         ...(Platform.OS === 'web' ? { outlineStyle: 'solid', outlineOffset: 4, outlineColor: colors.primary,
           outlineWidth: (state as { focused?: boolean }).focused ? 3 : 0 } as object : {}) })}>
-      <Cover id={story.id} title={title(story)} artworkUrl={mediaUrl(story.artworkUrl)} size={width} />
+      <Cover id={story.id} title={name} artworkUrl={mediaUrl(story.artworkUrl)} size={width} />
       {progress !== null ? <ProgressBar value={progress} /> : null}
-      <Text variant="heading" numberOfLines={2} style={{ fontSize: 15, lineHeight: 21 }}>{title(story)}</Text>
+      <Text variant="heading" numberOfLines={2} style={{ fontSize: 15, lineHeight: 21 }}>{name}</Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <Ionicons name="time-outline" size={13} color={colors.muted} />
-        <Text variant="small" muted>{t('common.min', { n: minutes(story.duration) })}</Text>
+        <Ionicons name={book ? 'book-outline' : 'time-outline'} size={13} color={colors.muted} />
+        <Text variant="small" muted>{detail}</Text>
         {story.favorite ? <Ionicons name="heart" size={13} color={colors.accent} /> : null}
       </View>
     </Pressable>
@@ -92,10 +98,18 @@ function useArrowKeys() {
   }, []);
 }
 
-export function Shelf({ title, items, onSeeAll }: { title: string; items: Story[]; onSeeAll?: () => void }) {
+export function Shelf({ title, items, onSeeAll, chapterView }: { title: string; items: Story[]; onSeeAll?: () => void;
+  chapterView?: boolean }) {
+  return <ShelfRow title={title} items={items} onSeeAll={onSeeAll} keyOf={(item) => item.id}
+    render={(item) => <StoryCard story={item} chapterView={chapterView} />} />;
+}
+
+// A titled, sideways-scrolling row of tiles: stories, story sets, or audiobooks.
+export function ShelfRow<T>({ title, items, onSeeAll, keyOf, render }: { title: string; items: T[]; onSeeAll?: () => void;
+  keyOf: (item: T) => string; render: (item: T) => ReactElement }) {
   const { t } = useI18n();
   const colors = useColors();
-  const list = useRef<FlatList<Story>>(null);
+  const list = useRef<FlatList<T>>(null);
   const [offset, setOffset] = useState(0);
   const [visible, setVisible] = useState(0);
   const [content, setContent] = useState(0);
@@ -125,12 +139,12 @@ export function Shelf({ title, items, onSeeAll }: { title: string; items: Story[
         {onSeeAll ? <Pressable onPress={onSeeAll} hitSlop={12}><Ionicons name="chevron-forward" size={20} /></Pressable> : null}
       </View>
       <FlatList
-        ref={list} horizontal data={items} keyExtractor={(item) => item.id} showsHorizontalScrollIndicator={false}
+        ref={list} horizontal data={items} keyExtractor={keyOf} showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: space.lg, gap: space.lg }}
         onLayout={(event) => setVisible(event.nativeEvent.layout.width)}
         onContentSizeChange={(width) => setContent(width)}
         onScroll={(event) => setOffset(event.nativeEvent.contentOffset.x)} scrollEventThrottle={100}
-        renderItem={({ item }) => <StoryCard story={item} />}
+        renderItem={({ item }) => render(item)}
       />
     </View>
   );
@@ -156,12 +170,14 @@ export function narratorHref(person: NarratorCredit) {
   return { pathname: '/narrator/[id]' as const, params: { id: person.id != null ? String(person.id) : person.name } };
 }
 
-function narratorsOf(story: Story): NarratorCredit[] {
+type Credited = Pick<Story, 'narrator' | 'narrators' | 'narratorId'>;
+
+function narratorsOf(story: Credited): NarratorCredit[] {
   return story.narrators ?? (story.narratorId ? [{ name: story.narrator, id: story.narratorId }] : []);
 }
 
 // Each credited narrator's name opens their stories. Goes inside a <Text>.
-export function NarratorLinks({ story }: { story: Story }) {
+export function NarratorLinks({ story }: { story: Credited }) {
   const people = narratorsOf(story);
   if (!people.length) return <>{story.narrator}</>;
   return (
@@ -178,7 +194,7 @@ export function NarratorLinks({ story }: { story: Story }) {
 }
 
 // "Narrated by …" with linked names, placed wherever the translation puts {name}. Goes inside a <Text>.
-export function NarratedBy({ story }: { story: Story }) {
+export function NarratedBy({ story }: { story: Credited }) {
   const { t } = useI18n();
   const [before, after = ''] = t('story.narratedBy', { name: '\u0000' }).split('\u0000');
   return <>{before}<NarratorLinks story={story} />{after}</>;

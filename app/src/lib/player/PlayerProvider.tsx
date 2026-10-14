@@ -35,6 +35,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => engine.onStoryCompleted(() => {
     void queryClient.invalidateQueries({ queryKey: ['home'] });
     void queryClient.invalidateQueries({ queryKey: ['catalog'] });
+    void queryClient.invalidateQueries({ queryKey: ['book'] }); // finished and partial marks
+    void queryClient.invalidateQueries({ queryKey: ['collection'] }); // heard ticks
   }), [engine, queryClient]);
 
   const value = useMemo<PlayerState>(() => ({
