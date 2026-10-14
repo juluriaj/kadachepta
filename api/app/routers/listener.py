@@ -17,7 +17,7 @@ from ..db import get_db
 from ..models import (
     AudioAsset, Collection, ListenerFavorite, ListeningDaily, ListeningProgress, Profile, TeaserDraft, Transcript,
 )
-from ..services import pipeline, recommend
+from ..services import morals, pipeline, recommend
 from ..services.assets import artwork_url, asset_payload, iso
 from ..services.households import MOMENTS, current_profile, suitable_for
 from ..services.transcripts import read_along
@@ -57,14 +57,21 @@ def active_collections(db: Session) -> list[Collection]:
                            .order_by(Collection.position, Collection.id)))
 
 
-def teaser_for(teaser: TeaserDraft, languages: list[str]) -> dict[str, Any]:
-    """Pick the teaser in the listener's preferred language, falling back to the original."""
+def teaser_texts(teaser: TeaserDraft) -> dict[str, dict[str, Any]]:
+    """The teaser in every language it has: {"te-IN": {"short", "long"}, "en-IN": {...}}."""
     options = {teaser.language: {"short": teaser.short_text, "long": teaser.long_text}}
     options.update({lang: value for lang, value in (teaser.alternates or {}).items() if value})
+    return {lang: {"short": value.get("short"), "long": value.get("long")}
+            for lang, value in options.items() if value.get("long") or value.get("short")}
+
+
+def teaser_for(teaser: TeaserDraft, languages: list[str]) -> dict[str, Any]:
+    """Pick the teaser in the listener's preferred language, falling back to the original."""
+    options = teaser_texts(teaser)
     for language in languages:
-        if options.get(language, {}).get("long") or options.get(language, {}).get("short"):
+        if language in options:
             return {"language": language, **options[language]}
-    return {"language": teaser.language, **options[teaser.language]}
+    return {"language": teaser.language, "short": teaser.short_text, "long": teaser.long_text}
 
 
 def moments_of(asset: AudioAsset) -> list[str]:
@@ -162,6 +169,8 @@ def story(asset_id: str, profile: Profile = Depends(current_profile), db: Sessio
     alike = recommend.related(db, asset.id, set(by_id) - shown, limit=10)
     prompts = asset.imagination_prompts or {}
     return {**card, "themes": teaser.themes, "ageSuggestion": teaser.age_suggestion,
+            # Every language, so the app shows the teaser and moral in its own language as soon as it switches.
+            "teasers": teaser_texts(teaser), "morals": morals.morals(asset),
             "readAlong": _read_along_transcript(db, asset) is not None,
             "waveform": (asset.renditions or {}).get("waveform", []),
             "upNext": [story_card(a, t, profile, progress.get(a.id)) for a, t in (later or series)[:10]],

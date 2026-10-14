@@ -23,7 +23,7 @@ from ..auth import utcnow
 from ..models import (
     AudioAsset, Household, Job, ListeningProgress, NarratorFollow, Notification, Profile, Review, ReviewReport, User,
 )
-from . import pipeline, recommend, titles
+from . import morals, pipeline, recommend, titles
 from . import settings as app_settings
 
 PERSONAL = re.compile(r"(\+?\d[\d\s-]{8,}\d|[\w.+-]+@[\w-]+\.[a-z]{2,}|https?://|www\.)", re.I)
@@ -123,8 +123,8 @@ def notify_published(db: Session, asset: AudioAsset) -> int:
 
 
 def ensure_ai_extras(db: Session, asset: AudioAsset, actor: str, priority: int = jobs.PRIORITY_DEFAULT) -> list[str]:
-    """Queue what a published story still needs from the local models: its recommendation embedding (whenever
-    its description changed) and conversation starters (once). Returns the job types queued."""
+    """Queue what a published story still needs from the AI models: its recommendation embedding (whenever its
+    description changed), conversation starters (once), and its moral in Telugu. Returns the job types queued."""
     queued = []
     draft = pipeline.latest_draft(db, asset.id)
     model = app_settings.get(db, "ai.embeddings.model")
@@ -135,6 +135,8 @@ def ensure_ai_extras(db: Session, asset: AudioAsset, actor: str, priority: int =
             and not pipeline.tried_once(db, asset.id, "prompts"):
         jobs.enqueue(db, "prompts", asset_id=asset.id, created_by=actor, priority=priority)
         queued.append("prompts")
+    if morals.request(db, asset, actor, priority):
+        queued.append("translate")
     return queued
 
 

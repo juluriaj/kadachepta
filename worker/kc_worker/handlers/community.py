@@ -139,6 +139,32 @@ class PromptsHandler:
                 "promptVersion": PROMPTS_VERSION, "stats": stats}
 
 
+class TranslateHandler:
+    """The idea behind a story (its English moral) in the other app languages, with the starters' Sarvam setup."""
+    capability = "stt"  # the Sarvam key lives with the speech-to-text worker
+
+    def describe(self) -> dict[str, Any]:
+        return {"provider": "sarvam", "model": TRANSLATE_MODEL, "mode": TRANSLATE_MODE,
+                "configured": bool(os.environ.get("SARVAM_API_KEY"))}
+
+    def run(self, context: JobContext) -> dict[str, Any]:
+        text = " ".join(str(context.inputs.get("text") or "").split())
+        languages = [code for code in context.inputs.get("languages") or [] if code != "en-IN"]
+        if not text or not languages:
+            raise PermanentError("Nothing to translate: the story has no English moral yet.")
+        translate = _translator()
+        if not translate:
+            raise PermanentError("SARVAM_API_KEY is not configured on this worker (or sarvamai is missing).")
+        texts = {}
+        for code in languages:
+            texts[code] = with_backoff(context, translate, input=text, source_language_code="en-IN",
+                                       target_language_code=code, model=TRANSLATE_MODEL,
+                                       mode=TRANSLATE_MODE).translated_text.strip()
+            context.log(f"{code}: {texts[code]}")
+        # "source" lets the API drop the result if an editor changed the moral while this ran.
+        return {"texts": texts, "source": context.inputs.get("text"), "model": TRANSLATE_MODEL}
+
+
 MODERATION_SYSTEM = """You check listener reviews of children's audio stories before they are shown to other parents.
 Return verdict:
 - "block": hate or harassment, sexual content, threats, personal details (phone numbers, emails, addresses,

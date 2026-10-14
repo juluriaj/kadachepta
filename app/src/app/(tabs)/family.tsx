@@ -20,10 +20,10 @@ function today() {
 }
 
 export default function Family() {
-  const { t, language, setLanguage } = useI18n();
+  const { t, language } = useI18n();
   const colors = useColors();
   const queryClient = useQueryClient();
-  const { household, signOut, refresh, isNarrator } = useSession();
+  const { household, signOut, refresh, isNarrator, changeLanguage } = useSession();
   const hasPin = !!household?.household.hasParentPin;
   const [unlocked, setUnlocked] = useState(!hasPin || hasRecentParentPin());
   const [pinMode, setPinMode] = useState<'verify' | 'create' | null>(hasPin && !hasRecentParentPin() ? 'verify' : null);
@@ -136,10 +136,8 @@ export default function Family() {
         <Text variant="heading">{t('family.language')}</Text>
         <View style={{ flexDirection: 'row', gap: space.sm }}>
           {(['en', 'te'] as const).map((code) => (
-            <Chip key={code} label={code === 'en' ? 'English' : 'తెలుగు'} selected={language === code} onPress={() => void act(async () => {
-              setLanguage(code);
-              await api('/api/me/preferences', { method: 'PATCH', profile: false, body: { uiLanguage: code } });
-            })} />
+            <Chip key={code} label={code === 'en' ? 'English' : 'తెలుగు'} selected={language === code}
+              onPress={() => void act(() => changeLanguage(code))} />
           ))}
         </View>
 

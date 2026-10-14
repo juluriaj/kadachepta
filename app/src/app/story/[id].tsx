@@ -19,7 +19,7 @@ import type { StoryDetail } from '@/lib/types';
 
 export default function Story() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { t, title } = useI18n();
+  const { t, title, language } = useI18n();
   const colors = useColors();
   const player = usePlayer();
   const queryClient = useQueryClient();
@@ -41,6 +41,9 @@ export default function Story() {
     return <Screen><Back /><ErrorState error={story.error ?? t('story.notAvailable')} onRetry={() => void story.refetch()} /></Screen>;
   }
   const s = story.data;
+  // In the app language when there is one; otherwise the listening-language teaser and the English moral.
+  const teaser = s.teasers?.[`${language}-IN`] ?? s.teaser;
+  const moral = s.morals?.[`${language}-IN`] ?? s.metadata.moralTakeaway;
   const resume = resumePosition(s.progress, s.duration);
   const isCurrent = player.story?.id === s.id;
 
@@ -124,9 +127,9 @@ export default function Story() {
           <StoryRatings storyId={s.id} />
         </View>
 
-        {s.teaser?.long || s.teaser?.short ? (
+        {teaser?.long || teaser?.short ? (
           <View style={{ paddingHorizontal: space.lg, gap: space.sm }}>
-            <Text style={{ fontSize: 17, lineHeight: 28 }}>{s.teaser.long || s.teaser.short}</Text>
+            <Text style={{ fontSize: 17, lineHeight: 28 }}>{teaser.long || teaser.short}</Text>
           </View>
         ) : null}
 
@@ -136,10 +139,10 @@ export default function Story() {
           </View>
         ) : null}
 
-        {s.metadata.moralTakeaway ? (
+        {moral ? (
           <View style={{ marginHorizontal: space.lg, padding: space.lg, borderRadius: 16, backgroundColor: colors.surfaceAlt, gap: space.xs }}>
             <Text variant="label" muted>{t('story.moral')}</Text>
-            <Text>{s.metadata.moralTakeaway}</Text>
+            <Text>{moral}</Text>
           </View>
         ) : null}
 

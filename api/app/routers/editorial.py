@@ -19,7 +19,7 @@ from ..models import (
 from ..services.assets import (
     apply_metadata, asset_payload, clean_metadata, iso, missing_publication_metadata, rendition_keys,
 )
-from ..services import community
+from ..services import community, morals
 from ..services.notify import notify
 from ..storage import get_storage
 
@@ -168,6 +168,8 @@ def _update_metadata(payload: MetadataUpdate, identity: Identity, db: Session, *
     metadata = clean_metadata(payload.model_extra or {}, fallback_title=asset.title)
     apply_metadata(asset, metadata)
     asset.metadata_review_status = status
+    if asset.status == "published":
+        morals.request(db, asset, identity.username)  # an edited moral needs a new Telugu translation
     default_notes = "Published audio metadata updated." if asset.status == "published" else "Audio asset metadata updated."
     _event(db, "audio_asset", asset.id, f"metadata:{status}", identity.username, payload.notes or default_notes)
     db.commit()

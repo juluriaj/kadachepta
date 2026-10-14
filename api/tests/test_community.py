@@ -243,7 +243,8 @@ def test_embed_and_prompt_jobs_store_their_results(client, db):
     token = make_worker(db)
     make_user(db, "ed", "editor")
     login(client, "ed")
-    assert client.post("/api/studio/community/refresh").json()["queued"] == {"embed": 1, "prompts": 1}
+    assert client.post("/api/studio/community/refresh").json()["queued"] == {"embed": 1, "prompts": 1,
+                                                                         "translate": 1}
     from app.services import recommend
     expected = recommend.source_hash("text-embedding-nomic-embed-text-v1.5",
                                      recommend.embedding_text(db.get(AudioAsset, STORY), None))

@@ -47,6 +47,7 @@ HANDLERS: dict[str, Handler] = {
     "teaser": teaser.TeaserHandler(),
     "titles": titles.TitlesHandler(),
     "prompts": community.PromptsHandler(),
+    "translate": community.TranslateHandler(),
     "review.moderate": community.ReviewModerationHandler(),
     "embed": community.EmbedHandler(),
     "artwork": artwork.ArtworkHandler(),

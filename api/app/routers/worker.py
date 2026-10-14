@@ -25,7 +25,7 @@ from ..config import get_settings
 from ..db import get_db
 from ..models import AudioAsset, EditorialEvent, Job, Review, StoryEmbedding, TeaserDraft, Transcript, Worker
 from ..security import token_hash
-from ..services import community, pipeline, policy, recommend, titles
+from ..services import community, morals, pipeline, policy, recommend, titles
 from ..services import settings as app_settings
 from ..services.assets import as_list, normalize_language
 from ..storage import get_storage, media_url
@@ -111,6 +111,8 @@ def _inputs(db: Session, job: Job, request: Request) -> dict[str, Any]:
                     themes=", ".join(draft.themes or []) if draft else None,
                     # The worker finds the story's animals and people in it, and checks the questions against it.
                     transcript=(transcript.text or "") if transcript else "")
+    if job.job_type == "translate":
+        base.update(text=job.payload.get("text") or "", languages=job.payload.get("languages") or [])
     if job.job_type == "review.moderate":
         review = db.get(Review, job.payload.get("reviewId"))
         base.update(reviewId=review.id if review else None, reviewText=review.text if review else "",
@@ -366,6 +368,15 @@ def apply_prompts(db: Session, job: Job, asset: AudioAsset, result: dict[str, An
         asset.imagination_prompts = {"texts": texts, "status": "approved" if publish else "draft", "by": f"ai:{by}"}
 
 
+def apply_translate(db: Session, job: Job, asset: AudioAsset, result: dict[str, Any]) -> None:
+    if job.payload.get("test") or result.get("source") != asset.moral_takeaway:
+        return  # the moral was edited while the job ran: the new text has its own job
+    missing = morals.missing(asset)  # never replace an editor's translation of this text
+    for language, text in (result.get("texts") or {}).items():
+        if language in missing and str(text).strip():
+            morals.record(asset, language, str(text), f"ai:{result.get('model', 'unknown')}")
+
+
 def apply_review_moderation(db: Session, job: Job, asset: AudioAsset, result: dict[str, Any]) -> None:
     review = db.get(Review, job.payload.get("reviewId"))
     if review is None or review.status != "pending":
@@ -375,7 +386,7 @@ def apply_review_moderation(db: Session, job: Job, asset: AudioAsset, result: di
 
 APPLIERS = {"media.process": apply_media, "transcription": apply_transcription,
             "teaser": apply_teaser, "artwork": apply_artwork, "titles": apply_titles, "embed": apply_embed,
-            "prompts": apply_prompts, "review.moderate": apply_review_moderation}
+            "prompts": apply_prompts, "translate": apply_translate, "review.moderate": apply_review_moderation}
 
 
 @router.post("/jobs/{job_id}/complete")

@@ -44,6 +44,10 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
   const [genres, setGenres] = useState<string[]>(meta.genres.length ? meta.genres : draft?.suggestions.genres ?? []);
   const [age, setAge] = useState(meta.audienceAgeRange ?? draft?.ageSuggestion ?? '');
   const [moral, setMoral] = useState(meta.moralTakeaway ?? '');
+  // The moral in Telugu (a Sarvam translation of the English). Sent only when the editor changes it, so an old
+  // translation left in the box goes stale when the English is rewritten, and is translated again.
+  const moralTeSaved = review.moralTranslations?.['te-IN'];
+  const [moralTe, setMoralTe] = useState(moralTeSaved?.text ?? '');
   // Every listening moment starts ticked; the editor unticks what doesn't fit. A saved choice is kept.
   const [moments, setMoments] = useState<string[]>(meta.listeningContexts.length ? meta.listeningContexts : [...MOMENTS]);
   const [keywords, setKeywords] = useState(listText(meta.keywords.length ? meta.keywords : draft?.suggestions.keywords));
@@ -85,6 +89,7 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
     teaser: teasers, transcript: { text: transcriptText, reviewed: transcriptChecked }, rights,
     checklist: [...checklist], captionsEnabled: captions,
     titles: Object.fromEntries(Object.entries({ 'te-IN': titleTe, 'en-IN': titleEn }).filter(([, text]) => text.trim())),
+    morals: moralTe !== (moralTeSaved?.text ?? '') ? { 'te-IN': moralTe } : {},
     prompts: Object.values(promptTexts).some((text) => text.trim())
       ? Object.fromEntries(Object.entries(promptTexts).map(([lang, text]) => [lang, text.split(NEWLINE)])) : undefined,
   });
@@ -284,7 +289,16 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
         <Chips options={AGE_RANGES} values={age ? [age] : []} single onChange={(values) => setAge(values[0] ?? '')} />
         <Label>Listening moments</Label>
         <Chips options={MOMENTS} values={moments} onChange={setMoments} />
-        <Field label="The idea behind it (moral)" value={moral} onChangeText={setMoral} />
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md }}>
+          <View style={{ flex: 1, minWidth: 220 }}>
+            <Field label="The idea behind it (moral, English)" value={moral} onChangeText={setMoral} />
+          </View>
+          <View style={{ flex: 1, minWidth: 220 }}>
+            <Field label={`In Telugu${moralTeSaved ? moralTeSaved.by.startsWith('editor:') ? ' (edited)' : ' (machine translation: check it)'
+              : ' (translated automatically from the English)'}`} value={moralTe} onChangeText={setMoralTe}
+              style={{ fontFamily: fontFor(moralTe) }} />
+          </View>
+        </View>
         <Field label="Content warnings (comma separated)" value={warnings} onChangeText={setWarnings} />
         <Field label="Search keywords (comma separated)" value={keywords} onChangeText={setKeywords} />
         <Field label="Source or adaptation" value={source} onChangeText={setSource} />

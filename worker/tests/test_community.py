@@ -7,7 +7,9 @@ import pytest  # noqa: E402
 
 from kc_worker import llm  # noqa: E402
 from kc_worker.handlers import JobContext, PermanentError  # noqa: E402
-from kc_worker.handlers.community import EmbedHandler, PromptsHandler, ReviewModerationHandler  # noqa: E402
+from kc_worker.handlers.community import (  # noqa: E402
+    EmbedHandler, PromptsHandler, ReviewModerationHandler, TranslateHandler,
+)
 
 
 def context(**inputs):
@@ -98,3 +100,29 @@ def test_prompts_reject_romanized_animal_names_and_long_questions():
     problems, _ = _problems(["One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen?"],
                             "")
     assert problems[0] == "1 questions instead of 3" and problems[1].startswith("too long (15 words)")
+
+
+def test_translate_sends_the_moral_to_sarvam_and_echoes_the_source(monkeypatch):
+    from kc_worker.handlers import community
+
+    sent = []
+
+    class Translation:
+        def __init__(self, text):
+            self.translated_text = f" te: {text} "
+
+    def fake_translate(**kwargs):
+        sent.append(kwargs)
+        return Translation(kwargs["input"])
+
+    monkeypatch.setattr(community, "_translator", lambda: fake_translate)
+    result = TranslateHandler().run(context(text="Be  kind to\neveryone.", languages=["te-IN", "en-IN"]))
+    assert result == {"texts": {"te-IN": "te: Be kind to everyone."}, "source": "Be  kind to\neveryone.",
+                      "model": community.TRANSLATE_MODEL}
+    assert [(k["target_language_code"], k["model"], k["mode"]) for k in sent] == [
+        ("te-IN", community.TRANSLATE_MODEL, community.TRANSLATE_MODE)]
+    with pytest.raises(PermanentError):
+        TranslateHandler().run(context(text=" ", languages=["te-IN"]))
+    monkeypatch.setattr(community, "_translator", lambda: None)
+    with pytest.raises(PermanentError):
+        TranslateHandler().run(context(text="Be kind.", languages=["te-IN"]))

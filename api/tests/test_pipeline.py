@@ -67,6 +67,9 @@ def narrate_to_review(client, db, token, **submission):
     run_job(client, token, "prompts", {"texts": {"en-IN": ["What would you have done?"], "te-IN": ["నువ్వైతే ఏం చేసేవాడివి?"]},
                                        "model": "qwen/qwen3-8b"})
     run_job(client, token, "artwork", {"key": "<cover.jpg>", "provider": "local-sdxl"}, {"cover.jpg": b"\xff\xd8\xff"})
+    translate = run_job(client, token, "translate", {"texts": {"te-IN": "చేసే ముందు ఆలోచించండి."},
+                                                     "source": "Think before you act.", "model": "mayura:v1"})
+    assert translate["inputs"]["text"] == "Think before you act." and translate["inputs"]["languages"] == ["te-IN"]
     return asset_id
 
 
@@ -113,6 +116,7 @@ def test_submission_flows_through_the_pipeline_to_one_click_publish(client, db):
     login(client, "ed")
     review = client.get(f"/api/studio/review/{asset_id}").json()
     assert review["transcript"]["reviewRequired"] is False and review["rights"]["attestation"]["sourceType"] == "public-domain"
+    assert review["moralTranslations"] == {"te-IN": {"text": "చేసే ముందు ఆలోచించండి.", "by": "ai:mayura:v1"}}
     blocked = client.post(f"/api/studio/review/{asset_id}/publish", json={"rights": "attestation"})
     assert blocked.status_code == 409 and any("checklist" in p for p in blocked.json()["problems"])
     db.expire_all()
