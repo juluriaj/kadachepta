@@ -66,9 +66,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // Startup waits on this one, so it gives up quickly: an unreachable server leads to the sign-in screen,
+  // where review builds can change the server address, instead of an endless spinner.
   const sessionQuery = useQuery({
     queryKey: ['session'], enabled: loaded, staleTime: 60_000,
-    queryFn: () => api<Session>('/api/session', { profile: false }),
+    queryFn: () => api<Session>('/api/session', { profile: false, timeoutMs: 8_000 }),
   });
   const session = useMemo<Session>(() => sessionQuery.data ?? { authenticated: false }, [sessionQuery.data]);
   useEffect(() => {
