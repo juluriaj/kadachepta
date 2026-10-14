@@ -6,6 +6,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 
 import { FollowSeries, StoryRatings, StoryReviews, TalkAboutIt } from '@/components/community';
 import { AddToPlaylist } from '@/components/playlists';
+import { setTitle } from '@/components/sets';
 import { DownloadButton, minutes, NarratedBy, Shelf } from '@/components/stories';
 import { Button, Chip, Cover, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
 import { api, mediaUrl } from '@/lib/api';
@@ -58,6 +59,13 @@ export default function Story() {
             <NarratedBy story={s} /> · {t('common.min', { n: minutes(s.duration) })}
             {s.metadata.audienceAgeRange ? ` · ${s.metadata.audienceAgeRange}` : ''}
           </Text>
+          {s.book ? (
+            <PartOf icon="book-outline" label={`${t('book.chapterOf', { n: s.book.chapter, total: s.book.chapters })} · ${s.book.title}`}
+              onPress={() => router.push(`/book/${s.book!.id}`)} />
+          ) : s.storySet ? (
+            <PartOf icon="albums-outline" label={t('collection.from', { title: setTitle(s.storySet, language) })}
+              onPress={() => router.push(`/collection/${s.storySet!.id}`)} />
+          ) : null}
         </View>
 
         <View style={{ paddingHorizontal: space.lg, gap: space.md }}>
@@ -69,7 +77,8 @@ export default function Story() {
             onPress={() => {
               if (isCurrent) player.toggle();
               else {
-                void player.play(s, { queue: s.upNext, autoContinue: false });
+                // A book's chapters and a story set's stories play on into the next one; other stories stop.
+                void player.play(s, { queue: s.upNext, autoContinue: !!(s.book || s.storySet) });
                 router.push('/player');
               }
             }}
@@ -120,7 +129,10 @@ export default function Story() {
 
         {s.prompts ? <View style={{ paddingHorizontal: space.lg }}><TalkAboutIt prompts={s.prompts} /></View> : null}
 
-        {s.upNext.length ? <Shelf title={t('story.upNext')} items={s.upNext} /> : null}
+        {s.upNext.length ? (
+          <Shelf title={s.storySet ? t('collection.more', { title: setTitle(s.storySet, language) }) : t('story.upNext')}
+            items={s.upNext} chapterView={!!s.book} />
+        ) : null}
         <View style={{ paddingHorizontal: space.lg }}><FollowSeries storyId={s.id} /></View>
         {s.moreLikeThis.length ? <Shelf title={t('story.moreLikeThis')} items={s.moreLikeThis} /> : null}
         {s.moreFromNarrator.length ? <Shelf title={t('story.moreFromNarrator')} items={s.moreFromNarrator} /> : null}
@@ -128,6 +140,20 @@ export default function Story() {
         <View style={{ paddingHorizontal: space.lg }}><StoryReviews storyId={s.id} /></View>
       </ScrollView>
     </Screen>
+  );
+}
+
+// "From Tenali Ramakrishna" or "Chapter 3 of 12 · Barister Parvateesam": opens the set or the book.
+function PartOf({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }) {
+  const colors = useColors();
+  return (
+    <Pressable onPress={onPress} accessibilityRole="link" hitSlop={8}
+      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: space.xs, paddingHorizontal: space.md,
+        paddingVertical: space.sm, borderRadius: 999, backgroundColor: colors.surfaceAlt, opacity: pressed ? 0.8 : 1 })}>
+      <Ionicons name={icon} size={16} color={colors.primary} />
+      <Text variant="small" color={colors.primary} style={{ flexShrink: 1 }}>{label}</Text>
+      <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+    </Pressable>
   );
 }
 

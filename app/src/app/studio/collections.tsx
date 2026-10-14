@@ -30,6 +30,8 @@ export default function Collections() {
       <Text muted>
         Published collections appear on Home as shelves, in this order, between the listener’s own shelves and the listening
         moments. A festival collection shows only between its dates. Children see only the stories suitable for their age.
+        A story set (one character or series, like Tenali Ramakrishna) is listed for listeners under Story sets instead of
+        as a shelf, and newly published stories join the set their collection name matches.
       </Text>
       {editing ? (
         <Editor draft={editing} stories={stories} onDone={() => { setEditing(null); void query.refetch(); }}
@@ -89,7 +91,7 @@ function Editor({ draft, stories, onDone, onCancel }: { draft: Draft; stories: {
   return (
     <Card style={{ borderColor: colors.primary }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-        {(['festival', 'theme', 'age'] as const).map((kind) => (
+        {(['festival', 'theme', 'age', 'set'] as const).map((kind) => (
           <Chip key={kind} label={kind} selected={value.kind === kind} onPress={() => set({ kind })} />
         ))}
         <Chip label={value.published ? 'Published' : 'Draft'} selected={value.published} onPress={() => set({ published: !value.published })} />

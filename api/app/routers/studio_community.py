@@ -101,7 +101,7 @@ def decide_flag(flag_id: int, payload: FlagDecision, identity: Identity = Depend
 # --- Collections and editorial shelves (P3-08) ---
 
 class CollectionIn(BaseModel):
-    kind: Literal["festival", "theme", "age"] = "theme"
+    kind: Literal["festival", "theme", "age", "set"] = "theme"  # set: a story set listeners always see
     titles: dict[str, str] = Field(default_factory=dict)
     descriptions: dict[str, str] = Field(default_factory=dict)
     startsOn: date | None = None

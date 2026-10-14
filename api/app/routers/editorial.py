@@ -19,7 +19,7 @@ from ..models import (
 from ..services.assets import (
     apply_metadata, asset_payload, clean_metadata, iso, missing_publication_metadata, rendition_keys,
 )
-from ..services import community, morals
+from ..services import community, morals, story_sets
 from ..services.notify import notify
 from ..storage import get_storage
 
@@ -455,6 +455,7 @@ def mark_published(db: Session, asset: AudioAsset, actor: str, notes: str | None
            "Families can listen to it now. Thank you for narrating!", asset.id)
     community.notify_published(db, asset)  # opt-in listener notifications (followers, series listeners)
     community.ensure_ai_extras(db, asset, actor)  # recommendations and conversation starters
+    story_sets.join_set(db, asset)  # Tenali Ramakrishna stories join the Tenali Ramakrishna set
 
 
 @router.post("/narrator/review")

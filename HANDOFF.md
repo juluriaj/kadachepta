@@ -91,6 +91,11 @@ Operator CLI: `docker compose exec api python -m app.cli create-user|set-passwor
   status events so background listening is counted). Pure rules are in `logic.ts` with node tests.
 - Listening reports include screen-off seconds (app backgrounded or tab hidden), which power the
   "screen off" share parents see.
+- Story sets and audiobooks (`services/story_sets.py`): a story set is a `collections` row of kind `set`
+  (standalone stories of one character or series, browsed and shuffled; listed when published with 2+ stories).
+  A published story joins the set whose `source_names` match its free-text `collection`. An audiobook is a
+  `series`: its chapters never appear as stories on Home or in search, the book appears once and resumes where
+  the profile left off. Screens: `/collection/[id]`, `/book/[id]`.
 
 ## Engineering rules learned the hard way
 

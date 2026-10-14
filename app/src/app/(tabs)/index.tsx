@@ -5,7 +5,8 @@ import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 
 import { LanguageSwitch } from '@/components/LanguageSwitch';
-import { Shelf } from '@/components/stories';
+import { BookTile, SetTile } from '@/components/sets';
+import { Shelf, ShelfRow } from '@/components/stories';
 import { Avatar, Chip, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useI18n, type TranslationKey } from '@/lib/i18n';
@@ -38,10 +39,12 @@ export default function Home() {
 
   const shelves = useMemo(() => {
     const max = DURATIONS.find((d) => d.id === duration)?.max ?? Infinity;
+    // Story-set and audiobook tiles stand for many stories, so a moment or length filter hides them.
+    const filtering = !!moment || duration !== 'any';
     return (home.data?.shelves ?? [])
       .filter((shelf) => !moment || shelf.id === moment || shelf.id === 'continue')
       .map((shelf) => ({ ...shelf, items: shelf.items.filter((story) => (story.duration || 0) <= max) }))
-      .filter((shelf) => shelf.items.length);
+      .filter((shelf) => shelf.items.length || (!filtering && (shelf.sets?.length || shelf.books?.length)));
   }, [home.data, duration, moment]);
 
   const updates = useQuery({ queryKey: ['updates', profile?.id], enabled: profile?.kind === 'adult',
@@ -108,7 +111,13 @@ export default function Home() {
             <Text muted style={{ textAlign: 'center' }}>{t('home.emptyHint')}</Text>
           </View>
         ) : null}
-        {shelves.map((shelf) => (
+        {shelves.map((shelf) => shelf.sets?.length ? (
+          <ShelfRow key={shelf.id} title={shelfTitle(shelf)} items={shelf.sets} keyOf={(set) => `set-${set.id}`}
+            render={(set) => <SetTile set={set} />} />
+        ) : shelf.books?.length ? (
+          <ShelfRow key={shelf.id} title={shelfTitle(shelf)} items={shelf.books} keyOf={(book) => `book-${book.id}`}
+            render={(book) => <BookTile book={book} />} />
+        ) : (
           <Shelf key={shelf.id} title={shelfTitle(shelf)} items={shelf.items} />
         ))}
       </ScrollView>

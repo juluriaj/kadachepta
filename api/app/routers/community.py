@@ -18,7 +18,7 @@ from ..db import get_db
 from ..models import (
     AudioAsset, NarratorFollow, NarratorProfile, Notification, Profile, Review, StoryRating, User,
 )
-from ..services import community, follows, ratings, search
+from ..services import community, follows, ratings, search, story_sets
 from ..services.assets import iso, narrator_people, person_key
 from ..services.households import current_profile
 from .listener import _favorite_set, _progress_map, published_stories, story_card
@@ -279,16 +279,38 @@ def follow(user_id: int, payload: FollowIn, profile: Profile = Depends(current_p
 
 # --- Search (P3-05) ---
 
+def _best(found: list[tuple[float, dict[str, Any]]], limit: int = 10) -> list[dict[str, Any]]:
+    return [{**item, "match": round(value, 2)} for value, item in sorted(found, key=lambda pair: -pair[0])][:limit]
+
+
 @router.get("/api/search")
 def find(q: str = "", language: str | None = None, profile: Profile = Depends(current_profile),
          db: Session = Depends(get_db)):
+    """Results in groups: story sets, audiobooks, and stories (narrators are matched in the app). A chapter is found
+    through its book, never listed as a story of its own."""
     stories = [(a, t) for a, t in published_stories(db, profile) if not language or a.language == language]
     if not q.strip():
-        return {"query": q, "items": []}
+        return {"query": q, "items": [], "collections": [], "books": []}
     progress, favorites = _progress_map(db, profile), _favorite_set(db, profile)
-    results = search.search(q, stories)
-    return {"query": q, "items": [{**story_card(a, t, profile, progress.get(a.id), a.id in favorites),
-                                   "match": round(value, 2)} for a, t, value in results]}
+    results = search.search(q, [(a, t) for a, t in stories if not a.series_id])
+    sets = []
+    for collection, members in story_sets.listed_sets(db, stories):
+        value = search.score(q, {"title": search.loose(" ".join([*collection.titles.values(), *collection.source_names])).split()})
+        if value >= search.THRESHOLD:
+            sets.append((value, story_sets.set_summary(collection, members, progress)))
+    books = []
+    for book in story_sets.books_of(db, stories).values():
+        summary = story_sets.book_summary(book, progress)
+        own = search.score(q, {"title": search.loose(book.series.title).split(),
+                               "narrator": search.loose(summary["narrator"]).split(),
+                               "text": search.loose(book.series.description or "").split()})
+        chapters = search.search(q, book.chapters, limit=1)
+        value = max(own, chapters[0][2] * 0.9 if chapters else 0)
+        if value >= search.THRESHOLD:
+            books.append((value, summary))
+    return {"query": q, "collections": _best(sets), "books": _best(books),
+            "items": [{**story_card(a, t, profile, progress.get(a.id), a.id in favorites),
+                       "match": round(value, 2)} for a, t, value in results]}
 
 
 # --- Updates for listeners (P3-09): opt-in, never for children, never about streaks ---

@@ -15,8 +15,8 @@ export type QueueItem = {
   mastering: { choice: Mastering['choice']; profile: string | null; level: Mastering['level']; processing: boolean };
 };
 
-// An editorial shelf on Home (P3-08).
-export type StudioCollection = { id: number; kind: 'festival' | 'theme' | 'age'; titles: Record<string, string>;
+// An editorial shelf on Home (P3-08), or a story set (one character or series, always listed for listeners).
+export type StudioCollection = { id: number; kind: 'festival' | 'theme' | 'age' | 'set'; titles: Record<string, string>;
   descriptions: Record<string, string>; startsOn: string | null; endsOn: string | null; position: number; published: boolean;
   stories: { id: string; title: string; status: string }[] };
 
