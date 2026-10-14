@@ -1,15 +1,16 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { FlatList, Platform, Pressable, View } from 'react-native';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { FlatList, Platform, Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { mediaUrl } from '@/lib/api';
+import { downloadStory, downloadsSupported, localUri } from '@/lib/downloads';
 import { useI18n } from '@/lib/i18n';
 import { usePlayer } from '@/lib/player/PlayerProvider';
 import { radius, space, touch } from '@/lib/theme';
-import type { Story } from '@/lib/types';
+import type { NarratorCredit, NarratorSummary, Story } from '@/lib/types';
 
-import { Cover, ProgressBar, Text, useColors } from './ui';
+import { Button, Cover, ProgressBar, Text, useColors } from './ui';
 
 export function minutes(seconds: number) {
   return Math.max(1, Math.round((seconds || 0) / 60));
@@ -147,6 +148,95 @@ export function StoryRow({ story, right }: { story: Story; right?: React.ReactNo
       </View>
       {right}
     </Pressable>
+  );
+}
+
+// A narrator's page: by account when they have one, otherwise by the name the catalog credits them with.
+export function narratorHref(person: NarratorCredit) {
+  return { pathname: '/narrator/[id]' as const, params: { id: person.id != null ? String(person.id) : person.name } };
+}
+
+function narratorsOf(story: Story): NarratorCredit[] {
+  return story.narrators ?? (story.narratorId ? [{ name: story.narrator, id: story.narratorId }] : []);
+}
+
+// Each credited narrator's name opens their stories. Goes inside a <Text>.
+export function NarratorLinks({ story }: { story: Story }) {
+  const people = narratorsOf(story);
+  if (!people.length) return <>{story.narrator}</>;
+  return (
+    <>
+      {people.map((person, index) => (
+        <Fragment key={person.id ?? person.name}>
+          {index ? ', ' : ''}
+          <Text muted onPress={() => router.push(narratorHref(person))} accessibilityRole="link"
+            style={{ textDecorationLine: 'underline' }}>{person.name}</Text>
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
+// "Narrated by …" with linked names, placed wherever the translation puts {name}. Goes inside a <Text>.
+export function NarratedBy({ story }: { story: Story }) {
+  const { t } = useI18n();
+  const [before, after = ''] = t('story.narratedBy', { name: '\u0000' }).split('\u0000');
+  return <>{before}<NarratorLinks story={story} />{after}</>;
+}
+
+export function NarratorRow({ person }: { person: NarratorSummary }) {
+  const { t } = useI18n();
+  const colors = useColors();
+  return (
+    <Pressable onPress={() => router.push(narratorHref(person))} accessibilityRole="link"
+      style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 56, opacity: pressed ? 0.8 : 1 })}>
+      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceAlt, alignItems: 'center',
+        justifyContent: 'center' }}>
+        <Ionicons name="mic" size={20} color={colors.primary} />
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text variant="heading" numberOfLines={1} style={{ fontSize: 15 }}>{person.name}</Text>
+        <Text variant="small" muted>{t('narrator.storyCount', { n: person.stories })}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+    </Pressable>
+  );
+}
+
+// Save a story for listening offline, from its page or while it plays. The web app streams only, so it shows nothing.
+export function DownloadButton({ story, onError, style }: { story: Story; onError: (message: string | null) => void;
+  style?: StyleProp<ViewStyle> }) {
+  const { t } = useI18n();
+  const colors = useColors();
+  const player = usePlayer();
+  const [saved, setSaved] = useState<{ storyId: string; downloaded: boolean } | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  useEffect(() => {
+    let current = true;
+    void localUri(story.id).then((uri) => { if (current) setSaved({ storyId: story.id, downloaded: !!uri }); });
+    return () => { current = false; };
+  }, [story.id]);
+  if (!downloadsSupported) return null;
+  const downloaded = saved?.storyId === story.id && saved.downloaded;
+
+  const download = async () => {
+    setDownloading(true);
+    onError(null);
+    try {
+      await downloadStory(story, player.dataSaver);
+      setSaved({ storyId: story.id, downloaded: true });
+    } catch (failure) {
+      onError(failure instanceof Error ? failure.message : String(failure));
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <Button title={downloaded ? t('story.downloaded') : downloading ? t('story.downloading') : t('story.download')}
+      kind="secondary" style={style} loading={downloading} disabled={downloaded}
+      icon={<Ionicons name={downloaded ? 'checkmark-circle' : 'download-outline'} size={18} color={colors.text} />}
+      onPress={() => void download()} />
   );
 }
 

@@ -149,8 +149,10 @@ def static_file(path: str):
             # Hashed bundles never change; everything else revalidates.
             cache = "public, max-age=31536000, immutable" if "/_expo/static/" in f"/{path}" else "no-cache"
             return FileResponse(candidate, media_type=STATIC_TYPES[candidate.suffix], headers={"Cache-Control": cache})
-    if "." not in path.rsplit("/", 1)[-1] and not path.startswith(("editor", "narrator")):
-        return _app_index()  # a client-side route of the listener app
+    # A client-side route of the listener app. /narrator itself is the old prototype page, but /narrator/<id or name>
+    # is a narrator's page in the app (names can contain dots).
+    if path.startswith("narrator/") or ("." not in path.rsplit("/", 1)[-1] and not path.startswith(("editor", "narrator"))):
+        return _app_index()
     return JSONResponse(status_code=404, content={"error": "Not found.", "detail": "Not found."})
 
 

@@ -23,7 +23,9 @@ from ..models import (
 )
 from ..services import morals, pipeline, policy, ratings, titles
 from ..services import settings as app_settings
-from ..services.assets import apply_metadata, asset_payload, clean_metadata, iso, mastering_payload, metadata_of
+from ..services.assets import (
+    apply_metadata, asset_payload, clean_metadata, iso, mastering_payload, metadata_of, narrator_people, person_key,
+)
 from ..services.notify import notify
 from ..storage import media_url
 from .editorial import (
@@ -684,7 +686,27 @@ def narrators(identity: Identity = Depends(require("content.publish")), db: Sess
                        "rejected": counts.get(user.id, {}).get("rejected", 0),
                        "inReview": sum(v for k, v in counts.get(user.id, {}).items() if k not in ("published", "rejected")),
                        "suggestTrust": profile.trust_level == "new" and counts.get(user.id, {}).get("published", 0) >= needed}
-                      for user, profile in rows]}
+                      for user, profile in rows],
+            "catalog": _catalog_narrators(db)}
+
+
+def _catalog_narrators(db: Session) -> list[dict[str, Any]]:
+    """Narrators the catalog credits by name, without an account: who they are, what they narrated, how it's rated."""
+    people: dict[str, dict[str, Any]] = {}
+    assets = db.scalars(select(AudioAsset).where(AudioAsset.narrator_user_id.is_(None), AudioAsset.narrator_name.is_not(None))
+                        .order_by(AudioAsset.status != "published", AudioAsset.title))
+    for asset in assets:
+        for person in narrator_people(asset):
+            entry = people.setdefault(person_key(person), {"name": person["name"], "languages": [], "stories": []})
+            if asset.language not in entry["languages"]:
+                entry["languages"].append(asset.language)
+            entry["stories"].append({"id": asset.id, "title": asset.title, "status": asset.status})
+    for entry in people.values():
+        published = [story["id"] for story in entry["stories"] if story["status"] == "published"]
+        rejected = sum(story["status"] == "rejected" for story in entry["stories"])
+        entry.update(published=len(published), rejected=rejected, notPublished=len(entry["stories"]) - len(published) - rejected,
+                     narration=ratings.narration_score(db, published) if published else None)
+    return sorted(people.values(), key=lambda p: (-p["published"], -len(p["stories"]), p["name"].casefold()))
 
 
 class TrustChange(BaseModel):

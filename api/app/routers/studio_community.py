@@ -174,6 +174,65 @@ def update_collection(collection_id: int, payload: CollectionIn, identity: Ident
     return {"id": collection.id}
 
 
+def _collection(db: Session, collection_id: int) -> Collection:
+    collection = db.get(Collection, collection_id)
+    if not collection:
+        raise HTTPException(status_code=404, detail="Collection not found.")
+    return collection
+
+
+def _label(collection: Collection) -> str:
+    return collection.titles.get("en-IN") or collection.titles.get("te-IN") or f"#{collection.id}"
+
+
+class StoriesIn(BaseModel):
+    assetIds: list[str] = Field(min_length=1, max_length=500)
+
+
+@router.post("/collections/{collection_id}/stories")
+def add_stories(collection_id: int, payload: StoriesIn, identity: Identity = Depends(EDITOR), db: Session = Depends(get_db)):
+    """Add stories to the end of a collection from wherever the editor is (the queue, a story's page); repeats are skipped."""
+    collection = _collection(db, collection_id)
+    present = {item.audio_asset_id for item in collection.items}
+    wanted = list(dict.fromkeys(payload.assetIds))
+    known = set(db.scalars(select(AudioAsset.id).where(AudioAsset.id.in_(wanted))))
+    added = [asset_id for asset_id in wanted if asset_id in known and asset_id not in present]
+    start = max((item.position for item in collection.items), default=-1) + 1
+    collection.items.extend(CollectionItem(audio_asset_id=asset_id, position=start + index) for index, asset_id in enumerate(added))
+    for asset_id in added:  # in the story's own history too
+        _event(db, asset_id, "collection:added", identity.username, _label(collection))
+    if added:
+        _event(db, f"collection:{collection.id}", "collection:updated", identity.username, f"added {len(added)}")
+    db.commit()
+    return {"id": collection.id, "added": len(added), "already": sum(asset_id in present for asset_id in wanted)}
+
+
+def _remove(db: Session, collection: Collection, asset_ids: list[str], actor: str) -> int:
+    wanted = set(asset_ids)
+    gone = [item for item in collection.items if item.audio_asset_id in wanted]
+    for item in gone:
+        collection.items.remove(item)
+        _event(db, item.audio_asset_id, "collection:removed", actor, _label(collection))
+    if gone:
+        _event(db, f"collection:{collection.id}", "collection:updated", actor, f"removed {len(gone)}")
+    db.commit()
+    return len(gone)
+
+
+@router.post("/collections/{collection_id}/stories/remove")
+def remove_stories(collection_id: int, payload: StoriesIn, identity: Identity = Depends(EDITOR),
+                   db: Session = Depends(get_db)):
+    """Take the selected stories out of a collection (the Published list's toggle); the rest keep their order."""
+    collection = _collection(db, collection_id)
+    return {"id": collection.id, "removed": _remove(db, collection, payload.assetIds, identity.username)}
+
+
+@router.delete("/collections/{collection_id}/stories/{asset_id}")
+def remove_story(collection_id: int, asset_id: str, identity: Identity = Depends(EDITOR), db: Session = Depends(get_db)):
+    _remove(db, _collection(db, collection_id), [asset_id], identity.username)
+    return {"ok": True}
+
+
 @router.delete("/collections/{collection_id}")
 def delete_collection(collection_id: int, identity: Identity = Depends(EDITOR), db: Session = Depends(get_db)):
     collection = db.get(Collection, collection_id)

@@ -5,6 +5,7 @@ Child profiles only ever see and send an emoji reaction: no reviews, no follows,
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,7 +19,7 @@ from ..models import (
     AudioAsset, NarratorFollow, NarratorProfile, Notification, Profile, Review, StoryRating, User,
 )
 from ..services import community, ratings, search
-from ..services.assets import iso
+from ..services.assets import iso, narrator_people, person_key
 from ..services.households import current_profile
 from .listener import _favorite_set, _progress_map, published_stories, story_card
 
@@ -150,6 +151,41 @@ def report(review_id: int, payload: ReportIn, profile: Profile = Depends(current
 
 
 # --- Narrator pages and follows (P3-04) ---
+
+@router.get("/api/narrators")
+def narrators(profile: Profile = Depends(current_profile), db: Session = Depends(get_db)):
+    """Everyone who narrated a story this profile can hear, most stories first: a way to find a voice you like."""
+    people: dict[str, dict[str, Any]] = {}
+    for asset, _ in published_stories(db, profile):
+        for person in narrator_people(asset):
+            entry = people.setdefault(person_key(person), {**person, "stories": 0, "languages": []})
+            entry["stories"] += 1
+            if asset.language not in entry["languages"]:
+                entry["languages"].append(asset.language)
+    return {"items": sorted(people.values(), key=lambda p: (-p["stories"], p["name"].casefold()))}
+
+
+@router.get("/api/narrators/named/{name}")
+def named_narrator_page(name: str, profile: Profile = Depends(current_profile), db: Session = Depends(get_db)):
+    """A narrator the catalog credits by name only (no account yet): every story crediting them, nothing to follow."""
+    key = person_key({"id": None, "name": name})
+    stories, shown = [], None
+    for asset, teaser in published_stories(db, profile):
+        match = next((p for p in narrator_people(asset) if person_key(p) == key), None)
+        if match:
+            stories.append((asset, teaser))
+            shown = shown or match["name"]
+    if not stories:
+        raise HTTPException(status_code=404, detail="Narrator not found.")
+    progress, favorites = _progress_map(db, profile), _favorite_set(db, profile)
+    languages = [lang for lang, _ in Counter(a.language for a, _ in stories).most_common()]
+    return {
+        "id": None, "name": shown, "biography": None, "languages": languages, "since": None,
+        "stories": [story_card(a, t, profile, progress.get(a.id), a.id in favorites) for a, t in stories],
+        "narration": ratings.narration_score(db, [a.id for a, _ in stories]) if profile.kind == "adult" else None,
+        "followers": 0, "following": False, "canFollow": False,
+    }
+
 
 @router.get("/api/narrators/{user_id}")
 def narrator_page(user_id: int, profile: Profile = Depends(current_profile), db: Session = Depends(get_db)):

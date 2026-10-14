@@ -1,15 +1,14 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { StoryRatings, StoryReviews, TalkAboutIt } from '@/components/community';
 import { AddToPlaylist } from '@/components/playlists';
-import { minutes, Shelf } from '@/components/stories';
+import { DownloadButton, minutes, NarratedBy, Shelf } from '@/components/stories';
 import { Button, Chip, Cover, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
 import { api, mediaUrl } from '@/lib/api';
-import { downloadStory, downloadsSupported, localUri } from '@/lib/downloads';
 import { formatClock, useI18n, type TranslationKey } from '@/lib/i18n';
 import { usePlayer } from '@/lib/player/PlayerProvider';
 import { resumePosition } from '@/lib/player/logic';
@@ -24,17 +23,11 @@ export default function Story() {
   const player = usePlayer();
   const queryClient = useQueryClient();
   const { profile } = useSession();
-  const [downloaded, setDownloaded] = useState(false);
-  const [downloading, setDownloading] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const story = useQuery({
     queryKey: ['story', id, profile?.id], enabled: !!id && !!profile,
     queryFn: () => api<StoryDetail>(`/api/stories/${id}`),
   });
-
-  useEffect(() => {
-    if (id) void localUri(id).then((uri) => setDownloaded(!!uri));
-  }, [id]);
 
   if (story.isLoading) return <Loading />;
   if (story.error || !story.data) {
@@ -54,19 +47,6 @@ export default function Story() {
     void queryClient.invalidateQueries({ queryKey: ['catalog'] });
   };
 
-  const download = async () => {
-    setDownloading(true);
-    setNote(null);
-    try {
-      await downloadStory(s, player.dataSaver);
-      setDownloaded(true);
-    } catch (failure) {
-      setNote(failure instanceof Error ? failure.message : String(failure));
-    } finally {
-      setDownloading(false);
-    }
-  };
-
   return (
     <Screen padded={false}>
       <ScrollView contentContainerStyle={{ gap: space.xl, paddingBottom: space.xxl }}>
@@ -75,10 +55,7 @@ export default function Story() {
           <Cover id={s.id} title={title(s)} artworkUrl={mediaUrl(s.artworkUrl)} size={240} />
           <Text variant="display" style={{ textAlign: 'center' }} accessibilityRole="header">{title(s)}</Text>
           <Text muted style={{ textAlign: 'center' }}>
-            {s.narratorId ? (
-              <Text muted onPress={() => router.push(`/narrator/${s.narratorId}`)} accessibilityRole="link"
-                style={{ textDecorationLine: 'underline' }}>{t('story.narratedBy', { name: s.narrator })}</Text>
-            ) : t('story.narratedBy', { name: s.narrator })} · {t('common.min', { n: minutes(s.duration) })}
+            <NarratedBy story={s} /> · {t('common.min', { n: minutes(s.duration) })}
             {s.metadata.audienceAgeRange ? ` · ${s.metadata.audienceAgeRange}` : ''}
           </Text>
         </View>
@@ -115,12 +92,7 @@ export default function Story() {
             <Button title={s.favorite ? t('story.removeFavorite') : t('story.addFavorite')} kind="secondary" style={{ flex: 1 }}
               icon={<Ionicons name={s.favorite ? 'heart' : 'heart-outline'} size={18} color={s.favorite ? colors.accent : colors.text} />}
               onPress={() => void toggleFavorite()} />
-            {downloadsSupported ? (
-              <Button title={downloaded ? t('story.downloaded') : downloading ? t('story.downloading') : t('story.download')}
-                kind="secondary" style={{ flex: 1 }} loading={downloading} disabled={downloaded}
-                icon={<Ionicons name={downloaded ? 'checkmark-circle' : 'download-outline'} size={18} color={colors.text} />}
-                onPress={() => void download()} />
-            ) : null}
+            <DownloadButton story={s} onError={setNote} style={{ flex: 1 }} />
           </View>
           <AddToPlaylist storyId={s.id} />
           {note ? <Text variant="small" color={colors.danger}>{note}</Text> : null}

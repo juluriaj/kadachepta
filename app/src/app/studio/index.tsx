@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 
+import { AddToCollection, useCollectionsByStory } from '@/components/StudioCollections';
 import { Button, Chip, Cover, ErrorState, Loading, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
 import { formatClock, LANGUAGE_LABELS } from '@/lib/i18n';
@@ -43,6 +44,7 @@ export default function Queue() {
   const queue = useQuery({ queryKey: ['studio-queue', view, search.trim(), language, background],
     queryFn: () => api<QueueResponse>(`/api/studio/queue?${params}`, { profile: false }), refetchInterval: 20_000 });
   const items = useMemo(() => queue.data?.items ?? [], [queue.data]);
+  const inCollections = useCollectionsByStory();
 
   const changeView = (next: string) => {
     setView(next);
@@ -170,6 +172,7 @@ export default function Queue() {
           )}
         </View>
         ) : null}
+        {view === 'published' ? <AddToCollection assetIds={[...selected]} /> : null}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, alignItems: 'center' }}>
           <Text variant="small" muted>Mastering:</Text>
           {MASTERING_CHOICES.map(([value, label]) => (
@@ -190,7 +193,7 @@ export default function Queue() {
       <View style={{ gap: 2 }}>
         {items.map((item, index) => (
           <Row key={item.id} item={item} focused={index === cursor} selected={selected.has(item.id)}
-            showBlockers={view === 'review'} onToggle={() => toggle(item.id)} />
+            showBlockers={view === 'review'} collections={inCollections.get(item.id) ?? []} onToggle={() => toggle(item.id)} />
         ))}
       </View>
       {Platform.OS === 'web' ? <Text variant="small" muted>Keys: j / k move · x select · Enter open</Text> : null}
@@ -217,8 +220,8 @@ function Badge({ text, color }: { text: string; color: string }) {
   );
 }
 
-function Row({ item, focused, selected, showBlockers, onToggle }: {
-  item: QueueItem; focused: boolean; selected: boolean; showBlockers: boolean; onToggle: () => void;
+function Row({ item, focused, selected, showBlockers, collections, onToggle }: {
+  item: QueueItem; focused: boolean; selected: boolean; showBlockers: boolean; collections: string[]; onToggle: () => void;
 }) {
   const colors = useColors();
   const safetyColor = item.safetyRating === 'all-ages' ? colors.success : item.safetyRating === 'caution' ? colors.accent : colors.danger;
@@ -244,6 +247,7 @@ function Row({ item, focused, selected, showBlockers, onToggle }: {
         <View style={{ alignItems: 'flex-end', gap: 4, maxWidth: 320 }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end' }}>
             <Badge text={item.stageLabel ?? item.stage} color={colors.muted} />
+            {collections.map((name, index) => <Badge key={index} text={`in ${name}`} color={colors.primary} />)}
             {item.safetyRating ? <Badge text={item.safetyRating} color={safetyColor} /> : null}
             {item.qcVerdict && item.qcVerdict !== 'pass' ? <Badge text={`sound ${item.qcVerdict}`} color={colors.accent} /> : null}
             {item.transcriptReviewRequired ? <Badge text="read transcript" color={colors.accent} /> : null}

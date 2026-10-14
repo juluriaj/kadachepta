@@ -15,6 +15,11 @@ export type QueueItem = {
   mastering: { choice: Mastering['choice']; profile: string | null; level: Mastering['level']; processing: boolean };
 };
 
+// An editorial shelf on Home (P3-08).
+export type StudioCollection = { id: number; kind: 'festival' | 'theme' | 'age'; titles: Record<string, string>;
+  descriptions: Record<string, string>; startsOn: string | null; endsOn: string | null; position: number; published: boolean;
+  stories: { id: string; title: string; status: string }[] };
+
 export type QueueResponse = { view: string; items: QueueItem[]; counts: Record<string, number>; slaHours: number };
 
 export type SafetyFlag = { category: string; severity: 'low' | 'medium' | 'high'; evidence: string };

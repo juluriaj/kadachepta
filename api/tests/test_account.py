@@ -72,6 +72,24 @@ def test_editors_see_how_to_reach_a_narrator(client, db):
     assert review["narrator"]["contactNotes"] == "mornings" and review["narrator"]["email"] == "narr@example.com"
 
 
+def test_editors_see_narrators_the_catalog_credits_by_name(client, db):
+    narrator = make_user(db, "narr", "narrator")
+    make_asset(db, "a" * 16, ready_to_publish=True, status="published", narrator_name="Vimala Mare, Leo Tolstoy", title="Pilli")
+    make_asset(db, "b" * 16, narrator_name="vimala mare", title="Kaaki")  # not published yet
+    make_asset(db, "c" * 16, status="rejected", narrator_name="Kusuma P")
+    make_asset(db, "d" * 16, ready_to_publish=True, status="published", narrator=narrator)  # has an account: listed above
+    make_user(db, "ed", "editor")
+    login(client, "ed")
+    listed = client.get("/api/studio/narrators").json()
+    assert [n["name"] for n in listed["items"]] == ["narr"]
+    catalog = {n["name"]: n for n in listed["catalog"]}
+    assert list(catalog) == ["Vimala Mare", "Leo Tolstoy", "Kusuma P"]  # most published first, then most stories
+    vimala = catalog["Vimala Mare"]
+    assert (vimala["published"], vimala["notPublished"], vimala["rejected"], vimala["languages"]) == (1, 1, 0, ["te-IN"])
+    assert [s["title"] for s in vimala["stories"]] == ["Pilli", "Kaaki"]  # published first
+    assert vimala["narration"]["count"] == 0 and catalog["Kusuma P"]["narration"] is None
+
+
 def test_listeners_cannot_see_other_peoples_contact_details(client, db):
     make_user(db, "lis", "listener")
     login(client, "lis")

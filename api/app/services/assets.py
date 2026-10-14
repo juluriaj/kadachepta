@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from pathlib import PurePosixPath
 from typing import Any
@@ -125,6 +126,23 @@ def narrator_label(asset: AudioAsset) -> str:
     if asset.narrator_user:
         return asset.narrator_user.display_name or asset.narrator_user.handle
     return asset.narrator_name or "KathaChepta"
+
+
+NAME_SEPARATORS = re.compile(r"\s*[,&/]\s*")
+
+
+def narrator_people(asset: AudioAsset) -> list[dict[str, Any]]:
+    """Everyone credited for the narration, each with their own page. Catalog stories name narrators without an
+    account, and co-narrated ones credit several people in one field ("Sahiti Sagar, Chaitanya Sagar")."""
+    if asset.narrator_user:
+        return [{"name": narrator_label(asset), "id": asset.narrator_user_id}]
+    return [{"name": " ".join(name.split()), "id": None} for name in NAME_SEPARATORS.split(asset.narrator_name or "")
+            if name.strip()]
+
+
+def person_key(person: dict[str, Any]) -> str:
+    """One key per narrator: their account when they have one, otherwise their name (case and spacing aside)."""
+    return f"id:{person['id']}" if person["id"] is not None else f"name:{' '.join(person['name'].split()).casefold()}"
 
 
 def asset_payload(asset: AudioAsset, *, include_original: bool = False, **extra: Any) -> dict[str, Any]:
