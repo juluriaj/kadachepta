@@ -16,8 +16,8 @@ import type { NarratorPage } from '@/lib/types';
 const LANGUAGE_NAMES: Record<string, string> = { 'te-IN': 'తెలుగు', 'hi-IN': 'हिन्दी', 'en-IN': 'English' };
 
 // A narrator's public page (P3-04): who they are, what they've narrated, how families rate the narration.
-// The id is an account number, or for narrators the catalog credits by name only, their name: that page has
-// their stories and rating but nothing to follow.
+// The id is an account number, or for narrators the catalog credits by name only, their name. Grown-ups can
+// follow either kind.
 export default function Narrator() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useI18n();
@@ -36,8 +36,10 @@ export default function Narrator() {
   const toggleFollow = async () => {
     setBusy(true);
     try {
-      await api(`/api/narrators/${n.id}/follow`, { method: 'POST', body: { following: !n.following } });
+      await api(n.id != null ? `/api/narrators/${n.id}/follow` : `/api/narrators/named/${encodeURIComponent(n.name)}/follow`,
+        { method: 'POST', body: { following: !n.following } });
       await queryClient.invalidateQueries({ queryKey: ['narrator', id] });
+      void queryClient.invalidateQueries({ queryKey: ['updates'] });
     } finally {
       setBusy(false);
     }
@@ -58,7 +60,7 @@ export default function Narrator() {
           <Text variant="title" accessibilityRole="header">{n.name}</Text>
           <Text variant="small" muted>
             {[n.languages.map((code) => LANGUAGE_NAMES[code] ?? code).join(' · '),
-              n.id != null ? t('narrator.followers', { n: n.followers }) : null].filter(Boolean).join(' · ')}
+              n.followers ? t('narrator.followers', { n: n.followers }) : null].filter(Boolean).join(' · ')}
           </Text>
         </View>
       </View>

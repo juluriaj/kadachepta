@@ -568,12 +568,15 @@ class StoryEmbedding(Base):
 
 
 class Collection(Base):
-    """An editorial shelf (festival, theme, age) shown on Home while published and in season."""
+    """An editorial shelf (festival, theme, age) shown on Home while published and in season, or a story set
+    (kind "set"): standalone stories of one character or series, always listed while published."""
 
     __tablename__ = "collections"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     kind: Mapped[str] = mapped_column(String(16), nullable=False, server_default="theme")
+    # Story sets: the catalog's free-text `collection` spellings whose stories join the set when published.
+    source_names: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default="{}")
     titles: Mapped[dict[str, str]] = mapped_column(JSONB, nullable=False, server_default="{}")
     descriptions: Mapped[dict[str, str]] = mapped_column(JSONB, nullable=False, server_default="{}")
     starts_on: Mapped[date | None] = mapped_column(Date)

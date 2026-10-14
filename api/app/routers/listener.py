@@ -1,4 +1,5 @@
-"""Listener API: home shelves, stories, favorites, listening progress and stats (all per profile)."""
+"""Listener API: home shelves, stories, story sets, audiobooks, favorites, listening progress and stats (all per
+profile)."""
 
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ from ..db import get_db
 from ..models import (
     AudioAsset, Collection, ListenerFavorite, ListeningDaily, ListeningProgress, Profile, TeaserDraft, Transcript,
 )
-from ..services import morals, pipeline, recommend
+from ..services import morals, pipeline, recommend, story_sets
 from ..services.assets import artwork_url, asset_payload, iso, narrator_people, person_key
 from ..services.households import MOMENTS, current_profile, suitable_for
 from ..services.transcripts import read_along
@@ -51,7 +52,7 @@ def active_collections(db: Session) -> list[Collection]:
     """Published editorial shelves in season (P3-08), in the editors' order."""
     today = utcnow().date()
     return list(db.scalars(select(Collection).options(selectinload(Collection.items))
-                           .where(Collection.published.is_(True),
+                           .where(Collection.published.is_(True), Collection.kind != story_sets.SET_KIND,
                                   (Collection.starts_on.is_(None)) | (Collection.starts_on <= today),
                                   (Collection.ends_on.is_(None)) | (Collection.ends_on >= today))
                            .order_by(Collection.position, Collection.id)))
@@ -114,19 +115,38 @@ def catalog(language: str | None = None, profile: Profile = Depends(current_prof
     return {"items": items}
 
 
+def _cards(stories: list[tuple[AudioAsset, TeaserDraft]], profile: Profile, progress: dict[str, ListeningProgress],
+           favorites: set[str], books: dict[int, story_sets.Book]) -> dict[str, dict[str, Any]]:
+    """Story cards by id; a chapter's card says which book it belongs to ("Chapter 3 of 12")."""
+    cards = {}
+    for asset, teaser in stories:
+        card = story_card(asset, teaser, profile, progress.get(asset.id), asset.id in favorites)
+        if asset.series_id in books:
+            card["book"] = books[asset.series_id].info(asset.id)
+        cards[asset.id] = card
+    return cards
+
+
 @router.get("/api/home")
 def home(profile: Profile = Depends(current_profile), db: Session = Depends(get_db)):
     stories = published_stories(db, profile)
     progress, favorites = _progress_map(db, profile), _favorite_set(db, profile)
-    cards = {asset.id: story_card(asset, teaser, profile, progress.get(asset.id), asset.id in favorites)
-             for asset, teaser in stories}
-    order = list(cards)
-    continuing = sorted((row for row in progress.values() if row.audio_asset_id in cards and not row.completed
-                         and row.last_position >= 20), key=lambda row: row.last_listened_at, reverse=True)
+    books = story_sets.books_of(db, stories)
+    cards = _cards(stories, profile, progress, favorites, books)
+    # Chapters are heard through their book: never shelved one by one as if they were stories.
+    order = [asset.id for asset, _ in stories if not asset.series_id]
+    standalone = set(order)
+    continuing = [(row.last_listened_at, cards[row.audio_asset_id]) for row in progress.values()
+                  if row.audio_asset_id in standalone and not row.completed and row.last_position >= 20]
+    for book in books.values():  # one card per book: the chapter it resumes at
+        summary = story_sets.book_summary(book, progress)
+        if summary["resume"]["state"] == "continue":
+            continuing.append((story_sets.last_listened(book, progress), cards[summary["resume"]["chapterId"]]))
+    continuing.sort(key=lambda pair: pair[0], reverse=True)
     shelves = []
     if continuing:
-        shelves.append({"id": "continue", "items": [cards[row.audio_asset_id] for row in continuing[:10]]})
-    because = recommend.because_you_finished(db, profile.id, set(cards))
+        shelves.append({"id": "continue", "items": [card for _, card in continuing[:10]]})
+    because = recommend.because_you_finished(db, profile.id, standalone)
     if because:
         shelves.append({"id": "because", "basedOn": cards[because["basedOn"]], "items": [cards[a] for a in because["items"]]})
     for collection in active_collections(db):
@@ -135,17 +155,71 @@ def home(profile: Profile = Depends(current_profile), db: Session = Depends(get_
             shelves.append({"id": f"collection-{collection.id}", "collection": {
                 "id": collection.id, "kind": collection.kind, "titles": collection.titles,
                 "descriptions": collection.descriptions}, "items": items[:20]})
+    sets = story_sets.listed_sets(db, stories)
+    if sets:  # one tile per set, not a row of its stories
+        shelves.append({"id": "sets", "items": [],
+                        "sets": [story_sets.set_summary(c, members, progress) for c, members in sets]})
+    if books:
+        listed = sorted(books.values(), key=lambda b: (b.series.title.casefold(), b.series.id))
+        shelves.append({"id": "books", "items": [], "books": [story_sets.book_summary(b, progress) for b in listed]})
     household_moments = profile.household.moments or list(MOMENTS)
     for moment in [m for m in MOMENTS if m in household_moments] + [m for m in MOMENTS if m not in household_moments]:
         items = [cards[asset_id] for asset_id in order if moment in cards[asset_id]["moments"]]
         if items:
             shelves.append({"id": moment, "moment": moment, "items": items[:20]})
     if favorites:
-        shelves.append({"id": "favorites", "items": [cards[a] for a in order if a in favorites][:20]})
+        shelves.append({"id": "favorites", "items": [cards[a] for a in cards if a in favorites][:20]})
     shelves.append({"id": "short", "items": [cards[a] for a in order if (cards[a]["duration"] or 0) <= 600][:20]})
     shelves.append({"id": "new", "items": [cards[a] for a in order][:20]})
-    return {"profileId": profile.id, "shelves": [shelf for shelf in shelves if shelf["items"]],
-            "totalStories": len(cards)}
+    return {"profileId": profile.id,
+            "shelves": [shelf for shelf in shelves if shelf["items"] or shelf.get("sets") or shelf.get("books")],
+            "totalStories": len(order) + len(books)}
+
+
+# --- Story sets (standalone stories of one character or series) and audiobooks (chapters in order) ---
+
+@router.get("/api/collections")
+def story_set_list(profile: Profile = Depends(current_profile), db: Session = Depends(get_db)):
+    progress = _progress_map(db, profile)
+    return {"items": [story_sets.set_summary(c, members, progress)
+                      for c, members in story_sets.listed_sets(db, published_stories(db, profile))]}
+
+
+@router.get("/api/collections/{collection_id}")
+def collection_page(collection_id: int, profile: Profile = Depends(current_profile), db: Session = Depends(get_db)):
+    """A story set, or an editorial shelf that is in season: every story in it this profile can hear."""
+    collection = db.scalar(select(Collection).options(selectinload(Collection.items)).where(Collection.id == collection_id))
+    listed = collection and collection.published and (
+        collection.kind == story_sets.SET_KIND or any(c.id == collection.id for c in active_collections(db)))
+    stories = published_stories(db, profile)
+    by_id = {asset.id: (asset, teaser) for asset, teaser in stories}
+    members = [by_id[item.audio_asset_id] for item in collection.items if item.audio_asset_id in by_id] if listed else []
+    if not members:
+        raise HTTPException(status_code=404, detail="This collection isn't available for this listener.")
+    progress, favorites = _progress_map(db, profile), _favorite_set(db, profile)
+    cards = _cards(members, profile, progress, favorites, story_sets.books_of(db, stories))
+    return {**story_sets.set_summary(collection, members, progress), "stories": list(cards.values())}
+
+
+@router.get("/api/books")
+def book_list(profile: Profile = Depends(current_profile), db: Session = Depends(get_db)):
+    progress = _progress_map(db, profile)
+    books = sorted(story_sets.books_of(db, published_stories(db, profile)).values(),
+                   key=lambda b: (b.series.title.casefold(), b.series.id))
+    return {"items": [story_sets.book_summary(book, progress) for book in books]}
+
+
+@router.get("/api/books/{book_id}")
+def book_page(book_id: int, profile: Profile = Depends(current_profile), db: Session = Depends(get_db)):
+    """An audiobook: where this profile left off, and every chapter with its finished or partial mark."""
+    stories = published_stories(db, profile)
+    books = story_sets.books_of(db, [(a, t) for a, t in stories if a.series_id == book_id])
+    if book_id not in books:
+        raise HTTPException(status_code=404, detail="This audiobook isn't available for this listener.")
+    book = books[book_id]
+    progress, favorites = _progress_map(db, profile), _favorite_set(db, profile)
+    return {**story_sets.book_summary(book, progress),
+            "chapters": list(_cards(book.chapters, profile, progress, favorites, books).values())}
 
 
 @router.get("/api/stories/{asset_id}")
@@ -156,18 +230,25 @@ def story(asset_id: str, profile: Profile = Depends(current_profile), db: Sessio
         raise HTTPException(status_code=404, detail="This story isn't available for this listener.")
     asset, teaser = match
     progress, favorites = _progress_map(db, profile), _favorite_set(db, profile)
-    card = story_card(asset, teaser, profile, progress.get(asset.id), asset.id in favorites)
-    if asset.series_id:  # a real series (P2-11) orders chapters explicitly
-        same = [(a, t) for a, t in stories if a.series_id == asset.series_id and a.id != asset.id]
+    books = story_sets.books_of(db, [(a, t) for a, t in stories if asset.series_id and a.series_id == asset.series_id])
+    card = _cards([match], profile, progress, favorites, books)[asset.id]
+    story_set = next(((c, members) for c, members in story_sets.listed_sets(db, stories)
+                      if any(a.id == asset.id for a, _ in members)), None) if not asset.series_id else None
+    if asset.series_id in books:  # an audiobook chapter: the chapters after it, in order
+        chapters = books[asset.series_id].chapters
+        up_next = chapters[books[asset.series_id].number(asset.id):][:20]
+    elif story_set:  # a story set: the rest of the set, not yet heard first
+        up_next = story_sets.next_in_set(story_set[1], asset.id, progress)
     else:
-        same = [(a, t) for a, t in stories if a.album and a.album == asset.album and a.id != asset.id]
-    series = sorted(same, key=lambda pair: (_episode_key(pair[0]), pair[0].title))
-    later = [pair for pair in series if _episode_key(pair[0]) > _episode_key(asset)]
+        same = [(a, t) for a, t in stories if a.album and a.album == asset.album and a.id != asset.id and not a.series_id]
+        series = sorted(same, key=lambda pair: (story_sets.episode_key(pair[0]), pair[0].title))
+        up_next = ([pair for pair in series if story_sets.episode_key(pair[0]) > story_sets.episode_key(asset)]
+                   or series)[:10]
     narrators = {person_key(person) for person in narrator_people(asset)}
-    same_narrator = [(a, t) for a, t in stories if a.id != asset.id
+    same_narrator = [(a, t) for a, t in stories if a.id != asset.id and not a.series_id
                      and narrators & {person_key(person) for person in narrator_people(a)}][:10]
-    by_id = {a.id: (a, t) for a, t in stories}
-    shown = {asset.id, *(a.id for a, _ in (later or series)[:10]), *(a.id for a, _ in same_narrator)}
+    by_id = {a.id: (a, t) for a, t in stories if not a.series_id}
+    shown = {asset.id, *(a.id for a, _ in up_next[:10]), *(a.id for a, _ in same_narrator)}
     alike = recommend.related(db, asset.id, set(by_id) - shown, limit=10)
     prompts = asset.imagination_prompts or {}
     return {**card, "themes": teaser.themes, "ageSuggestion": teaser.age_suggestion,
@@ -175,7 +256,9 @@ def story(asset_id: str, profile: Profile = Depends(current_profile), db: Sessio
             "teasers": teaser_texts(teaser), "morals": morals.morals(asset),
             "readAlong": _read_along_transcript(db, asset) is not None,
             "waveform": (asset.renditions or {}).get("waveform", []),
-            "upNext": [story_card(a, t, profile, progress.get(a.id)) for a, t in (later or series)[:10]],
+            "storySet": {"id": story_set[0].id, "titles": story_set[0].titles, "storyCount": len(story_set[1])}
+            if story_set else None,
+            "upNext": list(_cards(up_next, profile, progress, set(), books).values()),
             "moreFromNarrator": [story_card(a, t, profile, progress.get(a.id)) for a, t in same_narrator],
             "moreLikeThis": [story_card(*by_id[a], profile, progress.get(a)) for a in alike],
             # Conversation starters are for parents (P3-07): never on a child's profile.
@@ -203,16 +286,6 @@ def read_along_text(asset_id: str, profile: Profile = Depends(current_profile), 
     passages = read_along(transcript.text, transcript.segments, intro_removed=transcript.intro_removed, offset=trimmed)
     return {"language": transcript.language, "timed": any(p["start"] is not None for p in passages),
             "passages": passages}
-
-
-def _episode_key(asset: AudioAsset) -> tuple[int, str]:
-    if asset.series_position:
-        return (asset.series_position, "")
-    for value in (asset.episode_number, asset.track_number):
-        digits = "".join(ch for ch in (value or "") if ch.isdigit())
-        if digits:
-            return (int(digits[:6]), "")
-    return (0, asset.title)
 
 
 class FavoriteChange(BaseModel):

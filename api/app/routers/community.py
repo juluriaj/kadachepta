@@ -18,7 +18,7 @@ from ..db import get_db
 from ..models import (
     AudioAsset, NarratorFollow, NarratorProfile, Notification, Profile, Review, StoryRating, User,
 )
-from ..services import community, ratings, search
+from ..services import community, follows, ratings, search, story_sets
 from ..services.assets import iso, narrator_people, person_key
 from ..services.households import current_profile
 from .listener import _favorite_set, _progress_map, published_stories, story_card
@@ -57,9 +57,13 @@ def community_payload(db: Session, profile: Profile, asset: AudioAsset) -> dict[
                          .order_by(Review.created_at.desc()).limit(50)).all()
     my_review = db.scalars(select(Review).options(selectinload(Review.profile))
                            .where(Review.profile_id == profile.id, Review.audio_asset_id == asset.id)).first()
+    series = follows.series_key(asset)
     payload.update(story=scores["story"], narration=scores["narration"],
                    reviews=[community.review_payload(r, mine=r.profile_id == profile.id) for r in reviews],
-                   myReview=community.review_payload(my_review, mine=True) if my_review else None)
+                   myReview=community.review_payload(my_review, mine=True) if my_review else None,
+                   # The series (audiobook or album) this story belongs to, to follow for its next chapters.
+                   series={"title": follows.series_title(asset),
+                           "following": series in follows.followed(_owner(db, profile), "series")} if series else None)
     return payload
 
 
@@ -165,9 +169,12 @@ def narrators(profile: Profile = Depends(current_profile), db: Session = Depends
     return {"items": sorted(people.values(), key=lambda p: (-p["stories"], p["name"].casefold()))}
 
 
-@router.get("/api/narrators/named/{name}")
-def named_narrator_page(name: str, profile: Profile = Depends(current_profile), db: Session = Depends(get_db)):
-    """A narrator the catalog credits by name only (no account yet): every story crediting them, nothing to follow."""
+class FollowIn(BaseModel):
+    following: bool
+
+
+def _named_stories(db: Session, profile: Profile, name: str):
+    """Every story crediting a narrator the catalog names without an account, and the name as first credited."""
     key = person_key({"id": None, "name": name})
     stories, shown = [], None
     for asset, teaser in published_stories(db, profile):
@@ -177,14 +184,60 @@ def named_narrator_page(name: str, profile: Profile = Depends(current_profile), 
             shown = shown or match["name"]
     if not stories:
         raise HTTPException(status_code=404, detail="Narrator not found.")
+    return key, shown, stories
+
+
+@router.get("/api/narrators/named/{name}")
+def named_narrator_page(name: str, profile: Profile = Depends(current_profile), db: Session = Depends(get_db)):
+    """A narrator the catalog credits by name only (no account yet): every story crediting them, to follow too."""
+    key, shown, stories = _named_stories(db, profile, name)
     progress, favorites = _progress_map(db, profile), _favorite_set(db, profile)
     languages = [lang for lang, _ in Counter(a.language for a, _ in stories).most_common()]
     return {
         "id": None, "name": shown, "biography": None, "languages": languages, "since": None,
         "stories": [story_card(a, t, profile, progress.get(a.id), a.id in favorites) for a, t in stories],
         "narration": ratings.narration_score(db, [a.id for a, _ in stories]) if profile.kind == "adult" else None,
-        "followers": 0, "following": False, "canFollow": False,
+        "followers": follows.follower_count(db, "narrators", key),
+        "following": key in follows.followed(_owner(db, profile), "narrators"), "canFollow": profile.kind == "adult",
     }
+
+
+@router.post("/api/narrators/named/{name}/follow")
+def follow_named(name: str, payload: FollowIn, profile: Profile = Depends(current_profile),
+                 db: Session = Depends(get_db)):
+    _adult(profile)
+    key, shown, _ = _named_stories(db, profile, name)
+    follows.set_follow(_owner(db, profile), "narrators", key, shown, payload.following)
+    db.commit()
+    return {"following": payload.following}
+
+
+@router.post("/api/stories/{asset_id}/series/follow")
+def follow_series(asset_id: str, payload: FollowIn, profile: Profile = Depends(current_profile),
+                  db: Session = Depends(get_db)):
+    """Hear when the next chapter of this story's series (an audiobook, or an album of chapters) comes out."""
+    _adult(profile)
+    asset, _ = _story(db, profile, asset_id)
+    key = follows.series_key(asset)
+    if not key:
+        raise HTTPException(status_code=404, detail="This story isn't part of a series.")
+    follows.set_follow(_owner(db, profile), "series", key, follows.series_title(asset), payload.following)
+    db.commit()
+    return {"following": payload.following}
+
+
+class Unfollow(BaseModel):
+    kind: Literal["narrators", "series"]
+    key: str = Field(max_length=300)
+
+
+@router.post("/api/me/follows/remove")
+def unfollow(payload: Unfollow, profile: Profile = Depends(current_profile), db: Session = Depends(get_db)):
+    """Stop following a name-only narrator or a series from the Updates page (it may no longer be published)."""
+    _adult(profile)
+    follows.set_follow(_owner(db, profile), payload.kind, payload.key, "", False)
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/api/narrators/{user_id}")
@@ -207,10 +260,6 @@ def narrator_page(user_id: int, profile: Profile = Depends(current_profile), db:
     }
 
 
-class FollowIn(BaseModel):
-    following: bool
-
-
 @router.post("/api/narrators/{user_id}/follow")
 def follow(user_id: int, payload: FollowIn, profile: Profile = Depends(current_profile), db: Session = Depends(get_db)):
     _adult(profile)
@@ -221,6 +270,7 @@ def follow(user_id: int, payload: FollowIn, profile: Profile = Depends(current_p
     current = db.get(NarratorFollow, (account, user_id))
     if payload.following and not current and account != user_id:
         db.add(NarratorFollow(user_id=account, narrator_user_id=user_id))
+        follows.turn_on(_owner(db, profile), "followed")  # following means wanting to hear about new stories
     elif not payload.following and current:
         db.delete(current)
     db.commit()
@@ -229,16 +279,38 @@ def follow(user_id: int, payload: FollowIn, profile: Profile = Depends(current_p
 
 # --- Search (P3-05) ---
 
+def _best(found: list[tuple[float, dict[str, Any]]], limit: int = 10) -> list[dict[str, Any]]:
+    return [{**item, "match": round(value, 2)} for value, item in sorted(found, key=lambda pair: -pair[0])][:limit]
+
+
 @router.get("/api/search")
 def find(q: str = "", language: str | None = None, profile: Profile = Depends(current_profile),
          db: Session = Depends(get_db)):
+    """Results in groups: story sets, audiobooks, and stories (narrators are matched in the app). A chapter is found
+    through its book, never listed as a story of its own."""
     stories = [(a, t) for a, t in published_stories(db, profile) if not language or a.language == language]
     if not q.strip():
-        return {"query": q, "items": []}
+        return {"query": q, "items": [], "collections": [], "books": []}
     progress, favorites = _progress_map(db, profile), _favorite_set(db, profile)
-    results = search.search(q, stories)
-    return {"query": q, "items": [{**story_card(a, t, profile, progress.get(a.id), a.id in favorites),
-                                   "match": round(value, 2)} for a, t, value in results]}
+    results = search.search(q, [(a, t) for a, t in stories if not a.series_id])
+    sets = []
+    for collection, members in story_sets.listed_sets(db, stories):
+        value = search.score(q, {"title": search.loose(" ".join([*collection.titles.values(), *collection.source_names])).split()})
+        if value >= search.THRESHOLD:
+            sets.append((value, story_sets.set_summary(collection, members, progress)))
+    books = []
+    for book in story_sets.books_of(db, stories).values():
+        summary = story_sets.book_summary(book, progress)
+        own = search.score(q, {"title": search.loose(book.series.title).split(),
+                               "narrator": search.loose(summary["narrator"]).split(),
+                               "text": search.loose(book.series.description or "").split()})
+        chapters = search.search(q, book.chapters, limit=1)
+        value = max(own, chapters[0][2] * 0.9 if chapters else 0)
+        if value >= search.THRESHOLD:
+            books.append((value, summary))
+    return {"query": q, "collections": _best(sets), "books": _best(books),
+            "items": [{**story_card(a, t, profile, progress.get(a.id), a.id in favorites),
+                       "match": round(value, 2)} for a, t, value in results]}
 
 
 # --- Updates for listeners (P3-09): opt-in, never for children, never about streaks ---
@@ -261,8 +333,16 @@ def updates(profile: Profile = Depends(current_profile), db: Session = Depends(g
         asset, teaser = available[row.audio_asset_id]
         items.append({"id": row.id, "kind": row.kind, "read": row.read_at is not None, "createdAt": iso(row.created_at),
                       "story": story_card(asset, teaser, profile)})
+    user = db.get(User, account)
+    narrators = db.execute(select(User.id, User.display_name, User.username, NarratorProfile.display_name)
+                           .join(NarratorFollow, NarratorFollow.narrator_user_id == User.id)
+                           .outerjoin(NarratorProfile, NarratorProfile.user_id == User.id)
+                           .where(NarratorFollow.user_id == account)).all()
+    following = sorted(({"kind": "narrator", "key": f"id:{user_id}", "name": stage or shown or username,
+                         "narratorId": user_id} for user_id, shown, username, stage in narrators),
+                       key=lambda item: item["name"].casefold())
     return {"items": items, "unread": sum(1 for item in items if not item["read"]),
-            "settings": community.preferences(db.get(User, account))}
+            "settings": community.preferences(user), "following": following + follows.listing(user)}
 
 
 @router.post("/api/me/updates/read")

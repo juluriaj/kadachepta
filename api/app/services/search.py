@@ -128,6 +128,7 @@ def similarity(a: str, b: str) -> float:
 
 # --- Documents ---
 
+THRESHOLD = 0.42  # the score a result needs to be shown
 FIELD_WEIGHTS = {"title": 1.0, "series": 0.8, "narrator": 0.7, "keywords": 0.6, "text": 0.4}
 _cache: dict[str, tuple[Any, dict[str, list[str]]]] = {}
 
@@ -177,7 +178,7 @@ def score(query: str, doc: dict[str, list[str]]) -> float:
     return total / len(groups)
 
 
-def search(query: str, stories: list[tuple[Any, Any]], limit: int = 30, threshold: float = 0.42) -> list[tuple[Any, Any, float]]:
+def search(query: str, stories: list[tuple[Any, Any]], limit: int = 30, threshold: float = THRESHOLD) -> list[tuple[Any, Any, float]]:
     ranked = [(asset, teaser, score(query, document(asset, teaser))) for asset, teaser in stories]
     ranked = [item for item in ranked if item[2] >= threshold]
     ranked.sort(key=lambda item: (-item[2], item[0].title))

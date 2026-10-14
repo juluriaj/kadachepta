@@ -181,11 +181,14 @@ def test_follow_and_opt_in_notifications_on_publish(client, db):
     assert client.post(f"/api/narrators/{narrator.id}/follow", json={"following": True}, headers=kid).status_code == 403
     listen(client, profiles["mom"]["id"])
 
+    # Following turns on updates about that narrator; series updates stay off until asked for (opt-in).
+    assert client.get("/api/me/updates", headers=mom).json()["settings"] == {"followed": True, "series": False}
+
     from app.routers.editorial import mark_published
     second = make_asset(db, "b" * 16, ready_to_publish=True, narrator=narrator, album="Panchatantra")
     mark_published(db, second, "ed")
     db.commit()
-    assert db.query(Notification).filter(Notification.kind.in_(("new-from-followed", "series-next"))).count() == 0  # opt-in
+    assert db.query(Notification).filter(Notification.kind == "series-next").count() == 0  # she listened, but opt-in
 
     assert client.post("/api/me/notification-settings", json={"followed": True, "series": True}, headers=mom).json() == \
         {"followed": True, "series": True}
@@ -193,7 +196,10 @@ def test_follow_and_opt_in_notifications_on_publish(client, db):
     mark_published(db, third, "ed")
     db.commit()
     updates = client.get("/api/me/updates", headers=mom).json()
-    assert [(u["kind"], u["story"]["id"]) for u in updates["items"]] == [("new-from-followed", "c" * 16)]
+    assert [(u["kind"], u["story"]["id"]) for u in updates["items"]] == [("new-from-followed", "c" * 16),
+                                                                          ("new-from-followed", "b" * 16)]
+    assert updates["following"] == [{"kind": "narrator", "key": f"id:{narrator.id}", "name": "narr",
+                                     "narratorId": narrator.id}]
     assert client.get("/api/me/updates", headers=kid).json()["items"] == []
 
 
@@ -218,7 +224,7 @@ def test_narrators_credited_by_name_have_a_page_of_their_stories(client, db):
         ("Sahiti Sagar", None, 1)]
 
     page = client.get("/api/narrators/named/VIMALA MARE", headers=headers).json()
-    assert page["name"] == "Vimala Mare" and not page["canFollow"] and page["languages"] == ["te-IN"]
+    assert page["name"] == "Vimala Mare" and page["canFollow"] and page["languages"] == ["te-IN"]  # see test_follows
     assert sorted(s["id"] for s in page["stories"]) == [STORY, "b" * 16]
     assert client.get("/api/narrators/named/Sahiti Sagar", headers=headers).json()["stories"][0]["id"] == "c" * 16
     assert client.get("/api/narrators/named/narr", headers=headers).status_code == 404  # has an account page instead

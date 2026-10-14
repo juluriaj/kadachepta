@@ -9,6 +9,7 @@ import { Button, Chip, Cover, Screen, Text, useColors } from '@/components/ui';
 import { api, mediaUrl } from '@/lib/api';
 import { RatingCard } from '@/components/community';
 import { AddToPlaylist } from '@/components/playlists';
+import { setTitle } from '@/components/sets';
 import { DownloadButton, minutes, NarratorLinks } from '@/components/stories';
 import { formatClock, useI18n } from '@/lib/i18n';
 import { getEngine } from '@/lib/player/engine';
@@ -17,7 +18,7 @@ import { SLEEP_CHOICES, SPEEDS } from '@/lib/player/logic';
 import { pressFraction } from '@/lib/seek';
 import { useSession } from '@/lib/session';
 import { space, touch } from '@/lib/theme';
-import type { StoryDetail } from '@/lib/types';
+import type { BookPage, StoryDetail } from '@/lib/types';
 
 // Captions (read along) are on by default wherever a story has them; switching to the picture is remembered.
 const READ_ALONG = 'kc.readAlong';
@@ -27,7 +28,7 @@ AsyncStorage.getItem(READ_ALONG).then((value) => {
 }).catch(() => {});
 
 export default function Player() {
-  const { t, title } = useI18n();
+  const { t, title, language } = useI18n();
   const colors = useColors();
   const player = usePlayer();
   const [barWidth, setBarWidth] = useState(1);
@@ -43,6 +44,14 @@ export default function Player() {
   const [ratingDismissed, setRatingDismissed] = useState<string | null>(null);
   const [downloadNote, setDownloadNote] = useState<{ storyId: string; message: string | null } | null>(null);
   const canRead = !!detail.data?.readAlong;
+  const chapters = useBookChapters(story?.book?.id);
+  const chapterIndex = story && chapters ? chapters.findIndex((chapter) => chapter.id === story.id) : -1;
+  // Chapters move a whole chapter at a time and keep playing on; the rest of the book becomes the queue.
+  const playChapter = (index: number) => {
+    const chapter = chapters?.[index];
+    if (chapter) void player.play(chapter, { queue: chapters!.slice(index + 1), autoContinue: true });
+  };
+  const storySet = detail.data?.storySet;
 
   // Ask for a rating once most of the story has been heard (or it ended), never in bedtime mode (the screen is
   // dimmed and nobody should be tapping stars at lights-out: they can rate later on the story page).
@@ -97,6 +106,17 @@ export default function Player() {
               </Pressable>
             ) : <View style={{ width: 40 }} />}
             <View style={{ flexShrink: 1, alignItems: 'center', gap: space.xs }}>
+              {story.book ? (
+                <Text variant="label" color={colors.primary} accessibilityRole="link" style={{ textAlign: 'center' }}
+                  onPress={() => router.push(`/book/${story.book!.id}`)}>
+                  {t('book.chapterOf', { n: story.book.chapter, total: story.book.chapters })} · {story.book.title}
+                </Text>
+              ) : storySet ? (
+                <Text variant="label" color={colors.primary} accessibilityRole="link" style={{ textAlign: 'center' }}
+                  onPress={() => router.push(`/collection/${storySet.id}`)}>
+                  {t('collection.from', { title: setTitle(storySet, language) })}
+                </Text>
+              ) : null}
               <Text variant="title" style={{ textAlign: 'center' }}>{title(story)}</Text>
               <Text muted style={{ textAlign: 'center' }}><NarratorLinks story={story} /></Text>
             </View>
@@ -135,14 +155,23 @@ export default function Player() {
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' }}>
-          <Round icon="play-skip-back" label={t('player.previous')} onPress={player.previous} />
+          {story.book ? (
+            <Round icon="play-skip-back" label={t('player.previousChapter')} disabled={chapterIndex < 1}
+              onPress={() => playChapter(chapterIndex - 1)} />
+          ) : <Round icon="play-skip-back" label={t('player.previous')} onPress={player.previous} />}
           <Round icon="play-back" label={t('player.back15')} onPress={() => player.seekBy(-15)} badge="15" />
           <Pressable onPress={player.toggle} accessibilityRole="button" accessibilityLabel={player.playing ? t('player.pause') : t('player.play')}
             style={{ width: 84, height: 84, borderRadius: 42, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }}>
             <Ionicons name={player.playing ? 'pause' : 'play'} size={40} color={colors.onAccent} />
           </Pressable>
           <Round icon="play-forward" label={t('player.forward30')} onPress={() => player.seekBy(30)} badge="30" />
-          <Round icon="play-skip-forward" label={t('player.next')} onPress={player.next} disabled={!player.queue.length} />
+          {story.book && chapters ? (
+            <Round icon="play-skip-forward" label={t('player.nextChapter')}
+              disabled={chapterIndex < 0 || chapterIndex >= chapters.length - 1} onPress={() => playChapter(chapterIndex + 1)} />
+          ) : (
+            <Round icon="play-skip-forward" label={story.book ? t('player.nextChapter') : t('player.next')} onPress={player.next}
+              disabled={!player.queue.length} />
+          )}
         </View>
 
         {showRating ? <RatingCard storyId={story.id} compact onDismiss={() => setRatingDismissed(story.id)} /> : null}
@@ -280,6 +309,14 @@ function FavoriteButton({ storyId, fallback }: { storyId: string; fallback: bool
       <Ionicons name={saved ? 'heart' : 'heart-outline'} size={28} color={saved ? colors.accent : colors.text} />
     </Pressable>
   );
+}
+
+// Every chapter of the book being played, for previous and next chapter (shared with the book's page).
+function useBookChapters(bookId: number | undefined) {
+  const { profile } = useSession();
+  const book = useQuery({ queryKey: ['book', bookId, profile?.id], enabled: bookId != null && !!profile,
+    queryFn: () => api<BookPage>(`/api/books/${bookId}`) });
+  return book.data?.chapters;
 }
 
 // The story page's data (favorite, read-along availability), shared through the query cache.

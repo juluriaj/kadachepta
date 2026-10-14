@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, View } from 'react-native';
 
+import { shuffled } from '@/components/sets';
 import { minutes, StoryRow } from '@/components/stories';
 import { Button, ErrorState, Field, Loading, Screen, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -19,15 +20,6 @@ function confirm(message: string): Promise<boolean> {
     { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
     { text: 'OK', style: 'destructive', onPress: () => resolve(true) },
   ]));
-}
-
-function shuffled<T>(items: T[]): T[] {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
 }
 
 // One playlist: play it in order or shuffled (the rest of the list becomes the queue), reorder, rename, delete.

@@ -17,6 +17,7 @@ export type Story = {
   moments?: string[];
   favorite?: boolean;
   progress?: { position: number; completed: boolean; lastListenedAt: string | null } | null;
+  book?: BookRef | null; // an audiobook chapter: the app shows "Chapter N of M" and opens the book
   metadata: {
     genres: string[];
     audienceAgeRange: string | null;
@@ -38,11 +39,26 @@ export type StoryDetail = Story & {
   // By language (te-IN, en-IN), so the page follows the app language as soon as it switches.
   teasers?: Record<string, { short: string | null; long: string | null }>;
   morals?: Record<string, string>;
+  storySet?: { id: number; titles: Record<string, string>; storyCount: number } | null;
 };
+
+// A story set: standalone stories of one character or series (Tenali Ramakrishna), browsed and shuffled.
+export type StorySet = { id: number; kind: string; titles: Record<string, string>; descriptions: Record<string, string>;
+  artworkUrl: string | null; storyCount: number; heard: number; duration: number };
+export type StorySetPage = StorySet & { stories: Story[] };
+
+// An audiobook: chapters heard in order over many sessions, resumed where the profile left off.
+export type BookRef = { id: number; title: string; chapter: number; chapters: number };
+export type BookSummary = { id: number; title: string; description: string | null; language: string;
+  narrators: NarratorCredit[]; narrator: string; artworkUrl: string | null; chapterCount: number; duration: number;
+  finished: number; lastListenedAt: string | null;
+  resume: { state: 'start' | 'continue' | 'finished'; chapterId: string; chapter: number; position: number; remaining: number } };
+export type BookPage = BookSummary & { chapters: Story[] };
 
 export type Collection = { id: number; kind: string; titles: Record<string, string>; descriptions: Record<string, string> };
 
-export type Shelf = { id: string; moment?: string; basedOn?: Story; collection?: Collection; items: Story[] };
+export type Shelf = { id: string; moment?: string; basedOn?: Story; collection?: Collection; items: Story[];
+  sets?: StorySet[]; books?: BookSummary[] };
 
 // --- Phase 3: ratings, reviews, narrator pages, updates ---
 
@@ -63,6 +79,7 @@ export type Community = {
   narration?: Score;
   reviews?: Review[];
   myReview?: Review | null;
+  series?: { title: string; following: boolean } | null; // the story's series or album, to follow (grown-ups)
 };
 
 // A narrator with an account has an id; catalog narrators are credited by name only.
@@ -74,7 +91,9 @@ export type NarratorPage = { id: number | null; name: string; biography: string 
   stories: Story[]; narration: Score | null; followers: number; following: boolean; canFollow: boolean };
 
 export type Updates = { items: { id: number; kind: string; read: boolean; createdAt: string; story: Story }[]; unread: number;
-  settings: { followed: boolean; series: boolean } | null };
+  settings: { followed: boolean; series: boolean } | null;
+  // Narrators (with an account: narratorId) and series this account follows; absent for children.
+  following?: { kind: 'narrator' | 'series'; key: string; name: string; narratorId?: number }[] };
 
 export type Stats = {
   totalSeconds: number;

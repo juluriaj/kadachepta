@@ -4,16 +4,19 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { FlatList, Pressable, TextInput, View } from 'react-native';
 
+import { BookRow, SetRow } from '@/components/sets';
 import { NarratorRow, StoryRow } from '@/components/stories';
 import { Screen, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { fontFor, radius, space, touch } from '@/lib/theme';
-import type { NarratorSummary, Story } from '@/lib/types';
+import type { BookSummary, NarratorSummary, Story, StorySet } from '@/lib/types';
+
+type Results = { items: Story[]; collections?: StorySet[]; books?: BookSummary[] };
 
 // Search in Telugu script or English letters (P3-05): "kaaki", "kaki", "కాకి", and "crow" all find the same story.
-// Narrators are listed too (all of them before typing), so a voice the family likes leads to the rest of its stories.
+// Results come in groups: story sets, audiobooks, narrators, then stories. A book's chapters are found through the book.
 export default function Search() {
   const { t } = useI18n();
   const colors = useColors();
@@ -26,9 +29,11 @@ export default function Search() {
   }, [text]);
   const results = useQuery({
     queryKey: ['search', query, profile?.id], enabled: !!query && session.authenticated, placeholderData: keepPreviousData,
-    queryFn: () => api<{ items: Story[] }>(`/api/search?q=${encodeURIComponent(query)}`),
+    queryFn: () => api<Results>(`/api/search?q=${encodeURIComponent(query)}`),
   });
   const items = query ? results.data?.items ?? [] : [];
+  const sets = query ? results.data?.collections ?? [] : [];
+  const books = query ? results.data?.books ?? [] : [];
   const people = useQuery({
     queryKey: ['narrators', profile?.id], enabled: session.authenticated, staleTime: 5 * 60_000,
     queryFn: () => api<{ items: NarratorSummary[] }>('/api/narrators'),
@@ -61,15 +66,28 @@ export default function Search() {
         ListHeaderComponent={
           <View style={{ gap: space.md, paddingBottom: space.md }}>
             {!query ? <Text muted style={{ paddingTop: space.lg }}>{t('search.hint')}</Text> : null}
+            {sets.length ? (
+              <View>
+                <Text variant="label" muted style={{ paddingTop: space.md }}>{t('search.sets')}</Text>
+                {sets.map((set) => <SetRow key={set.id} set={set} />)}
+              </View>
+            ) : null}
+            {books.length ? (
+              <View>
+                <Text variant="label" muted style={{ paddingTop: space.md }}>{t('search.books')}</Text>
+                {books.map((book) => <BookRow key={book.id} book={book} />)}
+              </View>
+            ) : null}
             {narrators.length ? (
               <View>
                 <Text variant="label" muted style={{ paddingTop: space.md }}>{t('search.narrators')}</Text>
                 {narrators.map((person) => <NarratorRow key={`${person.id ?? person.name}`} person={person} />)}
               </View>
             ) : null}
-            {narrators.length && items.length ? <Text variant="label" muted>{t('narrator.stories')}</Text> : null}
+            {(narrators.length || sets.length || books.length) && items.length
+              ? <Text variant="label" muted style={{ paddingTop: space.md }}>{t('search.stories')}</Text> : null}
           </View>}
-        ListEmptyComponent={query && !narrators.length ? (
+        ListEmptyComponent={query && !narrators.length && !sets.length && !books.length ? (
           <Text muted style={{ paddingVertical: space.lg }}>
             {results.error ? String(results.error) : results.isFetching ? '' : t('search.empty', { q: query })}
           </Text>
