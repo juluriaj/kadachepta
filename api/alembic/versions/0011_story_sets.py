@@ -48,7 +48,7 @@ def promote(bind) -> None:
         bind.execute(sa.text("UPDATE audio_assets SET collection = :new WHERE collection = :old"), {"old": old, "new": new})
     rows = bind.execute(sa.text(
         "SELECT id, title, collection FROM audio_assets WHERE status = 'published' AND series_id IS NULL "
-        "AND coalesce(trim(collection), '') <> ''")).all()
+        "AND coalesce(trim(collection), '') <> '' ORDER BY published_at, id")).all()
     groups: dict[str, list] = {}
     names: dict[str, str] = {}
     for asset_id, title, collection in rows:
@@ -65,15 +65,16 @@ def promote(bind) -> None:
             bind.execute(sa.text(
                 "UPDATE collections SET kind = 'set', published = true, source_names = :names WHERE id = :id"),
                 {"names": variants, "id": collection_id})
-            bind.execute(sa.text("DELETE FROM collection_items WHERE collection_id = :id"), {"id": collection_id})
         else:
             titles = {"en-IN": name, **({"te-IN": TELUGU[name]} if name in TELUGU else {})}
             collection_id = bind.execute(sa.text(
                 "INSERT INTO collections (kind, titles, descriptions, published, source_names, created_by) "
                 "VALUES ('set', CAST(:titles AS jsonb), '{}'::jsonb, true, :names, 'migration:0011') RETURNING id"),
                 {"titles": json.dumps(titles, ensure_ascii=False), "names": variants}).scalar_one()
+        start = bind.execute(sa.text("SELECT coalesce(max(position) + 1, 0) FROM collection_items WHERE collection_id = :id"),
+                             {"id": collection_id}).scalar_one()  # an editor's own order comes first
         ordered = sorted(stories, key=lambda pair: _natural(pair[0]))
-        for position, (_, asset_id) in enumerate(ordered):
+        for position, (_, asset_id) in enumerate(ordered, start=start):
             bind.execute(sa.text("INSERT INTO collection_items (collection_id, audio_asset_id, position) "
                                  "VALUES (:c, :a, :p) ON CONFLICT DO NOTHING"),
                          {"c": collection_id, "a": asset_id, "p": position})
@@ -87,6 +88,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Spelling merges are not undone.
-    op.execute("DELETE FROM collections WHERE kind = 'set' AND created_by = 'migration:0011'")
+    op.execute("DELETE FROM collections WHERE kind = 'set' AND created_by IN ('migration:0011', 'auto')")
     op.execute("UPDATE collections SET kind = 'theme' WHERE kind = 'set'")
     op.drop_column("collections", "source_names")
