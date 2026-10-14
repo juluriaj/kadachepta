@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
+import { LanguageSwitch } from '@/components/LanguageSwitch';
 import { Button, Field, Screen, Text, useColors } from '@/components/ui';
 import { api, ApiError, CAN_CHANGE_SERVER, getApiBase, setApiBase } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -11,7 +12,7 @@ import { radius, space } from '@/lib/theme';
 type Step = 'email' | 'code' | 'staff' | 'mfa';
 
 export default function SignIn() {
-  const { t, language, setLanguage } = useI18n();
+  const { t } = useI18n();
   const colors = useColors();
   const { signIn, session, refresh } = useSession();
   const [step, setStep] = useState<Step>(session.mfaRequired || session.mfaEnrollmentRequired ? 'mfa' : 'email');
@@ -61,10 +62,7 @@ export default function SignIn() {
               <Text variant="heading">కథాచెప్టా</Text>
               <Text variant="small" muted>{t('app.tagline')}</Text>
             </View>
-            <Pressable onPress={() => setLanguage(language === 'en' ? 'te' : 'en')} style={{ marginLeft: 'auto', padding: space.sm }}
-              accessibilityRole="button" accessibilityLabel="Change language">
-              <Text variant="label" color={colors.primary}>{language === 'en' ? 'తెలుగు' : 'English'}</Text>
-            </Pressable>
+            <View style={{ marginLeft: 'auto' }}><LanguageSwitch /></View>
           </View>
 
           {step === 'email' || step === 'code' ? (

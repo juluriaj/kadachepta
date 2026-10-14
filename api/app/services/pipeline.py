@@ -18,8 +18,8 @@ from sqlalchemy.orm import Session
 from .. import jobs
 from ..auth import utcnow
 from ..models import AudioAsset, EditorialEvent, Job, TeaserDraft, Transcript
+from . import morals, titles
 from . import settings as app_settings
-from . import titles
 from .notify import notify
 from .transcripts import assess, strip_intro
 
@@ -43,7 +43,8 @@ IN_PROGRESS = ("checking", "awaiting-submit", "transcribing", "waiting-transcrip
                "ready", "failed")
 FINAL = ("published", "rejected")
 STEP_OF_JOB = {"media.process": "Audio check", "transcription": "Transcription", "teaser": "AI drafts",
-               "titles": "Titles", "prompts": "Conversation starters", "artwork": "Artwork"}
+               "titles": "Titles", "prompts": "Conversation starters", "artwork": "Artwork",
+               "translate": "Translation"}
 STT_LANGUAGES = {"te-IN", "hi-IN", "ta-IN", "kn-IN", "ml-IN", "mr-IN", "bn-IN", "gu-IN", "pa-IN", "od-IN", "en-IN"}
 USABLE = ("needs-review", "approved", "accepted")
 
@@ -194,6 +195,8 @@ def advance(db: Session, asset: AudioAsset, *, actor: str = "pipeline", allow_tr
             _set_stage(db, asset, "illustrating")
             return asset.pipeline_stage
 
+    # The moral in Telugu, for the editor to check next to the English. It doesn't hold up the review.
+    morals.request(db, asset, actor)
     if asset.pipeline_stage != "changes-requested" or start:
         if asset.pipeline_stage != "ready":
             asset.ready_for_review_at = utcnow()
@@ -233,7 +236,7 @@ def on_job_finished(db: Session, job: Job, asset: AudioAsset) -> None:
 def on_job_dead(db: Session, job: Job, asset: AudioAsset) -> None:
     if (job.payload or {}).get("test") or asset.pipeline_stage in ("none", *FINAL):
         return
-    if job.job_type in ("artwork", "titles", "prompts"):  # optional steps: continue to review without them
+    if job.job_type in ("artwork", "titles", "prompts", "translate"):  # optional steps: continue without them
         advance(db, asset)
         return
     step = STEP_OF_JOB.get(job.job_type, job.job_type)

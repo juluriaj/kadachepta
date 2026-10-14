@@ -15,6 +15,7 @@ from .models import Job
 JOB_CAPABILITIES = {
     "media.process": "media",
     "transcription": "stt",
+    "translate": "stt",  # Sarvam too: the always-on media worker holds the key
     "teaser": "llm",
     "titles": "llm",
     "prompts": "llm",

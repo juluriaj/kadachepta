@@ -102,7 +102,7 @@ review status.
 |---|---|---|---|
 | Speech-to-text | — | **Sarvam** (Saarika/Saaras): local Telugu STT quality is not good enough yet | faster-whisper large-v3, AI4Bharat IndicConformer |
 | Metadata, teaser, moral, age band, safety descriptors (structured JSON) | LM Studio, OpenAI-compatible, JSON schema output | none planned | Sarvam-M (24B, Indic-tuned), Gemma 3 12B/27B, Qwen3 14B/30B-A3B |
-| Translation (teasers, metadata) | LM Studio | none planned | Sarvam-Translate, IndicTrans2, the metadata model |
+| Translation (teasers, metadata) | LM Studio | **Sarvam** (mayura:v1, formal) for Telugu that listeners read: conversation starters and the moral (`translate` job, media worker) | Sarvam-Translate, IndicTrans2, the metadata model |
 | Review moderation | LM Studio classifier + word lists | none planned | Llama Guard 3, Gemma 3 |
 | Embeddings (search, recommendations) | LM Studio embeddings endpoint | none planned | bge-m3, multilingual-e5-large |
 | Cover artwork | Local diffusion on the GPU worker (ComfyUI or diffusers) | paid FLUX API only if no GPU is available | FLUX.1-schnell (Apache 2.0), SDXL |

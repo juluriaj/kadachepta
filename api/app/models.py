@@ -120,6 +120,8 @@ class AudioAsset(Base):
     content_warnings: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default="{}")
     keywords: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default="{}")
     moral_takeaway: Mapped[str | None] = mapped_column(Text)
+    # The moral in the other app languages (Telugu), translated from the English: see services/morals.py
+    moral_translations: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
     source_adaptation: Mapped[str | None] = mapped_column(Text)
     duration_seconds: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
     bitrate: Mapped[int | None] = mapped_column(Integer)

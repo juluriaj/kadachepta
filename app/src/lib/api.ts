@@ -108,14 +108,33 @@ export function onSignedOut(listener: () => void) {
 
 export const clientKind = IS_WEB ? 'web' : 'mobile';
 
+// Android waits minutes on a connection to an address nobody answers (the desktop moved to a new address),
+// and the app showed its startup spinner the whole time. Requests give up instead, with a clear message.
+const DEFAULT_TIMEOUT_MS = 30_000;
+export class OfflineError extends Error {}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = DEFAULT_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    const timedOut = controller.signal.aborted;
+    throw new OfflineError(timedOut ? `No answer from ${apiBase} in ${Math.round(timeoutMs / 1000)} s.`
+      : `Can't reach ${apiBase}: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function refreshAccess(): Promise<boolean> {
   if (!refreshToken) return false;
   refreshing ??= (async () => {
     try {
-      const response = await fetch(`${apiBase}/api/auth/refresh`, {
+      const response = await fetchWithTimeout(`${apiBase}/api/auth/refresh`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
-      });
+      }, 10_000);
       if (!response.ok) {
         await storeTokens(null, null);
         return false;
@@ -143,20 +162,20 @@ export async function refreshAfter401() {
   return !IS_WEB && refreshAccess();
 }
 
-type Options = { method?: string; body?: unknown; profile?: boolean; retry?: boolean };
+type Options = { method?: string; body?: unknown; profile?: boolean; retry?: boolean; timeoutMs?: number };
 
-export async function api<T = any>(path: string, { method = 'GET', body, profile = true, retry = true }: Options = {}): Promise<T> {
+export async function api<T = any>(path: string, { method = 'GET', body, profile = true, retry = true, timeoutMs }: Options = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (!IS_WEB && accessToken) headers.Authorization = `Bearer ${accessToken}`;
   if (profile && profileId) headers['X-Profile-Id'] = profileId;
   if (parentPin && parentPin.until > Date.now()) headers['X-Parent-Pin'] = parentPin.pin;
-  const response = await fetch(`${apiBase}${path}`, {
+  const response = await fetchWithTimeout(`${apiBase}${path}`, {
     method, headers, body: body === undefined ? undefined : JSON.stringify(body),
     credentials: IS_WEB ? 'same-origin' : 'omit',
-  });
+  }, timeoutMs);
   if (response.status === 401 && !IS_WEB && retry && (await refreshAccess())) {
-    return api<T>(path, { method, body, profile, retry: false });
+    return api<T>(path, { method, body, profile, retry: false, timeoutMs });
   }
   const text = await response.text();
   let data: any = {};

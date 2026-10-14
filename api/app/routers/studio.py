@@ -21,7 +21,7 @@ from ..db import get_db
 from ..models import (
     AssetRights, AudioAsset, EditorialEvent, Job, NarratorProfile, Notification, TeaserDraft, Transcript, User, Worker,
 )
-from ..services import pipeline, policy, ratings, titles
+from ..services import morals, pipeline, policy, ratings, titles
 from ..services import settings as app_settings
 from ..services.assets import apply_metadata, asset_payload, clean_metadata, iso, mastering_payload, metadata_of
 from ..services.notify import notify
@@ -195,6 +195,7 @@ def review_payload(db: Session, asset: AudioAsset) -> dict[str, Any]:
         "overdue": waiting is not None and waiting > sla, "captionsEnabled": asset.captions_enabled,
         "titleTranslations": {lang: {"text": e["text"], "by": e["by"], "confirmed": bool(e.get("confirmed"))}
                               for lang, e in titles.entries(asset).items()},
+        "moralTranslations": {lang: {"text": e["text"], "by": e["by"]} for lang, e in morals.entries(asset).items()},
         "imaginationPrompts": asset.imagination_prompts or {},
         "changesRequested": asset.changes_requested or None, "sourceText": asset.source_text,
         "series": {"id": asset.series.id, "title": asset.series.title, "position": asset.series_position}
@@ -250,6 +251,7 @@ class PublishRequest(BaseModel):
     checklist: list[str] = Field(default_factory=list)
     captionsEnabled: bool | None = None
     titles: dict[str, str] = Field(default_factory=dict)  # title per app language, confirmed by this editor
+    morals: dict[str, str] = Field(default_factory=dict)  # the moral in Telugu, as this editor wrote or left it
     prompts: dict[str, list[str]] | None = None  # conversation starters per language; saving approves them
     seriesPosition: int | None = None
     notes: str | None = Field(default=None, max_length=2000)
@@ -279,6 +281,7 @@ def _apply_review_edits(db: Session, asset: AudioAsset, payload: PublishRequest,
         apply_metadata(asset, clean_metadata(merged, fallback_title=asset.title))
     asset.metadata_review_status = "approved"
     _confirm_titles(asset, payload.titles, actor)
+    morals.record_editor(asset, payload.morals, actor)
     _approve_prompts(asset, payload.prompts, actor)
     if payload.captionsEnabled is not None:
         asset.captions_enabled = payload.captionsEnabled
@@ -351,6 +354,8 @@ def save_draft(asset_id: str, payload: PublishRequest, identity: Identity = Depe
     if payload.metadata:
         apply_metadata(asset, clean_metadata({**metadata_of(asset), **payload.metadata}, fallback_title=asset.title))
     _confirm_titles(asset, payload.titles, identity.username)
+    morals.record_editor(asset, payload.morals, identity.username)
+    morals.request(db, asset, identity.username)  # a new English moral is translated while the editor works
     _approve_prompts(asset, payload.prompts, identity.username)
     draft = pipeline.latest_draft(db, asset.id)
     if draft and payload.teaser:

@@ -34,6 +34,9 @@ export type StoryDetail = Story & {
   moreFromNarrator: Story[];
   moreLikeThis: Story[];
   prompts: Record<string, string[]> | null; // conversation starters for parents (never on child profiles)
+  // By language (te-IN, en-IN), so the page follows the app language as soon as it switches.
+  teasers?: Record<string, { short: string | null; long: string | null }>;
+  morals?: Record<string, string>;
 };
 
 export type Collection = { id: number; kind: string; titles: Record<string, string>; descriptions: Record<string, string> };

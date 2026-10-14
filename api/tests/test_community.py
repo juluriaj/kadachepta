@@ -243,7 +243,8 @@ def test_embed_and_prompt_jobs_store_their_results(client, db):
     token = make_worker(db)
     make_user(db, "ed", "editor")
     login(client, "ed")
-    assert client.post("/api/studio/community/refresh").json()["queued"] == {"embed": 1, "prompts": 1}
+    assert client.post("/api/studio/community/refresh").json()["queued"] == {"embed": 1, "prompts": 1,
+                                                                         "translate": 1}
     from app.services import recommend
     expected = recommend.source_hash("text-embedding-nomic-embed-text-v1.5",
                                      recommend.embedding_text(db.get(AudioAsset, STORY), None))
@@ -256,3 +257,26 @@ def test_embed_and_prompt_jobs_store_their_results(client, db):
     assert db.get(StoryEmbedding, STORY).embedding == [0.1, 0.2]
     assert asset.imagination_prompts["status"] == "draft"  # waits for an editor
     assert client.post("/api/studio/community/refresh").json()["queued"] == {}  # nothing new to do
+
+
+def test_an_owner_requested_refresh_replaces_approved_starters_and_publishes_them(client, db):
+    from app import jobs
+
+    asset = make_asset(db, STORY, ready_to_publish=True, status="published")
+    asset.imagination_prompts = {"texts": {"en-IN": ["How did the crow feel?"]}, "status": "approved", "by": "editor:ed"}
+    token = make_worker(db)
+    jobs.enqueue(db, "prompts", asset_id=STORY, payload={})
+    db.commit()
+    lease = run_job(client, token, "prompts", {"texts": {"en-IN": ["Ignored?"]}, "model": "qwen"})
+    assert "transcript" in lease["inputs"] and "excerpt" not in lease["inputs"]
+    db.expire_all()
+    assert db.get(AudioAsset, STORY).imagination_prompts["texts"] == {"en-IN": ["How did the crow feel?"]}  # kept
+
+    jobs.enqueue(db, "prompts", asset_id=STORY, payload={"publish": True})
+    db.commit()
+    run_job(client, token, "prompts", {"texts": {"en-IN": ["How did the monkey feel?"], "te-IN": ["కోతికి ఎలా అనిపించింది?"]},
+                                       "model": "qwen", "translation": "sarvam-translate:v1"})
+    db.expire_all()
+    assert db.get(AudioAsset, STORY).imagination_prompts == {
+        "texts": {"en-IN": ["How did the monkey feel?"], "te-IN": ["కోతికి ఎలా అనిపించింది?"]},
+        "status": "approved", "by": "ai:qwen+sarvam-translate:v1"}

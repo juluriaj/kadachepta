@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 
+import { LanguageSwitch } from '@/components/LanguageSwitch';
 import { Shelf } from '@/components/stories';
 import { Avatar, Chip, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -58,11 +59,13 @@ export default function Home() {
     <Screen tabs padded={false}>
       <ScrollView contentContainerStyle={{ gap: space.xl, paddingBottom: space.xxl }}
         refreshControl={<RefreshControl refreshing={home.isRefetching} onRefresh={() => void home.refetch()} />}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, paddingTop: space.lg }}>
-          <View style={{ flex: 1 }}>
-            <Text variant="small" muted>{t('app.tagline')}</Text>
-            <Text variant="title" accessibilityRole="header">{t(greetingKey(), { name: profile.name })}</Text>
-          </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, paddingTop: space.lg,
+          marginBottom: -space.md }}>
+          <Text variant="small" muted style={{ flex: 1 }}>{t('app.tagline')}</Text>
+          <LanguageSwitch />
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg }}>
+          <Text variant="title" accessibilityRole="header" style={{ flex: 1 }}>{t(greetingKey(), { name: profile.name })}</Text>
           <Pressable onPress={() => router.push('/search')} accessibilityRole="button" accessibilityLabel={t('home.search')}
             hitSlop={8} style={{ padding: space.xs }}>
             <Ionicons name="search" size={24} color={colors.text} />

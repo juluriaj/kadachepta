@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 
 import {
@@ -47,6 +47,7 @@ type SessionContext = {
   signIn: (body: Record<string, unknown>) => Promise<Session>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
+  changeLanguage: (language: UiLanguage) => Promise<void>;
 };
 
 const Context = createContext<SessionContext | null>(null);
@@ -58,6 +59,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const { setLanguage } = useI18n();
   const [loaded, setLoaded] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
+  // A language picked on the sign-in screen, saved to the account once it signs in.
+  const pickedLanguage = useRef<UiLanguage | null>(null);
 
   useEffect(() => {
     loadStoredSession().finally(() => {
@@ -66,9 +69,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // Startup waits on this one, so it gives up quickly: an unreachable server leads to the sign-in screen,
+  // where review builds can change the server address, instead of an endless spinner.
   const sessionQuery = useQuery({
     queryKey: ['session'], enabled: loaded, staleTime: 60_000,
-    queryFn: () => api<Session>('/api/session', { profile: false }),
+    queryFn: () => api<Session>('/api/session', { profile: false, timeoutMs: 8_000 }),
   });
   const session = useMemo<Session>(() => sessionQuery.data ?? { authenticated: false }, [sessionQuery.data]);
   useEffect(() => {
@@ -115,6 +120,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         { method: 'POST', body: { ...body, client: clientKind }, profile: false });
       if (result.accessToken && result.refreshToken) await storeTokens(result.accessToken, result.refreshToken);
       markSignedIn();
+      const picked = pickedLanguage.current;
+      if (picked && result.authenticated && !STAFF_ROLES.has(result.role ?? '') && picked !== result.uiLanguage) {
+        try {  // before the session is cached, so the app doesn't flip back to the account's old language
+          await api('/api/me/preferences', { method: 'PATCH', profile: false, body: { uiLanguage: picked } });
+          result.uiLanguage = picked;
+        } catch {
+          // Signing in matters more: the language can be changed again from the home screen.
+        }
+      }
+      pickedLanguage.current = null;
       queryClient.setQueryData(['session'], result);
       await queryClient.invalidateQueries({ queryKey: ['household'] });
       return result;
@@ -134,8 +149,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await queryClient.invalidateQueries({ queryKey: ['session'] });
       await queryClient.invalidateQueries({ queryKey: ['household'] });
     },
+    // Anyone can switch: it applies at once and is saved to the account (shared by the household's profiles).
+    changeLanguage: async (language) => {
+      setLanguage(language);
+      if (!session.authenticated) {
+        pickedLanguage.current = language;
+        return;
+      }
+      if (isStaff) return;  // the studio is in English; staff accounts have no household preferences
+      await api('/api/me/preferences', { method: 'PATCH', profile: false, body: { uiLanguage: language } });
+      await queryClient.invalidateQueries({ queryKey: ['household'] });
+    },
   }), [loaded, sessionQuery.isLoading, session, isStaff, householdQuery.data, householdQuery.isLoading, profile,
-    queryClient, clearAll]);
+    queryClient, clearAll, setLanguage]);
 
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
