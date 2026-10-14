@@ -1,17 +1,18 @@
 """Phase 3: ratings and their integrity, reviews and moderation, narrator pages, search, recommendations,
 collections, conversation starters, and opt-in notifications."""
 
+import importlib.util
 from datetime import timedelta
 
 from sqlalchemy import select
 
 from app.auth import utcnow
 from app.models import (
-    AudioAsset, Household, Notification, Profile, RatingFlag, Review, StoryEmbedding, StoryRating,
+    AudioAsset, EditorialEvent, Household, Notification, Profile, RatingFlag, Review, StoryEmbedding, StoryRating,
 )
 from app.services import ratings
 
-from .conftest import login, make_asset, make_user, make_worker
+from .conftest import API_ROOT, login, make_asset, make_user, make_worker
 from .test_household import onboard, parent
 from .test_pipeline import run_job
 
@@ -228,6 +229,41 @@ def test_narrators_credited_by_name_have_a_page_of_their_stories(client, db):
     assert sorted(s["id"] for s in page["stories"]) == [STORY, "b" * 16]
     assert client.get("/api/narrators/named/Sahiti Sagar", headers=headers).json()["stories"][0]["id"] == "c" * 16
     assert client.get("/api/narrators/named/narr", headers=headers).status_code == 404  # has an account page instead
+
+
+def test_migration_moves_authors_out_of_the_narrator_credit(client, db):
+    spec = importlib.util.spec_from_file_location("migration_0012",
+                                                  API_ROOT / "alembic" / "versions" / "0012_author_credits.py")
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    narrator = make_user(db, "narr", "narrator")
+    make_asset(db, STORY, ready_to_publish=True, status="published", narrator_name="Vimala Mare, Leo Tolstoy")
+    make_asset(db, "b" * 16, narrator_name="Vimala Mare &  Deepa  Agarwal", source_adaptation="KathaChepta")
+    make_asset(db, "c" * 16, narrator_name="Kamakshi Balasubramanyam", source_adaptation="KathaChepta: Pratham Books")
+    make_asset(db, "d" * 16, narrator_name="Sahiti Sagar, Chaitanya Sagar", source_adaptation="KathaChepta")
+    make_asset(db, "e" * 16, ready_to_publish=True, status="published", narrator=narrator,
+               narrator_name="Vimala Mare, Leo Tolstoy")  # a narrator account: not touched
+    db.commit()
+
+    assert migration.fix(db.connection()) == 3
+    db.commit()
+    db.expire_all()
+    assert [(a.narrator_name, a.source_adaptation) for a in db.scalars(select(AudioAsset).order_by(AudioAsset.id))] == [
+        ("Vimala Mare", "Folk tale: story by Leo Tolstoy"),
+        ("Vimala Mare", "KathaChepta: story by Deepa Agarwal"),
+        (None, "KathaChepta: Pratham Books; story by Kamakshi Balasubramanyam"),
+        ("Sahiti Sagar, Chaitanya Sagar", "KathaChepta"),
+        ("Vimala Mare, Leo Tolstoy", "Folk tale")]
+    events = db.scalars(select(EditorialEvent).where(EditorialEvent.action == "credits:corrected")
+                        .order_by(EditorialEvent.entity_id)).all()
+    assert [(e.entity_id, e.actor) for e in events] == [(STORY, "migration:0012"), ("b" * 16, "migration:0012"),
+                                                        ("c" * 16, "migration:0012")]
+    assert "'Vimala Mare, Leo Tolstoy' -> 'Vimala Mare'" in events[0].notes
+    assert migration.fix(db.connection()) == 0  # running it again changes nothing
+
+    headers = {"X-Profile-Id": str(family(client, db)["mom"]["id"])}
+    people = client.get("/api/narrators", headers=headers).json()["items"]
+    assert sorted(p["name"] for p in people) == ["Vimala Mare", "narr"]
     assert client.get("/api/narrators/named/Nobody", headers=headers).status_code == 404
     for path in ("/narrator/Vimala Mare", "/narrator/Dr. Rao", f"/narrator/{narrator.id}"):  # reloads and shared links
         response = client.get(path)
