@@ -109,7 +109,8 @@ def _inputs(db: Session, job: Job, request: Request) -> dict[str, Any]:
                     ((draft.suggestions or {}).get("englishTitle") if draft else None) or asset.title,
                     summary=english.get("long") or english.get("short"), moral=asset.moral_takeaway,
                     themes=", ".join(draft.themes or []) if draft else None,
-                    excerpt=(transcript.text or "")[:1200] if transcript else None)
+                    # The worker finds the story's animals and people in it, and checks the questions against it.
+                    transcript=(transcript.text or "") if transcript else "")
     if job.job_type == "review.moderate":
         review = db.get(Review, job.payload.get("reviewId"))
         base.update(reviewId=review.id if review else None, reviewText=review.text if review else "",
@@ -355,11 +356,14 @@ def apply_embed(db: Session, job: Job, asset: AudioAsset, result: dict[str, Any]
 
 
 def apply_prompts(db: Session, job: Job, asset: AudioAsset, result: dict[str, Any]) -> None:
-    if job.payload.get("test") or (asset.imagination_prompts or {}).get("status") == "approved":
+    # "publish" is set only when an owner asks for a catalog-wide refresh to go live without review.
+    publish = bool(job.payload.get("publish"))
+    if job.payload.get("test") or ((asset.imagination_prompts or {}).get("status") == "approved" and not publish):
         return  # never overwrite what an editor approved
     texts = {code: [str(q) for q in values][:3] for code, values in (result.get("texts") or {}).items() if values}
+    by = "+".join(filter(None, (result.get("model", "unknown"), result.get("translation"))))
     if texts:
-        asset.imagination_prompts = {"texts": texts, "status": "draft", "by": f"ai:{result.get('model', 'unknown')}"}
+        asset.imagination_prompts = {"texts": texts, "status": "approved" if publish else "draft", "by": f"ai:{by}"}
 
 
 def apply_review_moderation(db: Session, job: Job, asset: AudioAsset, result: dict[str, Any]) -> None:

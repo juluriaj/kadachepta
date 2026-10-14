@@ -20,6 +20,7 @@ $env:KC_WORKER_CAPABILITIES = if ($settings.KC_GPU_CAPABILITIES) { $settings.KC_
 $env:KC_LLM_BASE_URL = if ($settings.KC_LLM_BASE_URL) { $settings.KC_LLM_BASE_URL } else { "http://localhost:1234/v1" }
 $env:KC_LLM_MODEL = $settings.KC_LLM_MODEL
 $env:KC_ARTWORK_PROVIDER = $settings.KC_ARTWORK_PROVIDER
+$env:SARVAM_API_KEY = $settings.SARVAM_API_KEY  # Telugu conversation starters (Sarvam translate)
 $env:PYTHONIOENCODING = "utf-8"
 
 try {
