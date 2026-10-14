@@ -121,7 +121,10 @@ def _inputs(db: Session, job: Job, request: Request) -> dict[str, Any]:
                     audienceAgeRange=asset.audience_age_range, hasArtwork=bool(asset.artwork_key),
                     englishTitle=(draft.suggestions or {}).get("englishTitle") if draft else None,
                     englishTeaser=english.get("long") or english.get("short"),
-                    themes=draft.themes if draft else [])
+                    englishTeaserShort=english.get("short"), themes=draft.themes if draft else [])
+        # The worker reads which animals are in the story from the transcript and draws each one the same way.
+        transcript = pipeline.latest_transcript(db, asset.id)
+        base["transcript"] = (transcript.text or "") if transcript else ""
     return base
 
 
@@ -138,7 +141,9 @@ def lease(payload: LeaseRequest, request: Request, worker: Worker = Depends(curr
     if payload.info and payload.info != worker.info:
         db.execute(update(Worker).where(Worker.id == worker.id).values(info=payload.info))
         db.commit()
-    job = jobs.lease(db, worker.name, capabilities, get_settings().job_lease_seconds, prefer=payload.preferType)
+    limits = {"transcription": int(app_settings.get(db, "pipeline.transcriptionConcurrency"))}
+    job = jobs.lease(db, worker.name, capabilities, get_settings().job_lease_seconds, prefer=payload.preferType,
+                     limits=limits)
     if not job:
         return Response(status_code=204)
     return {"id": job.id, "type": job.job_type, "attempt": job.attempts, "payload": job.payload,

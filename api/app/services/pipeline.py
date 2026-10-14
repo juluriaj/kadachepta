@@ -173,7 +173,9 @@ def advance(db: Session, asset: AudioAsset, *, actor: str = "pipeline", allow_tr
         _set_stage(db, asset, "drafting")
         return asset.pipeline_stage
 
-    # Title suggestions in each app language, for the editor to confirm (optional, like artwork).
+    # Title suggestions in each app language, for the editor to confirm (optional, like artwork). The Telugu
+    # title comes from the recording when the narrator says it; the local model only drafts the rest.
+    titles.suggest_from_transcript(asset, transcript.text)
     if titles.missing(asset) and not _titles_tried(db, asset):
         _enqueue(db, asset, "titles", actor, {"languages": titles.missing(asset), "title": asset.title})
         _set_stage(db, asset, "drafting")

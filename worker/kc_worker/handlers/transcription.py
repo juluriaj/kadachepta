@@ -10,10 +10,27 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
 from . import JobContext, PermanentError
+
+RATE_LIMIT_WAITS = (15, 30, 60, 120, 240)  # seconds; the job's lease is kept alive by the heartbeat meanwhile
+
+
+def with_backoff(context: JobContext, call, *args, waits=RATE_LIMIT_WAITS, **kwargs):
+    """Sarvam answers HTTP 429 when too many requests arrive at once: wait and try again instead of failing the job."""
+    for wait in (*waits, None):
+        try:
+            return call(*args, **kwargs)
+        except Exception as error:  # noqa: BLE001 - the SDK's TooManyRequestsError, matched by status code
+            if getattr(error, "status_code", None) != 429 or wait is None:
+                raise
+            context.log(f"Sarvam rate limit; trying again in {wait} s")
+            time.sleep(wait)
+    raise AssertionError("unreachable")
+
 
 SARVAM_LANGUAGES = {"te-IN", "hi-IN", "ta-IN", "kn-IN", "ml-IN", "mr-IN", "bn-IN", "gu-IN", "pa-IN", "od-IN", "en-IN"}
 
@@ -41,17 +58,18 @@ class TranscriptionHandler:
         source = context.client.download(context.inputs["sourceUrl"],
                                          context.scratch / f"{context.inputs['assetId']}{suffix}")
         client = SarvamAI(api_subscription_key=api_key)
-        job = client.speech_to_text_job.create_job(model=model, mode="transcribe", language_code=language,
-                                                   with_diarization=False, with_timestamps=True)
+        job = with_backoff(context, client.speech_to_text_job.create_job, model=model, mode="transcribe",
+                           language_code=language, with_diarization=False, with_timestamps=True)
         context.log(f"Sarvam job created: {getattr(job, 'job_id', 'unknown')}")
-        job.upload_files(file_paths=[str(source)])
-        job.start()
-        job.wait_until_complete()
-        results = job.get_file_results()
+        with_backoff(context, job.upload_files, file_paths=[str(source)])
+        with_backoff(context, job.start)
+        # Long chapters can take a while; poll gently so several jobs together stay under the rate limit.
+        with_backoff(context, job.wait_until_complete, poll_interval=15, timeout=3600)
+        results = with_backoff(context, job.get_file_results)
         if not results.get("successful"):
             raise RuntimeError(f"Sarvam could not transcribe the file: {json.dumps(results.get('failed', []))[:800]}")
         with tempfile.TemporaryDirectory(dir=context.scratch) as output_dir:
-            job.download_outputs(output_dir=output_dir)
+            with_backoff(context, job.download_outputs, output_dir=output_dir)
             outputs = sorted(Path(output_dir).glob("*.json"))
             if not outputs:
                 raise RuntimeError("Sarvam reported success but returned no transcript file.")

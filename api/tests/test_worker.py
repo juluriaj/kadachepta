@@ -153,3 +153,16 @@ def test_workers_get_the_same_kind_of_job_as_last_time(client, db):
     token = make_worker(db)
     lease = client.post("/api/worker/lease", json={"preferType": "artwork"}, headers=auth(token)).json()
     assert lease["id"] == artwork.id  # same priority: no model swap on a shared GPU
+
+
+def test_transcriptions_at_once_are_capped(client, db):
+    from app.services import settings as app_settings
+    app_settings.put(db, "pipeline.transcriptionConcurrency", 2, "test")
+    for letter in "abc":
+        make_asset(db, letter * 16)
+        jobs.enqueue(db, "transcription", asset_id=letter * 16, payload={"language": "te-IN"})
+    jobs.enqueue(db, "media.process", asset_id="a" * 16, priority=jobs.PRIORITY_BULK)
+    db.commit()
+    token = make_worker(db, capabilities=["media", "stt"])
+    types = [client.post("/api/worker/lease", json={}, headers=auth(token)).json()["type"] for _ in range(3)]
+    assert types == ["transcription", "transcription", "media.process"]  # the third transcription waits its turn

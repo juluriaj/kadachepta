@@ -64,20 +64,37 @@ def test_mostly_silent_recording_fails():
     assert qc(silenceSeconds=250)["verdict"] == "fail"
 
 
-def test_drafts_v4_asks_for_safety_and_metadata_but_v3_does_not():
-    v4 = build_messages("కాకి", "ఒక కాకి.", ["te-IN", "en-IN"], "drafts-v4", series="పంచతంత్రం")[1]["content"]
-    assert "safety" in v4 and "listeningContexts" in v4 and "Part of the series: పంచతంత్రం" in v4
+def test_drafts_v5_asks_for_safety_and_metadata_but_v3_does_not():
+    v5 = build_messages("కాకి", "ఒక కాకి.", ["te-IN", "en-IN"], "drafts-v5", series="పంచతంత్రం")[1]["content"]
+    assert "safety" in v5 and "listeningContexts" in v5 and "Part of the series: పంచతంత్రం" in v5
     assert "safety" not in build_messages("కాకి", "ఒక కాకి.", ["te-IN"], "teaser-v3")[1]["content"]
     assert set(SCHEMA_V4["required"]) - set(SCHEMA_V3["required"]) == {
         "englishTitle", "genres", "keywords", "listeningContexts", "safety"}
 
 
-def test_artwork_prompt_leads_with_the_story_and_stays_short():
-    prompt = build_prompt({"assetId": "a" * 16, "title": "కాకి", "englishTitle": "The Clever Crow",
-                           "englishTeaser": "A thirsty crow finds a pot with little water. " * 10,
-                           "themes": ["cleverness", "patience"], "mood": "funny"})
-    assert prompt.startswith("Children's storybook illustration for \"The Clever Crow\". A thirsty crow")
-    assert len(prompt) < 600 and "no text" in prompt
+def test_artwork_prompt_is_house_style_then_the_cast_as_they_always_look():
+    from kc_worker.handlers.artwork import DEFAULT_STYLE, MAX_TOKENS, estimate_tokens
+
+    inputs = {"assetId": "a" * 16, "title": "Koti Mosali", "transcript": "ఒక కోతి, ఒక మొసలి. కోతి చెట్టు మీద.",
+              "englishTeaserShort": "A monkey befriends a crocodile who lives in the river. " * 4,
+              "englishTeaser": "ignored when there is a short teaser", "mood": "calm, wise"}
+    prompt = build_prompt(inputs, count=estimate_tokens)
+    assert prompt.startswith(DEFAULT_STYLE + ". featuring a small brown monkey with a long curly tail")
+    assert "big round eyes. A monkey befriends a crocodile" in prompt and "toothy grin" not in prompt  # one cast
+    assert prompt.endswith(". soft kind smiles.") and estimate_tokens(prompt) <= MAX_TOKENS
+    # The studio's style setting replaces the default; a story without animals gets no cast.
+    styled = build_prompt({"assetId": "b" * 16, "title": "Akbar Kala", "englishTeaserShort": "Akbar had a dream.",
+                           "mood": "funny", "settings": {"ai.artwork.style": "Flat paper-cut style."}},
+                          count=estimate_tokens)
+    assert styled == "Flat paper-cut style. Akbar had a dream. cheerful smiling faces."
+
+
+def test_artwork_cast_trusts_the_transcript_over_a_wrong_teaser():
+    from kc_worker import glossary
+
+    assert [e.gloss for e in glossary.cast("కోతి కోతి కోతి కోతి వడ్రంగి", "A crow watches.")] == ["monkey"]
+    assert glossary.cast("యుద్ధం. ఒక చీమ.", "Who holds the fate of war?") == []  # an aside, not a character
+    assert [e.gloss for e in glossary.cast("", "", "Kappa Paamu")] == ["frog", "snake"]
 
 
 def features(**overrides):
@@ -128,3 +145,109 @@ def test_qc_does_not_call_music_or_edited_pauses_background_noise():
     assert qc(noiseFloorDb=-40, profile="edited")["checks"] == []
     assert [c["code"] for c in qc(noiseFloorDb=-40, profile="noise", mastered=True)["checks"]] == ["background-sound"]
     assert [c["code"] for c in qc(profile="tonal")["checks"]] == ["tonal-background"]
+
+
+def test_sarvam_rate_limits_are_waited_out():
+    from kc_worker.handlers.transcription import with_backoff
+
+    class RateLimited(Exception):
+        status_code = 429
+
+    class Context:
+        lines: list = []
+
+        def log(self, line):
+            self.lines.append(line)
+
+    calls = []
+
+    def flaky():
+        calls.append(1)
+        if len(calls) < 3:
+            raise RateLimited()
+        return "ok"
+
+    context = Context()
+    assert with_backoff(context, flaky, waits=(0, 0, 0)) == "ok" and len(calls) == 3 and len(context.lines) == 2
+    try:
+        with_backoff(context, lambda: (_ for _ in ()).throw(RateLimited()), waits=(0,))
+    except RateLimited:
+        pass
+    else:
+        raise AssertionError("gives up after the last wait")
+
+
+MONKEY_STORY = ("ఒక అడవిలో వడ్రంగులు చెట్లను కొట్టి, చెక్కలతో సామాను తయారు చేస్తున్నారు. ఒక కోతి వచ్చి వడ్రంగుల పని "
+                "చూసి ఆశ్చర్యపడింది. కోతులు అన్నీ పారిపోయాయి.")
+
+
+def test_glossary_matches_inflected_words_but_not_lookalikes():
+    from kc_worker import glossary
+
+    found = {entry.gloss for entry in glossary.find(MONKEY_STORY)}
+    assert found == {"monkey", "carpenter"}
+    # కప్పలను (frogs) is a frog; కప్పుకొని (covering), చేపట్టాడు (took up), సింహాసనం (throne) are not animals.
+    assert {e.gloss for e in glossary.find("కప్పలను చూసి దుప్పటి కప్పుకొని పని చేపట్టాడు, సింహాసనం")} == {"frog"}
+    assert {e.gloss for e in glossary.find("వడ్రంగిపిట్ట")} == {"woodpecker"}  # not the carpenter
+    assert [e.gloss for e in glossary.find_roman("Koti Mosali")] == ["monkey", "crocodile"]
+
+
+def test_animals_the_transcript_never_mentions_are_caught():
+    from kc_worker import glossary
+
+    assert glossary.unsupported_animals("One day, a crow watches the woodcutters.", MONKEY_STORY) == ["crow"]
+    assert glossary.unsupported_animals("A curious monkey and two monkeys.", MONKEY_STORY) == []
+    assert glossary.unsupported_animals("A proud bull elephant meets an ant.", "ఏనుగు, చీమ") == []
+    assert glossary.unsupported_animals("Mice and wolves", "ఎలుకలు") == ["wolf"]
+
+
+def test_teaser_prompt_carries_the_story_glossary_not_a_crow_example():
+    from kc_worker.handlers.teaser import SYSTEM
+
+    user = build_messages("Toka Tegina Koti", MONKEY_STORY, ["te-IN", "en-IN"])[1]["content"]
+    line = next(line for line in user.splitlines() if line.startswith("Glossary of animals and people"))
+    assert "కోతి = monkey" in line and "వడ్రంగి = carpenter" in line
+    assert "కాకి" not in SYSTEM and "crow" not in SYSTEM
+
+
+def test_a_swapped_animal_is_retried_with_a_correction_then_fails_with_diagnostics(monkeypatch, tmp_path):
+    from kc_worker import llm
+    from kc_worker.handlers import JobContext
+    from kc_worker.handlers.teaser import TeaserHandler
+
+    def draft(animal):
+        return {"texts": [{"language": "te-IN", "short": "కోతి", "long": "ఒక కోతి"},
+                          {"language": "en-IN", "short": f"A {animal}.", "long": f"A curious {animal} watches."}],
+                "themes": [], "mood": [], "ageSuggestion": "4-8", "contentWarnings": [], "moralTakeaway": "Look first.",
+                "englishTitle": f"The {animal.title()}", "genres": [], "keywords": [], "listeningContexts": [],
+                "safety": {"flags": [], "summary": "", "minAge": 3, "rating": "all-ages"}}
+
+    replies, prompts = [draft("crow"), draft("monkey")], []
+
+    def fake_chat(messages, schema, **_):
+        prompts.append(messages[1]["content"])
+        return replies.pop(0), {"model": "qwen/qwen3-8b"}
+
+    monkeypatch.setattr(llm, "chat_json", fake_chat)
+    job = {"inputs": {"title": "Toka Tegina Koti", "transcript": MONKEY_STORY, "outputLanguages": ["te-IN", "en-IN"]}}
+    output = TeaserHandler().run(JobContext(client=None, job=job, scratch=tmp_path))
+    assert output["texts"]["en-IN"]["long"] == "A curious monkey watches." and output["promptVersion"] == "drafts-v5"
+    assert "previous draft was wrong" not in prompts[0]
+    assert "it mentioned crow (కాకి), but this story has no such animal" in prompts[1]
+
+    replies[:] = [draft("crow"), draft("crow")]
+    try:
+        TeaserHandler().run(JobContext(client=None, job=job, scratch=tmp_path))
+    except RuntimeError as error:
+        assert "mentions crow but the transcript has no కాకి" in str(error) and "కోతి = monkey" in str(error)
+    else:
+        raise AssertionError("a draft that keeps the wrong animal is not saved")
+
+
+def test_title_prompt_glosses_romanized_animal_words():
+    from kc_worker.handlers.titles import SYSTEM
+    from kc_worker.handlers.titles import build_messages as title_messages
+
+    user = title_messages("Raju gari koti", ["en-IN"], None, None)[1]["content"]
+    assert "Glossary: koti (కోతి) = monkey" in user
+    assert "Crow" not in SYSTEM

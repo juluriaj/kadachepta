@@ -278,7 +278,7 @@ def test_settings_are_validated_audited_and_sent_with_jobs(client, db):
     assert client.get("/api/studio/settings").status_code == 403
     login(client, "boss")
     page = client.get("/api/studio/settings").json()
-    assert page["values"]["ai.drafts.promptVersion"] == "drafts-v4"
+    assert page["values"]["ai.drafts.promptVersion"] == "drafts-v5"
     bad = client.put("/api/studio/settings", json={"values": {"ai.artwork.provider": "midjourney"}})
     assert bad.status_code == 422
     ok = client.put("/api/studio/settings", json={"values": {"ai.llm.model": "google/gemma-3-12b",

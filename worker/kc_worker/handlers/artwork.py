@@ -8,37 +8,116 @@ Provider (studio AI settings, sent with each job; KC_ARTWORK_PROVIDER is only th
   disabled
 
 Settings: KC_SDXL_MODEL, KC_SDXL_LORA_REPO, KC_SDXL_VAE (Hugging Face ids) to swap models.
+
+Prompt (artwork-v2): one fixed house style (studio setting ai.artwork.style), then the story's main animal drawn from
+a fixed description (glossary.LOOKS), then a short scene, then one expression phrase from a fixed list. All of it
+fits SDXL's 77-token window: artwork-v1 prompts ran to ~86 tokens and lost their tail.
 """
 
 from __future__ import annotations
 
 import hashlib
 import os
+import re
 import secrets
 import threading
 import time
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from typing import Any
 
-from .. import gpu
+from .. import glossary, gpu
 from . import JobContext, PermanentError
 
 _pipeline = None
 _pipeline_lock = threading.Lock()
+_tokenizer: Any = None
+
+PROMPT_VERSION = "artwork-v2"
+MAX_TOKENS = 77  # SDXL's CLIP text encoders, including the start and end markers
+DEFAULT_STYLE = ("Indian folk art storybook illustration, gouache and watercolor, bold clean outlines, "
+                 "warm earthy colors, soft light, simple composition, no text")
+# The same emotion is always asked for in the same words. First matching mood word wins.
+EXPRESSIONS = [
+    (("funny", "playful", "silly", "humorous", "cheerful", "happy", "joyful", "fun"), "cheerful smiling faces"),
+    (("sad", "emotional", "touching", "melancholy", "sorrowful", "bittersweet", "lonely"), "gentle sad eyes"),
+    (("adventurous", "exciting", "thrilling", "brave", "courageous", "energetic"), "eager wide-eyed faces"),
+    (("tense", "scary", "suspenseful", "dramatic", "serious", "fearful", "mysterious"), "worried wide eyes"),
+    (("wise", "thoughtful", "reflective", "clever", "curious", "inspiring"), "curious bright eyes"),
+    (("calm", "peaceful", "gentle", "soothing", "heartwarming", "warm", "hopeful", "tender"), "soft kind smiles"),
+]
+DEFAULT_EXPRESSION = "friendly expressive faces"
 
 
-def build_prompt(inputs: dict[str, Any]) -> str:
-    """Short and concrete first: SDXL's text encoders only read about 77 tokens."""
-    title = inputs.get("englishTitle") or inputs.get("title") or "a folk tale"
-    scene = (inputs.get("englishTeaser") or "").strip()
-    if len(scene) > 220:
-        scene = scene[:220].rsplit(" ", 1)[0]
-    themes = ", ".join([t for t in inputs.get("themes") or [] if str(t).isascii()][:3])  # the text encoder reads English
-    mood = inputs.get("mood") or "warm, gentle"
-    return (f"Children's storybook illustration for \"{title}\". {scene} "
-            f"Indian folk art, gouache and watercolor, {mood}, {themes}, soft light, expressive characters, "
-            "simple composition, no text").replace("  ", " ")
+def count_tokens(text: str) -> int:
+    """CLIP tokens SDXL reads, start and end markers included; an estimate where transformers isn't installed."""
+    global _tokenizer
+    if _tokenizer is None:
+        try:
+            from transformers import CLIPTokenizer
+            _tokenizer = CLIPTokenizer.from_pretrained(
+                os.environ.get("KC_SDXL_MODEL", "stabilityai/stable-diffusion-xl-base-1.0"), subfolder="tokenizer",
+                local_files_only=True)
+        except Exception:  # noqa: BLE001 - not installed or not downloaded yet
+            _tokenizer = False
+    if _tokenizer:
+        return len(_tokenizer(text, truncation=False).input_ids)
+    return estimate_tokens(text)
+
+
+def estimate_tokens(text: str) -> int:
+    """About one token per short word or punctuation mark and two per long word, plus start and end."""
+    return 2 + sum(1 + (len(word) > 7) for word in re.findall(r"[A-Za-z']+|\d+|[^\sA-Za-z\d]", text))
+
+
+def expression(mood: Any) -> str:
+    words = re.findall(r"[a-z]+", (", ".join(mood) if isinstance(mood, list) else str(mood or "")).lower())
+    for word in words:
+        for moods, phrase in EXPRESSIONS:
+            if word in moods:
+                return phrase
+    return DEFAULT_EXPRESSION
+
+
+def _a(look: str) -> str:
+    return f"{'an' if look[0] in 'aeiou' else 'a'} {look}"
+
+
+def build_prompt(inputs: dict[str, Any], count: Callable[[str], int] | None = None) -> str:
+    """House style, the cast as they always look, the scene, one expression; trimmed to fit 77 tokens."""
+    count = count or count_tokens
+    style = ((inputs.get("settings") or {}).get("ai.artwork.style") or DEFAULT_STYLE).strip().rstrip(".")
+    teaser = " ".join(str(inputs.get("englishTeaserShort") or inputs.get("englishTeaser") or "").split())
+    # Only the main animal gets a description: with two, SDXL-Lightning blends them (a monkey with a crocodile's
+    # tail, a two-headed sheep where the jackal should be). The scene sentence still names the others.
+    animals = glossary.cast(inputs.get("transcript") or "", teaser, inputs.get("title") or "", limit=1)
+    feeling = expression(inputs.get("mood"))
+    # The opening sentence is the concrete setup; later ones are questions, hooks, or turns that spoil the story.
+    scene = ""
+    for sentence in re.split(r"(?<=[.!?])\s+", teaser):
+        if len(scene.split()) >= 8:
+            break
+        if "?" not in sentence:
+            scene = f"{scene} {sentence}".strip()
+    words = (scene or teaser or inputs.get("englishTitle") or inputs.get("title") or "a folk tale").split()
+
+    def compose() -> str:
+        parts = [style]
+        if animals:
+            parts.append("featuring " + " and ".join(_a(glossary.LOOKS[entry.gloss]) for entry in animals))
+        if words:
+            parts.append(" ".join(words).rstrip(".!?"))
+        return ". ".join([*parts, feeling]) + "."
+
+    prompt = compose()
+    while count(prompt) > MAX_TOKENS:  # shorten the scene
+        if words:
+            words = words[:-1]
+        else:
+            break
+        prompt = compose()
+    return prompt
 
 
 def _seed(inputs: dict[str, Any]) -> int:
@@ -139,7 +218,7 @@ class ArtworkHandler:
         provider = settings.get("ai.artwork.provider") or os.environ.get("KC_ARTWORK_PROVIDER", "disabled")
         steps = int(settings.get("ai.artwork.steps") or 8)
         prompt, seed = build_prompt(inputs), _seed(inputs)
-        context.log(f"provider={provider} seed={seed} prompt={prompt}")
+        context.log(f"provider={provider} seed={seed} tokens={count_tokens(prompt)} prompt={prompt}")
         if provider == "local-sdxl":
             data, model = _local_sdxl(context, prompt, seed, steps), "sdxl-base-1.0+lightning-8step"
         elif provider == "pollinations":
@@ -149,4 +228,5 @@ class ArtworkHandler:
         path = context.scratch / "cover.jpg"
         path.write_bytes(data)
         key = context.client.upload(context.job["id"], "cover.jpg", path)
-        return {"key": key, "provider": provider, "model": model, "seed": seed, "prompt": prompt, "steps": steps}
+        return {"key": key, "provider": provider, "model": model, "seed": seed, "prompt": prompt, "steps": steps,
+                "promptVersion": PROMPT_VERSION}
