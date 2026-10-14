@@ -100,7 +100,8 @@ function TitleRow({ item, languages, onSaved }: { item: Item; languages: string[
         {languages.map((lang) => {
           const entry = item.titles[lang];
           const hint = !entry ? (item.pending ? 'AI working…' : 'none yet') : entry.confirmed
-            ? (entry.by === 'original' ? 'as recorded' : 'confirmed') : 'AI suggestion';
+            ? (entry.by === 'original' ? 'as recorded' : 'confirmed')
+            : (entry.by === 'transcript' ? 'from the recording' : 'AI suggestion');
           return (
             <View key={lang} style={{ minWidth: 220, flex: 1 }}>
               <Field label={`${LABELS[lang] ?? lang} · ${hint}`} value={values[lang]} editable={entry?.by !== 'original'}

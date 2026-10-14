@@ -846,6 +846,8 @@ def suggest_titles(payload: TitleSuggest, identity: Identity = Depends(require("
         query = query.where(AudioAsset.status == "published")
     queued = 0
     for asset in db.scalars(query):
+        transcript = pipeline.latest_transcript(db, asset.id)
+        titles.suggest_from_transcript(asset, transcript.text if transcript else None)
         missing = titles.missing(asset)
         if missing and not jobs.active_job(db, asset.id, "titles"):
             jobs.enqueue(db, "titles", asset_id=asset.id, payload={"languages": missing, "title": asset.title},

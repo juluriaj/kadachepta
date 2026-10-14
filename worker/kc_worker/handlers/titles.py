@@ -7,13 +7,14 @@ comes out as "The Proud Goats" rather than a guess from the sound of the words.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
-from .. import gpu, llm
+from .. import glossary, gpu, llm
 from . import JobContext, PermanentError, artwork
 
 LANGUAGE_NAMES = {"te-IN": "Telugu", "en-IN": "English", "hi-IN": "Hindi"}
-PROMPT_VERSION = "titles-v1"
+PROMPT_VERSION = "titles-v2"  # v2: glossary for animal words; v1's two crow examples turned monkeys into crows
 
 SYSTEM = """You write titles for Telugu children's stories in a bilingual app.
 Return the title in each requested language:
@@ -22,20 +23,34 @@ letters) as a Telugu speaker spells the words. Translate English words into natu
 - en-IN: the meaning in natural English, in title case, like a storybook title. Translate every Telugu word; keep \
 only personal names (people, gods) as names.
 - hi-IN: natural Hindi in Devanagari.
-Use the story summary, when given, to get the meaning right. Never add events or names that are not in the title. \
-Drop catalogue codes such as "TR14.".
+Use the glossary, when given, for animal and character words: it is always right. Use the story summary, when \
+given, to get the meaning right. Never add events or names that are not in the title. Drop catalogue codes such \
+as "TR14.".
 
 Examples:
-"Bhale Kaaki" -> te-IN "భలే కాకి", en-IN "The Clever Crow"
+"Telivaina Kothi" -> te-IN "తెలివైన కోతి", en-IN "The Clever Monkey"
 "Adavi Raju" -> te-IN "అడవి రాజు", en-IN "King of the Forest"
 "Tenali Ramudu Gurram" -> te-IN "తెనాలి రాముడు గుర్రం", en-IN "Tenali Raman's Horse"
-"కాకి హంస కాగలదా" -> en-IN "Can a Crow Become a Swan?"
+"కప్ప పాము" -> en-IN "The Frog and the Snake"
 "Garvinchina Nemali" -> te-IN "గర్వించిన నెమలి", en-IN "The Proud Peacock\""""
+
+
+def title_glossary(title: str) -> str:
+    """'koti (కోతి) = monkey' for each animal or character word in the title, romanized or in Telugu script."""
+    entries = list(glossary.find(title))
+    lines = [f"{entry.forms[0]} = {entry.gloss}" for entry in entries]
+    words = re.findall(r"[a-z]+", title.lower())
+    for entry in glossary.find_roman(title):
+        if entry not in entries:
+            spelled = next(word for word in words if word in entry.roman)
+            lines.append(f"{spelled} ({entry.forms[0]}) = {entry.gloss}")
+    return "; ".join(lines)
 
 
 def build_messages(title: str, languages: list[str], series: str | None, summary: str | None) -> list[dict[str, str]]:
     names = ", ".join(f"{code} ({LANGUAGE_NAMES.get(code, code)})" for code in languages)
-    user = (f"Title: {title}\n" + (f"Series: {series}\n" if series else "") +
+    words = title_glossary(title)
+    user = (f"Title: {title}\n" + (f"Glossary: {words}\n" if words else "") + (f"Series: {series}\n" if series else "") +
             (f"Story summary: {summary}\n" if summary else "") + f"Languages: {names}\n/no_think")
     return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
 

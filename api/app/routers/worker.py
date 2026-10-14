@@ -121,7 +121,10 @@ def _inputs(db: Session, job: Job, request: Request) -> dict[str, Any]:
                     audienceAgeRange=asset.audience_age_range, hasArtwork=bool(asset.artwork_key),
                     englishTitle=(draft.suggestions or {}).get("englishTitle") if draft else None,
                     englishTeaser=english.get("long") or english.get("short"),
-                    themes=draft.themes if draft else [])
+                    englishTeaserShort=english.get("short"), themes=draft.themes if draft else [])
+        # The worker reads which animals are in the story from the transcript and draws each one the same way.
+        transcript = pipeline.latest_transcript(db, asset.id)
+        base["transcript"] = (transcript.text or "") if transcript else ""
     return base
 
 

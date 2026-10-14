@@ -1,6 +1,6 @@
 """Story titles in each app language: AI suggestions, editor confirmation, and what listeners see."""
 
-from app.models import AudioAsset, Job
+from app.models import AudioAsset, Job, Transcript
 from app.services import titles
 
 from .conftest import login, make_asset, make_user, make_worker
@@ -56,3 +56,29 @@ def test_result_for_an_old_title_is_ignored(client, db):
     db.expire_all()
     assert db.get(AudioAsset, asset.id).title_translations == {}
     assert db.query(Job).filter_by(job_type="titles").one().status == "succeeded"
+
+
+def test_telugu_title_is_taken_from_the_recording_not_spelled_by_the_model():
+    opening = "కథచెప్తారు ఈరోజే చెప్పబోతున్నాను కదా, కోతి చేష్టలు. కోతి చేష్టలు అంటే అక్కర్లేని పనులు."
+    assert titles.from_transcript("Koti Chestalu", opening) == "కోతి చేష్టలు"
+    assert titles.from_transcript("TR11.Devudu Cheyaleni pani", "నేను చెప్పబోయే కథ దేవుడు చేయలేని పని. ఒకనాటి రాత్రి") \
+        == "దేవుడు చేయలేని పని"
+    assert titles.from_transcript("Prema Bandham by Pushpa Saksena", "నేను చెప్పబోయే కథ ప్రేమ బంధం. మోహన్") == "ప్రేమ బంధం"
+    # The narrator never says it: no guess, the model drafts it and an editor confirms.
+    assert titles.from_transcript("Mutyaala Vaana", "రామాపురం కొండ మీద ఎవరో ఒక ముని తపస్సు చేసుకుంటూ ఉండేవాడు.") is None
+
+
+def test_pipeline_fills_the_telugu_title_from_the_transcript_and_asks_the_model_only_for_english(client, db):
+    asset = make_asset(db, title="Koti Chestalu", status="published")
+    db.add(Transcript(audio_asset_id=asset.id, version=1, language="te-IN", status="approved",
+                      text="కోతి చేష్టలు. ఒక అడవిలో ఒక కోతి ఉండేది.", source_audio_checksum="0" * 64))
+    db.commit()
+    make_user(db, "ed", "editor")
+    login(client, "ed")
+    assert client.post("/api/studio/titles/suggest", json={}).json() == {"queued": 1}
+    db.expire_all()
+    asset = db.get(AudioAsset, asset.id)
+    assert titles.entries(asset)["te-IN"] == {"text": "కోతి చేష్టలు", "by": "transcript", "from": "Koti Chestalu",
+                                              "confirmed": False}
+    job = db.query(Job).filter(Job.audio_asset_id == asset.id, Job.job_type == "titles").one()
+    assert job.payload["languages"] == ["en-IN"]

@@ -1,6 +1,8 @@
 """AI drafts with a local LLM (LM Studio): teasers, metadata suggestions, and the safety pre-check.
 
 Prompt versions (chosen in the studio's AI settings, sent with each job):
+  drafts-v5  drafts-v4 plus a glossary of the story's animals and people, and a check that the English names
+             only animals the transcript mentions (drafts-v4's "కాకి is a crow" example turned monkeys into crows)
   drafts-v4  teasers + genres, keywords, listening moments, English title, and a content-policy safety check
   teaser-v3  teasers, themes, mood, age, warnings, moral (the Phase 0 prompt)
 """
@@ -10,7 +12,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from .. import gpu, llm
+from .. import glossary, gpu, llm
 from . import JobContext, PermanentError, artwork
 
 LANGUAGE_NAMES = {
@@ -20,7 +22,7 @@ LANGUAGE_NAMES = {
 }
 # Indic scripts cost ~1.4 tokens per character, and LM Studio loads models with an 8k context by default.
 MAX_TRANSCRIPT_CHARS = int(os.environ.get("KC_LLM_MAX_TRANSCRIPT_CHARS", "4200"))
-DEFAULT_PROMPT = "drafts-v4"
+DEFAULT_PROMPT = "drafts-v5"
 
 # Kept in step with api/app/services/policy.py and docs/content-policy.md.
 GENRES = ["Folklore", "Fable", "Mythology", "History", "Adventure", "Fantasy", "Humor", "Family", "Science",
@@ -90,8 +92,8 @@ SYSTEM = (
     "without spoilers. Use only facts present in the transcript; never invent names, places, or events. "
     "Do not reveal the ending or the twist. Keep language warm, simple, and suitable for children. "
     "Ignore channel intros, website names, sponsor messages, and greetings at the start or end of the "
-    "recording; never mention them. Translate animal and character names exactly (for example కాకి is "
-    "a crow, హంస is a swan). /no_think"
+    "recording; never mention them. Name every animal and person exactly as the transcript does: use the "
+    "glossary's English word for each Telugu word it lists, and never swap one animal for another. /no_think"
 )
 SAFETY_RUBRIC = (
     "Safety check, for parents: list every content flag with category (fear, violence, death, loss, romance, "
@@ -105,14 +107,25 @@ SAFETY_RUBRIC = (
 )
 
 
+def story_glossary(title: str, transcript: str) -> str:
+    """The animals and people in this story (from the whole transcript, even the part the model doesn't see)."""
+    entries = [entry for entry, _ in glossary.find(f"{title} {transcript}").most_common(14)]
+    return glossary.describe(entries + [entry for entry in glossary.find_roman(title) if entry not in entries])
+
+
 def build_messages(title: str, transcript: str, languages: list[str], version: str = DEFAULT_PROMPT,
-                   series: str | None = None) -> list[dict[str, str]]:
+                   series: str | None = None, correction: str = "") -> list[dict[str, str]]:
     names = ", ".join(f"{LANGUAGE_NAMES.get(code, code)} ({code})" for code in languages)
     story, trimmed = fit_transcript(transcript)
     note = ("The middle of the transcript is omitted. The ending is included only so you can judge the moral and "
             "content warnings: never mention or hint at it in the teasers.\n") if trimmed else ""
+    words = story_glossary(title, transcript)
+    if words:
+        note += f"Glossary of animals and people in this story: {words}.\n"
+    if correction:
+        note += f"{correction}\n"
     extra = ""
-    if version == "drafts-v4":
+    if version != "teaser-v3":
         extra = (f"Also give: `englishTitle` (a natural English title), `genres` (1-3 from the allowed list), "
                  f"`keywords` (3-8 English search words), `listeningContexts` (which of bedtime, drive, run, work, "
                  f"learn suit this story: bedtime only for calm stories), and `safety`.\n{SAFETY_RUBRIC}\n")
@@ -142,6 +155,22 @@ def validate(result: dict[str, Any], languages: list[str]) -> list[str]:
     return problems
 
 
+def wrong_animals(result: dict[str, Any], transcript: str) -> list[str]:
+    """English animal words in the draft that the transcript never mentions, e.g. "crow" in a monkey story."""
+    english = [item.get("short", "") + " " + item.get("long", "")
+               for item in result.get("texts", []) if item.get("language") == "en-IN"]
+    english += [str(result.get(key) or "") for key in ("englishTitle", "moralTakeaway")]
+    english += [str(word) for word in result.get("keywords") or []]
+    return glossary.unsupported_animals(" ".join(english), transcript)
+
+
+def animal_correction(animals: list[str], words: str) -> str:
+    named = ", ".join(f"{animal} ({glossary.telugu_word_for(animal)})" for animal in animals)
+    return (f"A previous draft was wrong: it mentioned {named}, but this story has no such animal. "
+            + (f"The animals and people in this story are: {words}." if words else
+               "Name only animals that the transcript mentions."))
+
+
 class TeaserHandler:
     capability = "llm"
 
@@ -158,23 +187,31 @@ class TeaserHandler:
         if not transcript:
             raise PermanentError("The transcript is empty.")
         languages = inputs.get("outputLanguages") or [inputs.get("language") or "te-IN"]
-        messages = build_messages(inputs.get("title") or "Untitled", transcript, languages, version,
-                                  inputs.get("series"))
-        schema = SCHEMA_V4 if version == "drafts-v4" else SCHEMA_V3
-        context.log(f"model={model} prompt={version}")
+        title = inputs.get("title") or "Untitled"
+        schema = SCHEMA_V3 if version == "teaser-v3" else SCHEMA_V4
+        words = story_glossary(title, transcript)
+        context.log(f"model={model} prompt={version} glossary={words or '(none)'}")
         artwork.release_pipeline()  # give the GPU back to the LLM (kc_worker/gpu.py)
         gpu.llm_will_load()
         last_problems: list[str] = []
-        for attempt in range(2):  # one repair attempt if the model skips a language
+        correction = ""
+        for attempt in range(2):  # one repair attempt if the model skips a language or swaps an animal
+            messages = build_messages(title, transcript, languages, version, inputs.get("series"), correction)
             result, stats = llm.chat_json(messages, schema, model=model, temperature=0.2 + 0.2 * attempt,
-                                          max_tokens=2500 if version == "drafts-v4" else 1500)
+                                          max_tokens=1500 if version == "teaser-v3" else 2500)
             context.log(f"LLM {stats}")
             last_problems = validate(result, languages)
+            animals = wrong_animals(result, transcript) if "en-IN" in languages else []
+            if animals:
+                last_problems.append("the English draft mentions " + ", ".join(
+                    f"{animal} but the transcript has no {glossary.telugu_word_for(animal)}" for animal in animals))
+                correction = animal_correction(animals, words)
             if not last_problems:
                 break
             context.log(f"Draft rejected: {last_problems}")
         if last_problems:
-            raise RuntimeError(f"Model output failed validation: {'; '.join(last_problems)}")
+            raise RuntimeError(f"Model output failed validation twice: {'; '.join(last_problems)}. "
+                               f"Glossary sent: {words or '(none)'}. Retry the drafts, or write the teaser by hand.")
         output = {
             "language": languages[0],
             "texts": {item["language"]: {"short": item["short"].strip(), "long": item["long"].strip()}
@@ -184,7 +221,7 @@ class TeaserHandler:
             "moralTakeaway": result.get("moralTakeaway"), "provider": "lmstudio", "model": stats["model"],
             "promptVersion": version, "stats": stats,
         }
-        if version == "drafts-v4":
+        if version != "teaser-v3":
             output.update({key: result.get(key) for key in
                            ("englishTitle", "genres", "keywords", "listeningContexts", "safety")})
         return output

@@ -40,13 +40,18 @@ SPECS: dict[str, Spec] = {
                          "LM Studio model for teasers, metadata suggestions, and safety checks."),
     "ai.llm.modelByLanguage": Spec({}, "map", "Drafting model per language",
                                    "Overrides the drafting model for specific story languages, e.g. hi-IN."),
-    "ai.drafts.promptVersion": Spec("drafts-v4", "choice", "Drafting prompt",
-                                    "drafts-v4 adds genres, listening moments, and the safety pre-check.",
-                                    choices=("drafts-v4", "teaser-v3")),
+    "ai.drafts.promptVersion": Spec("drafts-v5", "choice", "Drafting prompt",
+                                    "drafts-v5 adds genres, listening moments, the safety pre-check, and a "
+                                    "glossary so the model names the story's animals correctly.",
+                                    choices=("drafts-v5", "teaser-v3")),
     "ai.artwork.provider": Spec(os.environ.get("KC_ARTWORK_PROVIDER") or "local-sdxl", "choice", "Artwork provider",
                                 "local-sdxl runs on the GPU worker. Pollinations is a third-party service with "
                                 "unclear commercial terms; use only for experiments.",
                                 choices=("local-sdxl", "pollinations", "disabled")),
+    "ai.artwork.style": Spec("Indian folk art storybook illustration, gouache and watercolor, bold clean outlines, "
+                             "warm earthy colors, soft light, simple composition, no text", "text", "Artwork style",
+                             "The house style every cover starts with. Keep it short: the model reads about 60 "
+                             "words in all, and animals, the scene, and expressions come after it."),
     "ai.artwork.steps": Spec(8, "int", "Artwork steps",
                              "The local model is tuned for 8 steps; fewer is faster but rougher.", minimum=2, maximum=40),
     "ai.embeddings.model": Spec(os.environ.get("KC_EMBEDDING_MODEL") or "text-embedding-nomic-embed-text-v1.5", "text",
@@ -99,7 +104,7 @@ WORKER_KEYS = {
     "prompts": ("ai.llm.model",),
     "review.moderate": ("ai.llm.model",),
     "embed": ("ai.embeddings.model",),
-    "artwork": ("ai.artwork.provider", "ai.artwork.steps"),
+    "artwork": ("ai.artwork.provider", "ai.artwork.style", "ai.artwork.steps"),
     "transcription": ("ai.stt.model",),
     "media.process": ("audio.mastering", "audio.masteringStrength"),
 }
