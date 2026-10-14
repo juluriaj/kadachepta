@@ -1,18 +1,28 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { PinPad } from '@/components/ParentGate';
-import { Avatar, Screen, Text, useColors } from '@/components/ui';
+import { Avatar, Button, Screen, Text, useColors } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { useSession, type Profile } from '@/lib/session';
 import { radius, space } from '@/lib/theme';
 
+function confirm(message: string): Promise<boolean> {
+  if (Platform.OS === 'web') return Promise.resolve(window.confirm(message));
+  return new Promise((resolve) => Alert.alert('', message, [
+    { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+    { text: 'OK', style: 'destructive', onPress: () => resolve(true) },
+  ]));
+}
+
 // "Who's listening?" Leaving a child profile for another profile needs the parent PIN (when one is set).
+// Anyone can sign the device out, without the PIN: it shows nothing private and needs the password to undo.
 export default function Profiles() {
   const { t } = useI18n();
   const colors = useColors();
-  const { household, profile: current, selectProfile } = useSession();
+  const { household, profile: current, selectProfile, signOut } = useSession();
   const [pending, setPending] = useState<Profile | null>(null);
 
   const choose = async (profile: Profile) => {
@@ -41,6 +51,9 @@ export default function Profiles() {
             </Pressable>
           ))}
         </View>
+        <Button kind="ghost" title={t('family.signOut')} style={{ alignSelf: 'center' }}
+          icon={<Ionicons name="log-out-outline" size={18} color={colors.primary} />}
+          onPress={() => void confirm(t('profiles.signOutConfirm')).then((ok) => { if (ok) void signOut(); })} />
       </ScrollView>
       <PinPad visible={!!pending} onCancel={() => setPending(null)} onDone={async () => {
         const target = pending!;

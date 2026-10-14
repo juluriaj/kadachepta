@@ -59,6 +59,7 @@ export default function Family() {
           <Ionicons name="lock-closed-outline" size={40} color={colors.muted} />
           <Text variant="heading">{t('pin.enter')}</Text>
           <Button title={t('common.continue')} onPress={() => setPinMode('verify')} />
+          <Button kind="ghost" title={t('family.signOut')} onPress={signOut} />
         </View>
         <PinPad visible={pinMode === 'verify'} onCancel={() => setPinMode(null)} onDone={() => { setPinMode(null); setUnlocked(true); }} />
       </Screen>
