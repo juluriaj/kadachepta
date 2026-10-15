@@ -30,7 +30,7 @@ STAGES = {
     "needs-fix": "Needs a fix",
     "awaiting-submit": "Ready to submit",
     "transcribing": "Being prepared",
-    "waiting-transcript": "Waiting for transcription approval",
+    "waiting-transcript": "Waiting for an admin to transcribe",
     "drafting": "Being prepared",
     "illustrating": "Being prepared",
     "ready": "With editor",
