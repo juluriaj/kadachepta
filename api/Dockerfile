@@ -3,6 +3,9 @@ FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /srv/api
 
+# FriBiDi lets Pillow lay out Telugu (book cover titles, services/covers.py).
+RUN apt-get update && apt-get install -y --no-install-recommends libfribidi0 && rm -rf /var/lib/apt/lists/*
+
 COPY api/requirements.txt api/requirements-dev.txt ./
 ARG INSTALL_DEV=false
 RUN pip install -r requirements.txt && if [ "$INSTALL_DEV" = "true" ]; then pip install -r requirements-dev.txt; fi

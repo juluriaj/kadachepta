@@ -169,6 +169,17 @@ class Series(Base):
     description: Mapped[str | None] = mapped_column(Text)
     language: Mapped[str] = mapped_column(String(16), nullable=False, server_default="te-IN")
     narrator_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    # The book's cover stands for every chapter (services/assets.py artwork_url). "book-cover" is a scan of the
+    # printed book; "own-cover" is KathaChepta's (an illustration with the title set in code). The source note
+    # says where a book cover came from, for answering a claim.
+    artwork_key: Mapped[str | None] = mapped_column(Text)
+    artwork_updated_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    artwork_kind: Mapped[str | None] = mapped_column(String(16))
+    artwork_source: Mapped[str | None] = mapped_column(Text)
+    cover_title: Mapped[str | None] = mapped_column(Text)  # the title printed on our own cover (Telugu script)
+    # A book taken down after a claim: its chapters have the status "withdrawn" until it is restored.
+    withdrawn_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    withdrawn_reason: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = now_column()
     updated_at: Mapped[datetime] = now_column(onupdate=func.now())

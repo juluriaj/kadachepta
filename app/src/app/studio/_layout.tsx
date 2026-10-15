@@ -12,6 +12,7 @@ const LINKS = [
   { href: '/studio/titles', label: 'Titles' },
   { href: '/studio/prompts', label: 'Starters' },
   { href: '/studio/collections', label: 'Collections' },
+  { href: '/studio/books', label: 'Books' },
   { href: '/studio/narrators', label: 'Narrators' },
   { href: '/studio/activity', label: 'Activity' },
   { href: '/studio/settings', label: 'AI & processing', permission: 'jobs.manage' },

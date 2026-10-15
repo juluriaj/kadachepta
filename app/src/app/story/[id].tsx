@@ -52,7 +52,8 @@ export default function Story() {
     <Screen padded={false} back>
       <ScrollView contentContainerStyle={{ gap: space.xl, paddingBottom: space.xxl }}>
         <View style={{ alignItems: 'center', gap: space.lg, paddingHorizontal: space.lg }}>
-          <Cover id={s.id} title={title(s)} artworkUrl={mediaUrl(s.artworkUrl)} size={240} />
+          <Cover id={s.id} title={title(s)} artworkUrl={mediaUrl(s.artworkUrl)} size={240}
+            badge={s.book ? t('book.chapter', { n: s.book.chapter }) : null} />
           <Text variant="display" style={{ textAlign: 'center' }} accessibilityRole="header">{title(s)}</Text>
           <Text muted style={{ textAlign: 'center' }}>
             <NarratedBy story={s} /> · {t('common.min', { n: minutes(s.duration) })}

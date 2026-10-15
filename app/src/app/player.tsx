@@ -91,7 +91,8 @@ export default function Player() {
           {reading && canRead ? (
             <ReadAlong storyId={story.id} position={player.position} onSeek={player.seekTo} />
           ) : (
-            <Cover id={story.id} title={title(story)} artworkUrl={mediaUrl(story.artworkUrl)} size={280} />
+            <Cover id={story.id} title={title(story)} artworkUrl={mediaUrl(story.artworkUrl)} size={280}
+              badge={story.book ? t('book.chapter', { n: story.book.chapter }) : null} />
           )}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
             {canRead ? (

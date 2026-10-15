@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import PurePosixPath
 from typing import Any
 
-from ..models import AudioAsset
+from ..models import AudioAsset, Series
 from ..storage import media_url
 from .titles import confirmed_titles
 
@@ -117,7 +117,18 @@ def mastering_payload(asset: AudioAsset) -> dict[str, Any]:
             "compareUrl": media_url(compare) if compare else None}
 
 
+def series_cover_url(series: Series | None) -> str | None:
+    if series is None or not series.artwork_key:
+        return None
+    version = int(series.artwork_updated_at.timestamp()) if series.artwork_updated_at else None
+    return media_url(series.artwork_key, version)
+
+
 def artwork_url(asset: AudioAsset) -> str | None:
+    """A chapter of a book with a cover shows the book's cover; anything else its own artwork."""
+    cover = series_cover_url(asset.series) if asset.series_id else None
+    if cover:
+        return cover
     version = int(asset.artwork_updated_at.timestamp()) if asset.artwork_updated_at else None
     return media_url(asset.artwork_key, version)
 

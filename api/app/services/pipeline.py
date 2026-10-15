@@ -189,7 +189,8 @@ def advance(db: Session, asset: AudioAsset, *, actor: str = "pipeline", allow_tr
         return asset.pipeline_stage
 
     provider = app_settings.get(db, "ai.artwork.provider")
-    if not asset.artwork_key and provider != "disabled" and app_settings.get(db, "pipeline.autoArtwork"):
+    has_book_cover = bool(asset.series_id and asset.series and asset.series.artwork_key)  # the cover stands for it
+    if not asset.artwork_key and not has_book_cover and provider != "disabled"             and app_settings.get(db, "pipeline.autoArtwork"):
         if not _gave_up(db, asset.id, "artwork"):
             _enqueue(db, asset, "artwork", actor)
             _set_stage(db, asset, "illustrating")
