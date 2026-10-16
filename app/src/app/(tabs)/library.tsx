@@ -5,7 +5,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { NewPlaylist, usePlaylists } from '@/components/playlists';
-import { minutes, StoryRow } from '@/components/stories';
+import { minutes, StoryList } from '@/components/stories';
 import { Button, Chip, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
 import { downloadsSupported, listDownloads, removeDownload, type DownloadEntry } from '@/lib/downloads';
@@ -61,23 +61,22 @@ export default function Library() {
 
         {tab === 'playlists' ? <Playlists /> : null}
 
-        {tab === 'favorites' && (favorites.length ? favorites.map((story) => <StoryRow key={story.id} story={story} />)
-          : empty(t('library.noFavorites')))}
+        {tab === 'favorites' && (favorites.length ? <StoryList stories={favorites} /> : empty(t('library.noFavorites')))}
 
-        {tab === 'history' && (history.length ? history.map((story) => (
-          <StoryRow key={story.id} story={story} right={story.progress?.completed
-            ? <Ionicons name="checkmark-circle" size={22} color={colors.success} accessibilityLabel="Finished" /> : undefined} />
-        )) : empty(t('library.noHistory')))}
+        {tab === 'history' && (history.length ? (
+          <StoryList stories={history} accessory={(story) => story.progress?.completed
+            ? <Ionicons name="checkmark-circle" size={22} color={colors.success} accessibilityLabel="Finished" /> : null} />
+        ) : empty(t('library.noHistory')))}
 
         {tab === 'downloads' && (!downloadsSupported ? empty(t('library.downloadsWebOnly'))
-          : downloaded.length ? downloaded.map((entry) => (
-            <StoryRow key={entry.story.id} story={entry.story} right={
-              <Pressable accessibilityRole="button" accessibilityLabel={`${t('library.remove')} ${title(entry.story)}`} hitSlop={12}
-                onPress={async () => { await removeDownload(entry.story.id); setDownloads(await listDownloads()); }}>
+          : downloaded.length ? (
+            <StoryList stories={downloaded.map((entry) => entry.story)} accessory={(story) => (
+              <Pressable accessibilityRole="button" accessibilityLabel={`${t('library.remove')} ${title(story)}`} hitSlop={12}
+                onPress={async () => { await removeDownload(story.id); setDownloads(await listDownloads()); }}>
                 <Ionicons name="trash-outline" size={22} color={colors.muted} />
               </Pressable>
-            } />
-          )) : empty(t('library.noDownloads')))}
+            )} />
+          ) : empty(t('library.noDownloads')))}
         {tab === 'downloads' && downloaded.length ? (
           <Text variant="small" muted>
             {downloaded.length} · {Math.round(downloaded.reduce((sum, d) => sum + d.bytes, 0) / 1_000_000)} MB ·{' '}

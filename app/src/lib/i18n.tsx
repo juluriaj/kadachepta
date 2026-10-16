@@ -437,6 +437,9 @@ const en = {
   'search.sets': 'Story sets',
   'search.books': 'Audiobooks',
   'search.stories': 'Stories',
+  'stories.viewAs': 'Show stories as',
+  'stories.tiles': 'Tiles',
+  'stories.list': 'List',
 };
 
 type Key = keyof typeof en;
@@ -876,6 +879,9 @@ const te: Partial<Dictionary> = {
   'search.sets': 'కథా సంపుటాలు',
   'search.books': 'ఆడియో పుస్తకాలు',
   'search.stories': 'కథలు',
+  'stories.viewAs': 'కథలను ఇలా చూపించు',
+  'stories.tiles': 'బొమ్మలుగా',
+  'stories.list': 'జాబితాగా',
 };
 
 const dictionaries: Record<string, Partial<Dictionary>> = { en, te };

@@ -196,6 +196,8 @@ with no help.
 | P1-13 | Accessibility baseline: screen reader labels, dynamic type, 44 pt targets, contrast, reduced motion | |
 | P1-14 | UI localization framework (ICU messages); English + Telugu UI strings; locale-aware numbers and dates | Epic L |
 | P1-15 | Account deletion and data export inside the app | App Store requirement |
+| P1-16 | Screen readers on web hear whether chips, toggles, and checkboxes are selected or checked: merged in PR #10. Still to do: the checkboxes in `narrate/apply.tsx` and `narrate/new.tsx` use the old prop | Found 2026-10-16 |
+| P1-17 | Plural forms in UI strings: the app shows "1 stories" and "1 ratings" (narrator tiles, rating counts); the i18n layer has no plural rules for English or Telugu | Found 2026-10-16 |
 
 ---
 
@@ -273,6 +275,10 @@ narrators, and discovery gets better with use.
 | P3-07 | Imagination prompts: optional short spoken or written question at the end of a story ("What would you have done?"), drafted by a local LLM, approved by an editor, shown to parents as conversation starters | Supports the "provoke creativity" goal |
 | P3-08 | Collections and editorial shelves (festivals, themes, age), manageable in the studio | |
 | P3-09 | Notifications (opt-in): new story from followed narrator, series continuation; no streak-pressure notifications for children | |
+| P3-10 | Narrator photo and bio: narrators upload a photo and edit their bio in Studio → Profile; an editor approves the photo before listeners see it. Editors add the bio and photo for narrators the catalog credits by name only (most of today's voices, e.g. Vimala Mare, have no account). The photo replaces the initial on Home narrator tiles, search rows and the narrator page, which also shows "narrating since". Add the tiles/list toggle to the narrator page's story list at the same time | Requested 2026-10-16. Step 1 of narrator profiles and messaging |
+| P3-11 | Editor ↔ narrator conversation on each submission: a two-way thread on the Studio review page and the narrator's submission page, replacing the one-way notes left with each review action; a notification when the other side replies | Requested 2026-10-16. Step 2: low risk, and it ends the back-and-forth of resubmitting to ask a question |
+| P3-12 | Listener → narrator messages. Rules: grown-up profiles only, never children's; narrators opt in and can reply, mute, or block; email addresses, phone numbers, and links are filtered out; the same moderation checks and report button as reviews; a daily limit per household. A lighter first version: thank-you notes that the narrator can reply to | Requested 2026-10-16. Step 3. Child-safety line: no direct contact with children's profiles. Messaging rules agreed 2026-10-16 |
+| P3-13 | Spike (brigading) detection for narrator ratings. Grown-ups rate a narrator 1–5 on their page, and those ratings join the narration stars in one score (built 2026-10-16, `narrator_ratings`); the burst check still watches only story ratings | Needed before narrator scores affect payouts |
 
 ---
 
