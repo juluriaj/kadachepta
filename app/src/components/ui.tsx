@@ -152,11 +152,16 @@ export function Field(props: TextInputProps & { label: string }) {
   );
 }
 
-export function Chip({ label, selected, onPress, icon }: { label: string; selected?: boolean; onPress?: () => void; icon?: ReactNode }) {
+// A chip with `selected` is a checkbox: on/off, or one of a multi-select. One choice of several is role="radio", inside a
+// View with accessibilityRole="radiogroup". aria-checked rather than accessibilityState, which react-native-web drops.
+export function Chip({ label, selected, onPress, icon, role = 'checkbox' }: { label: string; selected?: boolean; onPress?: () => void;
+  icon?: ReactNode; role?: 'checkbox' | 'radio' }) {
   const colors = useColors();
+  const stateful = selected !== undefined;
   return (
     <Pressable
-      accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected }} onPress={onPress}
+      accessibilityRole={stateful ? role : 'button'} accessibilityLabel={label} aria-checked={stateful ? selected : undefined}
+      onPress={onPress}
       style={{ minHeight: 40, paddingHorizontal: space.lg, borderRadius: radius.pill, flexDirection: 'row', gap: 6,
         alignItems: 'center', borderWidth: 1, borderColor: selected ? colors.primary : colors.border,
         backgroundColor: selected ? colors.primary : colors.surface }}>

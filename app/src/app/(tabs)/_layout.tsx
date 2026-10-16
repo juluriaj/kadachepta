@@ -34,12 +34,12 @@ export default function TabsLayout() {
       tabBar={({ state, navigation }) => (
         <View style={{ backgroundColor: colors.surface }}>
           <MiniPlayer />
-          <View style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: colors.border, paddingBottom: Math.max(insets.bottom, space.sm) }}>
+          <View accessibilityRole="tablist" style={{ flexDirection: 'row', borderTopWidth: 1, borderColor: colors.border, paddingBottom: Math.max(insets.bottom, space.sm) }}>
             {state.routes.filter((route) => !hidden.has(route.name)).map((route) => {
               const focused = state.routes[state.index]?.key === route.key;
               const [active, inactive] = ICONS[route.name] ?? ['ellipse', 'ellipse-outline'];
               return (
-                <Pressable key={route.key} accessibilityRole="tab" accessibilityState={{ selected: focused }}
+                <Pressable key={route.key} accessibilityRole="tab" aria-selected={focused}
                   accessibilityLabel={labels[route.name]}
                   onPress={() => navigation.navigate(route.name)}
                   style={{ flex: 1, alignItems: 'center', gap: 2, paddingTop: space.sm, minHeight: 52 }}>

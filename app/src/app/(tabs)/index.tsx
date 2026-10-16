@@ -92,15 +92,17 @@ export default function Home() {
         </Text>
 
         {moments.length ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm, paddingHorizontal: space.lg }}>
+          <ScrollView horizontal accessibilityRole="radiogroup" accessibilityLabel={t('family.moments')} showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: space.sm, paddingHorizontal: space.lg }}>
             {moments.map((m) => (
-              <Chip key={m} label={t(`moment.${m}` as TranslationKey)} selected={moment === m} onPress={() => setMoment(moment === m ? null : m)} />
+              <Chip key={m} role="radio" label={t(`moment.${m}` as TranslationKey)} selected={moment === m} onPress={() => setMoment(moment === m ? null : m)} />
             ))}
           </ScrollView>
         ) : null}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm, paddingHorizontal: space.lg }}>
+        <ScrollView horizontal accessibilityRole="radiogroup" accessibilityLabel={t('home.length')} showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: space.sm, paddingHorizontal: space.lg }}>
           {DURATIONS.map((d) => (
-            <Chip key={d.id} label={d.id === 'any' ? t('home.allDurations') : `≤ ${t('common.min', { n: d.id })}`}
+            <Chip key={d.id} role="radio" label={d.id === 'any' ? t('home.allDurations') : `≤ ${t('common.min', { n: d.id })}`}
               selected={duration === d.id} onPress={() => setDuration(d.id)}
               icon={d.id === 'any' ? undefined : <Ionicons name="time-outline" size={14} color={duration === d.id ? colors.onPrimary : colors.text} />} />
           ))}

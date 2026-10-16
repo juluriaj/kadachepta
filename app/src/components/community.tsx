@@ -92,11 +92,11 @@ export function RatingCard({ storyId, compact, onDismiss }: { storyId: string; c
       {data.kind === 'child' ? (
         <>
           <Text variant="heading">{t('rate.kids')}</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+          <View accessibilityRole="radiogroup" accessibilityLabel={t('rate.kids')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
             {REACTIONS.map((reaction) => (
-              <Pressable key={reaction.id} onPress={() => void rate({ reaction: reaction.id })} accessibilityRole="button"
+              <Pressable key={reaction.id} onPress={() => void rate({ reaction: reaction.id })} accessibilityRole="radio"
                 accessibilityLabel={t(`reaction.${reaction.id}` as TranslationKey)}
-                accessibilityState={{ selected: mine?.reaction === reaction.id }}
+                aria-checked={mine?.reaction === reaction.id}
                 style={{ padding: space.sm, borderRadius: 16, borderWidth: 2, alignItems: 'center', minWidth: 72,
                   borderColor: mine?.reaction === reaction.id ? colors.primary : colors.border }}>
                 <Text style={{ fontSize: 34, lineHeight: 42 }}>{reaction.emoji}</Text>

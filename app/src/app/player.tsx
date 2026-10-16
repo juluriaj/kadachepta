@@ -96,8 +96,8 @@ export default function Player() {
           )}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
             {canRead ? (
-              <Pressable onPress={() => setReading(!reading)} hitSlop={12} accessibilityRole="button"
-                accessibilityState={{ selected: reading }} accessibilityLabel={reading ? t('player.showCover') : t('player.readAlong')}
+              <Pressable onPress={() => setReading(!reading)} hitSlop={12} accessibilityRole="switch"
+                aria-checked={reading} accessibilityLabel={t('player.readAlong')}
                 style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
                 <Ionicons name={reading ? 'image-outline' : 'document-text-outline'} size={26} color={colors.text} />
               </Pressable>
@@ -296,8 +296,8 @@ function FavoriteButton({ storyId, fallback }: { storyId: string; fallback: bool
   };
 
   return (
-    <Pressable onPress={() => void toggle()} hitSlop={12} accessibilityRole="button" accessibilityState={{ selected: saved }}
-      accessibilityLabel={saved ? t('story.removeFavorite') : t('story.addFavorite')}
+    <Pressable onPress={() => void toggle()} hitSlop={12} accessibilityRole="checkbox" aria-checked={saved}
+      accessibilityLabel={t('story.addFavorite')}
       style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
       <Ionicons name={saved ? 'heart' : 'heart-outline'} size={28} color={saved ? colors.accent : colors.text} />
     </Pressable>

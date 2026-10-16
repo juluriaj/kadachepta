@@ -104,9 +104,9 @@ export default function Onboarding() {
               </View>
             ))}
             <Field label={t('onboarding.kidName')} value={draftName} onChangeText={setDraftName} onSubmitEditing={addChild} />
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+            <View accessibilityRole="radiogroup" accessibilityLabel={t('age.label')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
               {(['3-5', '6-8', '9-12'] as const).map((band) => (
-                <Chip key={band} label={t(`age.${band}`)} selected={draftBand === band} onPress={() => setDraftBand(band)} />
+                <Chip key={band} role="radio" label={t(`age.${band}`)} selected={draftBand === band} onPress={() => setDraftBand(band)} />
               ))}
             </View>
             <Button title={t('onboarding.addKid')} kind="secondary" disabled={!draftName.trim()} onPress={addChild}
