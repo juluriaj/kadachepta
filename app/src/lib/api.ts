@@ -195,6 +195,23 @@ export async function api<T = any>(path: string, { method = 'GET', body, profile
   return data as T;
 }
 
+// Sends a file as the whole request body (a book cover in the studio), with the same sign-in and error shape as api().
+export async function apiSendFile<T = any>(path: string, file: Blob, contentType: string): Promise<T> {
+  const headers = { Accept: 'application/json', 'Content-Type': contentType, ...(await authHeaders()) };
+  const response = await fetchWithTimeout(`${apiBase}${path}`, {
+    method: 'PUT', headers, body: file, credentials: IS_WEB ? 'same-origin' : 'omit',
+  }, 120_000);
+  const text = await response.text();
+  let data: any = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { error: text.slice(0, 200) };
+  }
+  if (!response.ok) throw new ApiError(response.status, data, 'PUT', path, response.headers.get('x-request-id'));
+  return data as T;
+}
+
 // Signed media paths come back relative on the API; native players need absolute URLs.
 export function mediaUrl(path: string | null | undefined) {
   if (!path) return null;

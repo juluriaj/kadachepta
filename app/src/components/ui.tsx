@@ -171,8 +171,9 @@ export function Chip({ label, selected, onPress, icon, role = 'checkbox' }: { la
   );
 }
 
-export function Cover({ id, title, artworkUrl, size, rounded = radius.md }: { id: string; title: string; artworkUrl: string | null;
-  size: number; rounded?: number }) {
+// ``badge`` labels a chapter on its book's cover ("Chapter 12"), since every chapter shows the same picture.
+export function Cover({ id, title, artworkUrl, size, rounded = radius.md, badge }: { id: string; title: string;
+  artworkUrl: string | null; size: number; rounded?: number; badge?: string | null }) {
   return (
     <View style={{ width: size, height: size, borderRadius: rounded, overflow: 'hidden', backgroundColor: coverColor(id),
       alignItems: 'center', justifyContent: 'center' }}>
@@ -182,6 +183,12 @@ export function Cover({ id, title, artworkUrl, size, rounded = radius.md }: { id
       ) : (
         <RNText style={{ color: '#fff', fontSize: size * 0.34, fontFamily: fontFor(title, 'bold') }}>{title.trim().charAt(0)}</RNText>
       )}
+      {badge ? (
+        <View style={{ position: 'absolute', top: size * 0.05, left: size * 0.05, paddingHorizontal: 8, paddingVertical: 3,
+          borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.62)' }}>
+          <RNText style={{ color: '#fff', fontSize: Math.max(11, size * 0.055), fontFamily: fontFor(badge, 'bold') }}>{badge}</RNText>
+        </View>
+      ) : null}
     </View>
   );
 }

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { shuffled } from '@/components/sets';
-import { minutes, StoryRow } from '@/components/stories';
+import { minutes, StoryList } from '@/components/stories';
 import { Button, ErrorState, Field, Loading, Screen, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -104,17 +104,17 @@ export default function Playlist() {
           </View>
         ) : <Text muted>{t('playlist.noStories')}</Text>}
         {error ? <Text variant="small" color={colors.danger}>{error}</Text> : null}
-        {playlist.stories.map((story, index) => (
-          <StoryRow key={story.id} story={story} right={
-            <View style={{ flexDirection: 'row' }}>
-              <Small icon="chevron-up" label={t('queue.moveUp')} disabled={index === 0} onPress={() => move(index, -1)} />
-              <Small icon="chevron-down" label={t('queue.moveDown')} disabled={index === playlist.stories.length - 1}
-                onPress={() => move(index, 1)} />
-              <Small icon="close" label={`${t('playlist.remove')}: ${title(story)}`}
-                onPress={() => void change(() => api<PlaylistDetail>(`${url}/items/${story.id}`, { method: 'DELETE' }))} />
-            </View>
-          } />
-        ))}
+        {/* Tiles read left to right, so there the arrows point back and forward. */}
+        <StoryList stories={playlist.stories} accessory={(story, index, view) => (
+          <View style={{ flexDirection: 'row' }}>
+            <Small icon={view === 'tiles' ? 'chevron-back' : 'chevron-up'} label={t('queue.moveUp')} disabled={index === 0}
+              onPress={() => move(index, -1)} />
+            <Small icon={view === 'tiles' ? 'chevron-forward' : 'chevron-down'} label={t('queue.moveDown')}
+              disabled={index === playlist.stories.length - 1} onPress={() => move(index, 1)} />
+            <Small icon="close" label={`${t('playlist.remove')}: ${title(story)}`}
+              onPress={() => void change(() => api<PlaylistDetail>(`${url}/items/${story.id}`, { method: 'DELETE' }))} />
+          </View>
+        )} />
         <Button kind="ghost" title={t('playlist.delete')} onPress={() => void confirm(t('playlist.deleteConfirm')).then((ok) => {
           if (ok) void change(() => api(url, { method: 'DELETE' })).then(() => router.back());
         })} />

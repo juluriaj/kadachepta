@@ -25,6 +25,7 @@ export default function Narrator() {
   const { profile, session } = useSession();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const [rateError, setRateError] = useState<string | null>(null);
   const page = useQuery({ queryKey: ['narrator', id, profile?.id], enabled: !!id && session.authenticated,
     queryFn: () => api<NarratorPage>(/^\d+$/.test(id) ? `/api/narrators/${id}`
       : `/api/narrators/named/${encodeURIComponent(id)}`) });
@@ -42,6 +43,20 @@ export default function Narrator() {
       void queryClient.invalidateQueries({ queryKey: ['updates'] });
     } finally {
       setBusy(false);
+    }
+  };
+
+  // The narrator's score and your rating come back together, so the page updates without a reload.
+  const rate = async (value: number) => {
+    setRateError(null);
+    try {
+      const result = await api<Pick<NarratorPage, 'narration' | 'rating'>>(n.id != null ? `/api/narrators/${n.id}/rating`
+        : `/api/narrators/named/${encodeURIComponent(n.name)}/rating`, { method: 'POST', body: { rating: value } });
+      queryClient.setQueryData<NarratorPage>(['narrator', id, profile?.id], (old) => (old ? { ...old, ...result } : old));
+      void queryClient.invalidateQueries({ queryKey: ['narrators'] });
+      void queryClient.invalidateQueries({ queryKey: ['home'] });
+    } catch (failure) {
+      setRateError(failure instanceof Error ? failure.message : String(failure));
     }
   };
 
@@ -80,6 +95,14 @@ export default function Narrator() {
           ) : <Text variant="small" muted>{t('rate.few')}</Text>}
         </View>
       ) : null}
+      {n.rating ? n.rating.eligible ? (
+        <View style={{ gap: space.xs }}>
+          <Text variant="label" muted>{t('narrator.rate', { name: n.name })}</Text>
+          <Stars value={n.rating.mine} onChange={(value) => void rate(value)} label={t('narrator.rate', { name: n.name })} />
+          {n.rating.mine ? <Text variant="small" color={colors.success}>{t('rate.thanks')}</Text> : null}
+          {rateError ? <Text variant="small" color={colors.danger}>{rateError}</Text> : null}
+        </View>
+      ) : <Text variant="small" muted>{t('narrator.listenFirst')}</Text> : null}
       <Text variant="heading">{t('narrator.stories')} · {n.stories.length}</Text>
     </View>
   );

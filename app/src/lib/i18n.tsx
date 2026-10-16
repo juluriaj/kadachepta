@@ -137,6 +137,7 @@ const en = {
   'family.pinNew': 'Set a parent PIN',
   'family.pinHint': 'Children need this PIN to switch profiles, change settings, or leave their profile.',
   'family.language': 'App language',
+  'family.dataSaverHint': 'Plays and downloads smaller audio files on this device, to use less mobile data.',
   'family.account': 'Account',
   'family.export': 'Download my data',
   'family.delete': 'Delete account',
@@ -370,6 +371,8 @@ const en = {
   'narrator.score': 'Narration rating',
   'narrator.followHint': 'You’ll see their new stories in Updates (the bell on Home).',
   'narrator.storyCount': '{n} stories',
+  'narrator.rate': 'Your rating for {name}',
+  'narrator.listenFirst': 'Listen to one of their stories to rate them.',
   'series.follow': 'Follow this series',
   'series.following': 'Following this series',
   'series.followHint': 'You’ll see its next chapter in Updates (the bell on Home).',
@@ -410,6 +413,7 @@ const en = {
   'playlist.remove': 'Remove from playlist',
   'shelf.sets': 'Story sets',
   'shelf.books': 'Audiobooks',
+  'shelf.narrators': 'Narrators',
   'collection.count': '{n} stories',
   'collection.heard': '{n} of {total} heard',
   'collection.from': 'From {title}',
@@ -433,6 +437,9 @@ const en = {
   'search.sets': 'Story sets',
   'search.books': 'Audiobooks',
   'search.stories': 'Stories',
+  'stories.viewAs': 'Show stories as',
+  'stories.tiles': 'Tiles',
+  'stories.list': 'List',
 };
 
 type Key = keyof typeof en;
@@ -573,6 +580,7 @@ const te: Partial<Dictionary> = {
   'family.pinNew': 'తల్లిదండ్రుల PIN పెట్టండి',
   'family.pinHint': 'ప్రొఫైల్ మార్చడానికి, సెట్టింగ్‌లు మార్చడానికి పిల్లలకు ఈ PIN అవసరం.',
   'family.language': 'యాప్ భాష',
+  'family.dataSaverHint': 'ఈ పరికరంలో కథలు చిన్న ఆడియో ఫైళ్లుగా ప్లే, డౌన్‌లోడ్ అవుతాయి, మొబైల్ డేటా తక్కువ ఖర్చవుతుంది.',
   'family.account': 'ఖాతా',
   'family.export': 'నా డేటా డౌన్‌లోడ్ చేయండి',
   'family.delete': 'ఖాతాను తొలగించండి',
@@ -805,6 +813,8 @@ const te: Partial<Dictionary> = {
   'narrator.score': 'చెప్పిన తీరుకు రేటింగ్',
   'narrator.followHint': 'వారి కొత్త కథలు అప్‌డేట్స్‌లో (హోమ్‌లోని గంట గుర్తు) కనిపిస్తాయి.',
   'narrator.storyCount': '{n} కథలు',
+  'narrator.rate': '{name} గారికి మీ రేటింగ్',
+  'narrator.listenFirst': 'రేటింగ్ ఇవ్వడానికి వారి కథల్లో ఒకటి వినండి.',
   'series.follow': 'ఈ సిరీస్‌ను ఫాలో అవ్వండి',
   'series.following': 'ఈ సిరీస్‌ను ఫాలో అవుతున్నారు',
   'series.followHint': 'తర్వాతి భాగం అప్‌డేట్స్‌లో (హోమ్‌లోని గంట గుర్తు) కనిపిస్తుంది.',
@@ -845,6 +855,7 @@ const te: Partial<Dictionary> = {
   'playlist.remove': 'ప్లేలిస్ట్ నుంచి తీసేయి',
   'shelf.sets': 'కథా సంపుటాలు',
   'shelf.books': 'ఆడియో పుస్తకాలు',
+  'shelf.narrators': 'కథకులు',
   'collection.count': '{n} కథలు',
   'collection.heard': '{total}లో {n} విన్నారు',
   'collection.from': '{title} నుండి',
@@ -868,6 +879,9 @@ const te: Partial<Dictionary> = {
   'search.sets': 'కథా సంపుటాలు',
   'search.books': 'ఆడియో పుస్తకాలు',
   'search.stories': 'కథలు',
+  'stories.viewAs': 'కథలను ఇలా చూపించు',
+  'stories.tiles': 'బొమ్మలుగా',
+  'stories.list': 'జాబితాగా',
 };
 
 const dictionaries: Record<string, Partial<Dictionary>> = { en, te };

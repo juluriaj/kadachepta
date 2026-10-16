@@ -23,9 +23,9 @@ from .. import jobs
 from ..auth import utcnow
 from ..config import get_settings
 from ..db import get_db
-from ..models import AudioAsset, EditorialEvent, Job, Review, StoryEmbedding, TeaserDraft, Transcript, Worker
+from ..models import AudioAsset, EditorialEvent, Job, Review, Series, StoryEmbedding, TeaserDraft, Transcript, Worker
 from ..security import token_hash
-from ..services import community, morals, pipeline, policy, recommend, titles
+from ..services import community, covers, morals, pipeline, policy, recommend, titles
 from ..services import settings as app_settings
 from ..services.assets import as_list, normalize_language
 from ..storage import get_storage, media_url
@@ -128,6 +128,11 @@ def _inputs(db: Session, job: Job, request: Request) -> dict[str, Any]:
         # The worker reads which animals are in the story from the transcript and draws each one the same way.
         transcript = pipeline.latest_transcript(db, asset.id)
         base["transcript"] = (transcript.text or "") if transcript else ""
+        series = db.get(Series, int(job.payload["seriesId"])) if job.payload.get("seriesId") else None
+        if series:  # a whole book's cover: the book, not one chapter ("Chapter 1" is no subject for a picture)
+            base.update(title=series.title, englishTitle=series.title,
+                        englishTeaserShort=series.description or english.get("short"),
+                        englishTeaser=series.description or english.get("long"))
     return base
 
 
@@ -164,6 +169,8 @@ def _output_key(job: Job, asset: AudioAsset, name: str) -> str:
         return f"originals/{asset.id}/joined-{job.id}-{name}"
     if job.job_type == "media.process":  # per job, so re-mastering never overwrites a file someone is playing
         return f"renditions/{asset.id}/v{asset.version_number}/j{job.id}/{name}"
+    if job.job_type == "artwork" and job.payload.get("seriesId"):  # the illustration for a book's own cover
+        return f"series/{int(job.payload['seriesId'])}/{int(utcnow().timestamp())}-art-{name}"
     if job.job_type == "artwork":
         return f"artworks/{asset.id}/{int(utcnow().timestamp())}-{name}"
     if job.job_type == "transcription":
@@ -325,6 +332,17 @@ def apply_teaser(db: Session, job: Job, asset: AudioAsset, result: dict[str, Any
 
 
 def apply_artwork(db: Session, job: Job, asset: AudioAsset, result: dict[str, Any]) -> None:
+    if job.payload.get("seriesId"):  # KathaChepta's own cover for a whole book, drawn from its first chapter
+        series = db.get(Series, int(job.payload["seriesId"]))
+        key = result.get("key")
+        if series is None or not key or not key.startswith(f"series/{series.id}/") or not get_storage().exists(key):
+            raise HTTPException(status_code=400, detail=f"Result references a missing or foreign file: {key!r}.")
+        if not job.payload.get("test"):
+            try:
+                covers.save_own_cover(db, series, key, f"ai:{result.get('provider', 'unknown')}")
+            except covers.CoverError as error:
+                raise HTTPException(status_code=500, detail=str(error)) from None
+        return
     key = _require_key(asset, result.get("key"), "artworks")
     if job.payload.get("test"):
         return

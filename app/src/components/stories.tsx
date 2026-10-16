@@ -1,7 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import { Fragment, useEffect, useRef, useState, type ReactElement } from 'react';
-import { FlatList, Platform, Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type ReactElement, type ReactNode } from 'react';
+import {
+  FlatList, Platform, Pressable, StyleSheet, useWindowDimensions, View, type FlatListProps, type StyleProp, type ViewStyle,
+} from 'react-native';
 
 import { mediaUrl } from '@/lib/api';
 import { downloadStory, downloadsSupported, localUri } from '@/lib/downloads';
@@ -18,7 +21,8 @@ export function minutes(seconds: number) {
 
 // A chapter on a shelf stands for its book ("Barister Parvateesam · Ch 12 of 58") and opens the book, except in a
 // list of the book's own chapters (chapterView), where each card is that chapter.
-export function StoryCard({ story, width = 150, chapterView }: { story: Story; width?: number; chapterView?: boolean }) {
+export function StoryCard({ story, width = 150, chapterView, onPress }: { story: Story; width?: number; chapterView?: boolean;
+  onPress?: () => void }) {
   const { t, title } = useI18n();
   const colors = useColors();
   const progress = story.progress && !story.progress.completed && story.duration
@@ -30,7 +34,7 @@ export function StoryCard({ story, width = 150, chapterView }: { story: Story; w
   return (
     <Pressable
       accessibilityRole="button" accessibilityLabel={`${name}, ${detail}`}
-      onPress={() => router.push(book ? `/book/${book.id}` : `/story/${story.id}`)} testID="story-card"
+      onPress={onPress ?? (() => router.push(book ? `/book/${book.id}` : `/story/${story.id}`))} testID="story-card"
       style={(state) => ({ width, gap: space.sm, opacity: state.pressed ? 0.8 : 1, borderRadius: radius.md,
         // react-native-web reports keyboard focus: show where the arrow keys are
         ...(Platform.OS === 'web' ? { outlineStyle: 'solid', outlineOffset: 4, outlineColor: colors.primary,
@@ -165,6 +169,128 @@ export function StoryRow({ story, right }: { story: Story; right?: React.ReactNo
   );
 }
 
+// Long lists of stories show as cover tiles in a grid or as compact rows. The listener picks one for the whole app
+// and this device remembers it, the way the player remembers read along.
+export type StoryView = 'tiles' | 'list';
+const STORY_VIEW = 'kc.storyView';
+let storyView: StoryView = 'list';
+const storyViewListeners = new Set<() => void>();
+const showStoriesAs = (view: StoryView) => {
+  storyView = view;
+  storyViewListeners.forEach((listener) => listener());
+};
+const watchStoryView = (listener: () => void) => {
+  storyViewListeners.add(listener);
+  return () => { storyViewListeners.delete(listener); };
+};
+AsyncStorage.getItem(STORY_VIEW).then((value) => {
+  if (value === 'tiles' || value === 'list') showStoriesAs(value);
+}).catch(() => {});
+
+export function useStoryView() {
+  const view = useSyncExternalStore(watchStoryView, () => storyView, () => storyView);
+  const choose = (next: StoryView) => {
+    showStoriesAs(next);
+    AsyncStorage.setItem(STORY_VIEW, next).catch(() => {});
+  };
+  return [view, choose] as const;
+}
+
+// Two tiles across a phone, more as the screen widens.
+const TILE_MIN = 140;
+function grid(width: number) {
+  const columns = Math.max(2, Math.floor((width + space.lg) / (TILE_MIN + space.lg)));
+  return { columns, tile: Math.floor((width - space.lg * (columns - 1)) / columns) };
+}
+
+function TileGap() {
+  return <View style={{ height: space.lg }} />;
+}
+
+export function StoryViewToggle() {
+  const { t } = useI18n();
+  const colors = useColors();
+  const [view, setView] = useStoryView();
+  return (
+    <View accessibilityRole="radiogroup" accessibilityLabel={t('stories.viewAs')}
+      style={{ flexDirection: 'row', padding: 2, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border,
+        backgroundColor: colors.surface }}>
+      {(['tiles', 'list'] as const).map((option) => {
+        const selected = view === option;
+        return (
+          // aria-checked rather than accessibilityState, which react-native-web no longer passes to the page
+          <Pressable key={option} onPress={() => setView(option)} accessibilityRole="radio" aria-checked={selected}
+            accessibilityLabel={t(option === 'tiles' ? 'stories.tiles' : 'stories.list')} hitSlop={4} testID={`story-view-${option}`}
+            style={{ width: 44, height: 40, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center',
+              backgroundColor: selected ? colors.primary : 'transparent' }}>
+            <Ionicons name={option === 'tiles' ? 'grid-outline' : 'list'} size={20} color={selected ? colors.onPrimary : colors.text} />
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+type StoryListProps = {
+  stories: Story[];
+  // Beside the toggle: a heading ("58 chapters") or any label.
+  title?: ReactNode;
+  // With a header, the list does its own scrolling (a FlatList, with the header above the toggle) and takes FlatList
+  // props; without one, it sits inside the screen's ScrollView.
+  header?: ReactElement;
+  // Something for each story: at the end of its row, under its tile.
+  accessory?: (story: Story, index: number, view: StoryView) => ReactNode;
+  // A row other than StoryRow (a book's chapters), and what tapping a tile does instead of opening the story.
+  row?: (story: Story, index: number) => ReactElement;
+  onPress?: (story: Story, index: number) => void;
+  chapterView?: boolean;
+} & Omit<FlatListProps<Story>, 'data' | 'renderItem' | 'keyExtractor' | 'numColumns' | 'columnWrapperStyle'
+  | 'ItemSeparatorComponent' | 'ListHeaderComponent'>;
+
+export function StoryList({ stories, title, header, accessory, row, onPress, chapterView, ...list }: StoryListProps) {
+  const [view] = useStoryView();
+  const screen = useWindowDimensions();
+  const [width, setWidth] = useState<number | null>(null);
+  // Until the list has measured itself: the screen less its margins, or the list's own maximum width if narrower.
+  const maxWidth = StyleSheet.flatten(list.contentContainerStyle)?.maxWidth;
+  const guess = Math.min(screen.width - space.lg * 2, typeof maxWidth === 'number' ? maxWidth : Infinity);
+  const { columns, tile } = grid(width ?? guess);
+  const tiles = view === 'tiles';
+
+  const bar = stories.length ? (
+    <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touch, marginBottom: space.sm }}>
+      <View style={{ flex: 1 }}>
+        {typeof title === 'string' ? <Text variant="heading" accessibilityRole="header">{title}</Text> : title}
+      </View>
+      <StoryViewToggle />
+    </View>
+  ) : null;
+  const item = (story: Story, index: number) => tiles ? (
+    <View style={{ width: tile, gap: space.xs }}>
+      <StoryCard story={story} width={tile} chapterView={chapterView} onPress={onPress && (() => onPress(story, index))} />
+      {accessory ? <View style={{ flexDirection: 'row', alignItems: 'center' }}>{accessory(story, index, 'tiles')}</View> : null}
+    </View>
+  ) : row ? row(story, index) : <StoryRow story={story} right={accessory?.(story, index, 'list')} />;
+
+  if (header) {
+    return (
+      <FlatList {...list} key={tiles ? `tiles-${columns}` : 'list'} data={stories} keyExtractor={(story) => story.id}
+        numColumns={tiles ? columns : 1} columnWrapperStyle={tiles ? { gap: space.lg } : undefined}
+        ItemSeparatorComponent={tiles ? TileGap : undefined}
+        ListHeaderComponent={<>{header}{bar}</>} renderItem={({ item: story, index }) => item(story, index)} />
+    );
+  }
+  return (
+    <View>
+      {bar}
+      <View style={tiles ? { flexDirection: 'row', flexWrap: 'wrap', gap: space.lg } : undefined}>
+        {stories.map((story, index) => <Fragment key={story.id}>{item(story, index)}</Fragment>)}
+      </View>
+    </View>
+  );
+}
+
 // A narrator's page: by account when they have one, otherwise by the name the catalog credits them with.
 export function narratorHref(person: NarratorCredit) {
   return { pathname: '/narrator/[id]' as const, params: { id: person.id != null ? String(person.id) : person.name } };
@@ -212,10 +338,44 @@ export function NarratorRow({ person }: { person: NarratorSummary }) {
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <Text variant="heading" numberOfLines={1} style={{ fontSize: 15 }}>{person.name}</Text>
-        <Text variant="small" muted>{t('narrator.storyCount', { n: person.stories })}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+          <Text variant="small" muted>{t('narrator.storyCount', { n: person.stories })}</Text>
+          <NarratorScore person={person} />
+        </View>
       </View>
       <Ionicons name="chevron-forward" size={18} color={colors.muted} />
     </Pressable>
+  );
+}
+
+// A narrator on the home shelf: a round tile with their initial, so voices read differently from story covers.
+export function NarratorTile({ person, width = 110 }: { person: NarratorSummary; width?: number }) {
+  const { t } = useI18n();
+  return (
+    <Pressable onPress={() => router.push(narratorHref(person))} testID="story-card" accessibilityRole="link"
+      accessibilityLabel={[person.name, t('narrator.storyCount', { n: person.stories }),
+        person.narration?.score != null ? `${t('narrator.score')} ${person.narration.score.toFixed(1)}` : null].filter(Boolean).join(', ')}
+      style={({ pressed }) => ({ width, alignItems: 'center', gap: space.sm, opacity: pressed ? 0.8 : 1 })}>
+      <Cover id={`narrator-${person.id ?? person.name}`} title={person.name} artworkUrl={null} size={width} rounded={width / 2} />
+      <Text variant="heading" numberOfLines={2} style={{ fontSize: 15, lineHeight: 21, textAlign: 'center' }}>{person.name}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        <Text variant="small" muted>{t('narrator.storyCount', { n: person.stories })}</Text>
+        <NarratorScore person={person} />
+      </View>
+    </Pressable>
+  );
+}
+
+// "★ 4.6": the narrator's score, once enough grown-ups rated them (children's lists carry no scores).
+function NarratorScore({ person }: { person: NarratorSummary }) {
+  const colors = useColors();
+  const score = person.narration?.score;
+  if (score == null) return null;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+      <Ionicons name="star" size={12} color={colors.accent} />
+      <Text variant="small">{score.toFixed(1)}</Text>
+    </View>
   );
 }
 

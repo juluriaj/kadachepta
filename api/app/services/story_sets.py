@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from ..models import AudioAsset, Collection, CollectionItem, ListeningProgress, Series, TeaserDraft
-from .assets import artwork_url, iso, narrator_people, person_key
+from .assets import artwork_url, iso, narrator_people, person_key, series_cover_url
 
 SET_KIND = "set"
 MIN_SET_STORIES = 2  # one story is not a set: smaller sets are kept for editors but not listed
@@ -170,7 +170,8 @@ def book_summary(book: Book, progress: dict[str, ListeningProgress]) -> dict[str
         "id": book.series.id, "title": book.series.title, "description": book.series.description,
         "language": book.series.language, "narrators": list(narrators.values()),
         "narrator": ", ".join(person["name"] for person in narrators.values()) or "KathaChepta",
-        "artworkUrl": artwork_url(cover) if cover else None, "chapterCount": len(chapters),
+        "artworkUrl": series_cover_url(book.series) or (artwork_url(cover) if cover else None),
+        "chapterCount": len(chapters),
         "duration": round(sum(asset.duration_seconds or 0 for asset in chapters)),
         "finished": sum(1 for asset in chapters if _finished(asset, progress.get(asset.id))),
         "lastListenedAt": iso(last_listened(book, progress)),

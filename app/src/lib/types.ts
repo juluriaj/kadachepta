@@ -58,7 +58,7 @@ export type BookPage = BookSummary & { chapters: Story[] };
 export type Collection = { id: number; kind: string; titles: Record<string, string>; descriptions: Record<string, string> };
 
 export type Shelf = { id: string; moment?: string; basedOn?: Story; collection?: Collection; items: Story[];
-  sets?: StorySet[]; books?: BookSummary[] };
+  sets?: StorySet[]; books?: BookSummary[]; narrators?: NarratorSummary[] };
 
 // --- Phase 3: ratings, reviews, narrator pages, updates ---
 
@@ -85,10 +85,15 @@ export type Community = {
 // A narrator with an account has an id; catalog narrators are credited by name only.
 export type NarratorCredit = { name: string; id: number | null };
 
-export type NarratorSummary = NarratorCredit & { stories: number; languages: string[] };
+// ``narration`` (grown-ups only) pools the narration stars on their stories with ratings of the narrator.
+export type NarratorSummary = NarratorCredit & { stories: number; languages: string[]; narration?: Score };
 
 export type NarratorPage = { id: number | null; name: string; biography: string | null; languages: string[]; since: string | null;
-  stories: Story[]; narration: Score | null; followers: number; following: boolean; canFollow: boolean };
+  stories: Story[]; narration: Score | null; followers: number; following: boolean; canFollow: boolean;
+  rating: NarratorRating | null };
+
+// Rating the narrator from their page (grown-ups who heard one of their stories; never the narrator themselves).
+export type NarratorRating = { eligible: boolean; mine: number | null };
 
 export type Updates = { items: { id: number; kind: string; read: boolean; createdAt: string; story: Story }[]; unread: number;
   settings: { followed: boolean; series: boolean } | null;

@@ -1,10 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
-import { FlatList, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { resumeLabel } from '@/components/sets';
-import { minutes, NarratedBy } from '@/components/stories';
+import { minutes, NarratedBy, StoryList } from '@/components/stories';
 import { Button, Cover, ErrorState, Loading, ProgressBar, Screen, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
 import { formatListening, useI18n } from '@/lib/i18n';
@@ -58,16 +58,17 @@ export default function BookScreen() {
       <Button title={resumeLabel(t, book)} onPress={() => playFrom(resumeIndex)}
         icon={<Ionicons name={book.resume.state === 'finished' ? 'refresh' : 'play'} size={20} color={colors.onPrimary} />} />
       {book.description ? <Text style={{ fontSize: 17, lineHeight: 28 }}>{book.description}</Text> : null}
-      <Text variant="heading">{t('book.chapters', { n: book.chapterCount })}</Text>
     </View>
   );
 
+  // Tapping a chapter, row or tile, plays from there; the chapters after it follow on.
   return (
     <Screen back>
-      <FlatList data={book.chapters} keyExtractor={(chapter) => chapter.id} ListHeaderComponent={header} initialNumToRender={15}
+      <StoryList stories={book.chapters} header={header} title={t('book.chapters', { n: book.chapterCount })} chapterView
+        initialNumToRender={15} onPress={(_, index) => playFrom(index)}
         contentContainerStyle={{ paddingVertical: space.lg, maxWidth: 640, width: '100%', alignSelf: 'center' }}
-        renderItem={({ item, index }) => (
-          <ChapterRow chapter={item} number={index + 1} current={player.story?.id === item.id} onPress={() => playFrom(index)} />
+        row={(chapter, index) => (
+          <ChapterRow chapter={chapter} number={index + 1} current={player.story?.id === chapter.id} onPress={() => playFrom(index)} />
         )} />
     </Screen>
   );

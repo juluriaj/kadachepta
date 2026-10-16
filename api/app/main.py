@@ -25,7 +25,7 @@ from .db import get_db, get_sessionmaker
 from .models import Worker
 from .routers import (
     account, admin, auth, community, editorial, household, listener, media, narrator, playlists, studio, studio_batch,
-    studio_community, uploads, worker,
+    studio_community, studio_series, uploads, worker,
 )
 from .security import STAFF_ROLES, token_hash
 
@@ -87,7 +87,7 @@ async def validation_error(request: Request, error: RequestValidationError):
 
 
 for module in (auth, account, listener, community, playlists, household, media, narrator, uploads, editorial, studio_batch, studio,
-               studio_community, worker, admin):
+               studio_community, studio_series, worker, admin):
     app.include_router(module.router)
 app.include_router(studio.me_router)
 

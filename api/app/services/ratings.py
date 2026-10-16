@@ -9,10 +9,13 @@
   4.6s, and a handful of fake accounts can't move an established score far.
 - A sudden burst of ratings is held out of the scores until an editor looks (rating_flags).
 - Narrators and staff can't rate their own work.
+- Grown-ups can also rate a narrator as a whole, once they (or a child) have heard one of their stories. Those
+  ratings join the narration stars from each story in the narrator's one score.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import timedelta
 from typing import Any
 
@@ -20,7 +23,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..auth import utcnow
-from ..models import AudioAsset, ListeningProgress, Profile, RatingFlag, StoryRating, User
+from ..models import AudioAsset, ListeningProgress, NarratorRating, Profile, RatingFlag, StoryRating, User
+from .assets import narrator_people, narrator_summaries, person_key
 
 REACTIONS = ("love", "like", "okay", "sleepy")  # 😍 🙂 😐 😴
 PRIOR_WEIGHT = 5.0  # how many "average" ratings every score starts with
@@ -39,19 +43,38 @@ def listened_enough(row: ListeningProgress | None, duration: float) -> bool:
     return heard >= LISTEN_SHARE * duration or (row.completed and heard >= 0.3 * duration)
 
 
-def eligible(db: Session, profile: Profile, asset: AudioAsset) -> bool:
-    """Adults may rate what they or a child in the household listened to (parents rate for young children)."""
+def _listeners(profile: Profile) -> list[int]:
     profile_ids = [profile.id]
     if profile.kind == "adult":
         profile_ids += [p.id for p in profile.household.profiles if p.kind == "child" and not p.deleted_at]
-    rows = db.scalars(select(ListeningProgress).where(ListeningProgress.profile_id.in_(profile_ids),
+    return profile_ids
+
+
+def eligible(db: Session, profile: Profile, asset: AudioAsset) -> bool:
+    """Adults may rate what they or a child in the household listened to (parents rate for young children)."""
+    rows = db.scalars(select(ListeningProgress).where(ListeningProgress.profile_id.in_(_listeners(profile)),
                                                       ListeningProgress.audio_asset_id == asset.id))
     return any(listened_enough(row, asset.duration_seconds or 0) for row in rows)
+
+
+def narrator_eligible(db: Session, profile: Profile, assets: list[AudioAsset]) -> bool:
+    """Grown-ups may rate a narrator once they or a child in the household heard one of the narrator's stories."""
+    if profile.kind != "adult" or not assets:
+        return False
+    durations = {asset.id: asset.duration_seconds or 0 for asset in assets}
+    rows = db.scalars(select(ListeningProgress).where(ListeningProgress.profile_id.in_(_listeners(profile)),
+                                                      ListeningProgress.audio_asset_id.in_(list(durations))))
+    return any(listened_enough(row, durations[row.audio_asset_id]) for row in rows)
 
 
 def own_work(profile: Profile, asset: AudioAsset, owner: User | None) -> bool:
     return bool(owner and (owner.role in ("editor", "admin") or
                            (asset.narrator_user_id and owner.id == asset.narrator_user_id)))
+
+
+def own_narration(owner: User | None, narrator_key: str) -> bool:
+    """Narrators can't rate themselves, and staff (who edit every story) can't rate narrators."""
+    return bool(owner and (owner.role in ("editor", "admin") or narrator_key == f"id:{owner.id}"))
 
 
 def rater_weight(db: Session, profile: Profile) -> float:
@@ -126,20 +149,63 @@ def narrator_scores(db: Session, narrator_ids: list[int] | None = None) -> dict[
         AudioAsset.status == "published", AudioAsset.narrator_user_id.is_not(None))
     if narrator_ids is not None:
         query = query.where(AudioAsset.narrator_user_id.in_(narrator_ids))
-    owner = dict(db.execute(query).all())
+    credits: dict[str, list[str]] = {f"id:{narrator}": [] for narrator in narrator_ids or []}
+    for asset_id, narrator in db.execute(query).all():
+        credits.setdefault(f"id:{narrator}", []).append(asset_id)
+    return {int(key[3:]): score for key, score in people_scores(db, credits).items()}
+
+
+def people_scores(db: Session, credits: dict[str, list[str]]) -> dict[str, dict[str, Any]]:
+    """Narration quality per narrator, keyed like follows ({person_key: [their published story ids]}): the
+    narration stars on each of their stories and the ratings of the narrator directly, in one score."""
+    if not credits:
+        return {}
     prior = catalog_mean(db, StoryRating.narration_rating)
-    collected: dict[int, list[tuple[int, float]]] = {}
-    for rating in _counted(db, list(owner)):
+    by_story: dict[str, list[tuple[int, float]]] = {}
+    for rating in _counted(db, list({asset_id for ids in credits.values() for asset_id in ids})):
         if rating.narration_rating:
-            collected.setdefault(owner[rating.audio_asset_id], []).append((rating.narration_rating, rating.weight))
-    narrators = set(owner.values()) if narrator_ids is None else set(narrator_ids)
-    return {narrator: _score(collected.get(narrator, []), prior) for narrator in narrators}
+            by_story.setdefault(rating.audio_asset_id, []).append((rating.narration_rating, rating.weight))
+    direct: dict[str, list[tuple[int, float]]] = {}
+    for row in db.scalars(select(NarratorRating).where(NarratorRating.narrator_key.in_(list(credits)),
+                                                       NarratorRating.excluded.is_(False))):
+        direct.setdefault(row.narrator_key, []).append((row.rating, row.weight))
+    return {key: _score([r for asset_id in ids for r in by_story.get(asset_id, [])] + direct.get(key, []), prior)
+            for key, ids in credits.items()}
 
 
-def narration_score(db: Session, asset_ids: list[str]) -> dict[str, Any]:
-    """Narration quality across a set of stories: for narrators credited by name, with no account to key on."""
-    prior = catalog_mean(db, StoryRating.narration_rating)
-    return _score([(r.narration_rating, r.weight) for r in _counted(db, asset_ids) if r.narration_rating], prior)
+def credits_of(assets: Iterable[AudioAsset]) -> dict[str, list[str]]:
+    """Each credited narrator's stories among these, keyed like follows (a co-narrated story counts for each)."""
+    credits: dict[str, list[str]] = {}
+    for asset in assets:
+        for person in narrator_people(asset):
+            credits.setdefault(person_key(person), []).append(asset.id)
+    return credits
+
+
+def narrator_list(db: Session, profile: Profile, assets: list[AudioAsset]) -> list[dict[str, Any]]:
+    """Everyone credited with narrating these stories, most stories first. Grown-ups also see each narrator's
+    score; children never see scores."""
+    people = narrator_summaries(assets)
+    if profile.kind == "adult":
+        scores = people_scores(db, credits_of(assets))
+        for person in people:
+            person["narration"] = scores[person_key(person)]
+    return people
+
+
+def rate_narrator(db: Session, profile: Profile, narrator_key: str, value: int) -> None:
+    rating = db.scalars(select(NarratorRating).where(NarratorRating.profile_id == profile.id,
+                                                     NarratorRating.narrator_key == narrator_key)).first()
+    if rating is None:
+        rating = NarratorRating(profile_id=profile.id, household_id=profile.household_id, narrator_key=narrator_key)
+        db.add(rating)
+    rating.rating = value
+    rating.weight = rater_weight(db, profile)
+
+
+def my_narrator_rating(db: Session, profile: Profile, narrator_key: str) -> int | None:
+    return db.scalar(select(NarratorRating.rating).where(NarratorRating.profile_id == profile.id,
+                                                         NarratorRating.narrator_key == narrator_key))
 
 
 def check_spike(db: Session, asset_id: str) -> RatingFlag | None:

@@ -6,7 +6,7 @@ import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 
 import { LanguageSwitch } from '@/components/LanguageSwitch';
 import { BookTile, SetTile } from '@/components/sets';
-import { Shelf, ShelfRow } from '@/components/stories';
+import { NarratorTile, Shelf, ShelfRow } from '@/components/stories';
 import { Avatar, Chip, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useI18n, type TranslationKey } from '@/lib/i18n';
@@ -39,12 +39,12 @@ export default function Home() {
 
   const shelves = useMemo(() => {
     const max = DURATIONS.find((d) => d.id === duration)?.max ?? Infinity;
-    // Story-set and audiobook tiles stand for many stories, so a moment or length filter hides them.
+    // Story-set, audiobook and narrator tiles stand for many stories, so a moment or length filter hides them.
     const filtering = !!moment || duration !== 'any';
     return (home.data?.shelves ?? [])
       .filter((shelf) => !moment || shelf.id === moment || shelf.id === 'continue')
       .map((shelf) => ({ ...shelf, items: shelf.items.filter((story) => (story.duration || 0) <= max) }))
-      .filter((shelf) => shelf.items.length || (!filtering && (shelf.sets?.length || shelf.books?.length)));
+      .filter((shelf) => shelf.items.length || (!filtering && (shelf.sets?.length || shelf.books?.length || shelf.narrators?.length)));
   }, [home.data, duration, moment]);
 
   const updates = useQuery({ queryKey: ['updates', profile?.id], enabled: profile?.kind === 'adult',
@@ -122,6 +122,9 @@ export default function Home() {
         ) : shelf.books?.length ? (
           <ShelfRow key={shelf.id} title={shelfTitle(shelf)} items={shelf.books} keyOf={(book) => `book-${book.id}`}
             render={(book) => <BookTile book={book} />} />
+        ) : shelf.narrators?.length ? (
+          <ShelfRow key={shelf.id} title={shelfTitle(shelf)} items={shelf.narrators} keyOf={(person) => `narrator-${person.id ?? person.name}`}
+            render={(person) => <NarratorTile person={person} />} />
         ) : (
           <Shelf key={shelf.id} title={shelfTitle(shelf)} items={shelf.items} />
         ))}

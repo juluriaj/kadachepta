@@ -2,12 +2,13 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Platform, Pressable, ScrollView, Share, View } from 'react-native';
+import { Platform, Pressable, ScrollView, Share, Switch, View } from 'react-native';
 
 import { PinPad } from '@/components/ParentGate';
 import { Avatar, Button, Card, Chip, ErrorState, Field, Loading, Screen, Text, useColors } from '@/components/ui';
 import { api, ApiError, hasRecentParentPin, rememberParentPin } from '@/lib/api';
 import { formatListening, useI18n, type TranslationKey } from '@/lib/i18n';
+import { usePlayer } from '@/lib/player/PlayerProvider';
 import { useSession, type Profile } from '@/lib/session';
 import { radius, space } from '@/lib/theme';
 import type { Stats } from '@/lib/types';
@@ -24,6 +25,7 @@ export default function Family() {
   const colors = useColors();
   const queryClient = useQueryClient();
   const { household, signOut, refresh, isNarrator, changeLanguage } = useSession();
+  const player = usePlayer();
   const hasPin = !!household?.household.hasParentPin;
   const [unlocked, setUnlocked] = useState(!hasPin || hasRecentParentPin());
   const [pinMode, setPinMode] = useState<'verify' | 'create' | null>(hasPin && !hasRecentParentPin() ? 'verify' : null);
@@ -140,6 +142,15 @@ export default function Family() {
             <Chip key={code} role="radio" label={code === 'en' ? 'English' : 'తెలుగు'} selected={language === code}
               onPress={() => void act(() => changeLanguage(code))} />
           ))}
+        </View>
+
+        {/* Kept on this device (not the household), like playback speed: a phone on mobile data, a tablet on wifi. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+          <View style={{ flex: 1, gap: space.xs }}>
+            <Text variant="heading">{t('player.dataSaver')}</Text>
+            <Text variant="small" muted>{t('family.dataSaverHint')}</Text>
+          </View>
+          <Switch value={player.dataSaver} onValueChange={player.setDataSaver} accessibilityLabel={t('player.dataSaver')} />
         </View>
 
         <Text variant="heading">{t('family.moments')}</Text>

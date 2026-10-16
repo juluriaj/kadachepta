@@ -1,10 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
-import { FlatList, View } from 'react-native';
+import { View } from 'react-native';
 
 import { setTitle, shuffled } from '@/components/sets';
-import { minutes, StoryRow } from '@/components/stories';
+import { minutes, StoryList } from '@/components/stories';
 import { Button, Cover, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
 import { formatListening, useI18n } from '@/lib/i18n';
@@ -61,9 +61,9 @@ export default function CollectionScreen() {
 
   return (
     <Screen back>
-      <FlatList data={set.stories} keyExtractor={(story) => story.id} ListHeaderComponent={header} initialNumToRender={12}
+      <StoryList stories={set.stories} header={header} initialNumToRender={12}
         contentContainerStyle={{ paddingVertical: space.lg, maxWidth: 640, width: '100%', alignSelf: 'center' }}
-        renderItem={({ item }) => <StoryRow story={item} right={<Heard story={item} />} />} />
+        accessory={(story) => <Heard story={story} />} />
     </Screen>
   );
 }

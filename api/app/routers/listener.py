@@ -18,7 +18,7 @@ from ..db import get_db
 from ..models import (
     AudioAsset, Collection, ListenerFavorite, ListeningDaily, ListeningProgress, Profile, TeaserDraft, Transcript,
 )
-from ..services import morals, pipeline, recommend, story_sets
+from ..services import morals, pipeline, ratings, recommend, story_sets
 from ..services.assets import artwork_url, asset_payload, iso, narrator_people, person_key
 from ..services.households import MOMENTS, current_profile, suitable_for
 from ..services.transcripts import read_along
@@ -162,6 +162,9 @@ def home(profile: Profile = Depends(current_profile), db: Session = Depends(get_
     if books:
         listed = sorted(books.values(), key=lambda b: (b.series.title.casefold(), b.series.id))
         shelves.append({"id": "books", "items": [], "books": [story_sets.book_summary(b, progress) for b in listed]})
+    narrators = ratings.narrator_list(db, profile, [asset for asset, _ in stories])
+    if narrators:  # the voices behind the stories, as a way in next to sets and books (search lists them all)
+        shelves.append({"id": "narrators", "items": [], "narrators": narrators[:20]})
     household_moments = profile.household.moments or list(MOMENTS)
     for moment in [m for m in MOMENTS if m in household_moments] + [m for m in MOMENTS if m not in household_moments]:
         items = [cards[asset_id] for asset_id in order if moment in cards[asset_id]["moments"]]
@@ -172,7 +175,8 @@ def home(profile: Profile = Depends(current_profile), db: Session = Depends(get_
     shelves.append({"id": "short", "items": [cards[a] for a in order if (cards[a]["duration"] or 0) <= 600][:20]})
     shelves.append({"id": "new", "items": [cards[a] for a in order][:20]})
     return {"profileId": profile.id,
-            "shelves": [shelf for shelf in shelves if shelf["items"] or shelf.get("sets") or shelf.get("books")],
+            "shelves": [shelf for shelf in shelves
+                        if shelf["items"] or shelf.get("sets") or shelf.get("books") or shelf.get("narrators")],
             "totalStories": len(order) + len(books)}
 
 

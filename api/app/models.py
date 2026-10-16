@@ -169,6 +169,17 @@ class Series(Base):
     description: Mapped[str | None] = mapped_column(Text)
     language: Mapped[str] = mapped_column(String(16), nullable=False, server_default="te-IN")
     narrator_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    # The book's cover stands for every chapter (services/assets.py artwork_url). "book-cover" is a scan of the
+    # printed book; "own-cover" is KathaChepta's (an illustration with the title set in code). The source note
+    # says where a book cover came from, for answering a claim.
+    artwork_key: Mapped[str | None] = mapped_column(Text)
+    artwork_updated_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    artwork_kind: Mapped[str | None] = mapped_column(String(16))
+    artwork_source: Mapped[str | None] = mapped_column(Text)
+    cover_title: Mapped[str | None] = mapped_column(Text)  # the title printed on our own cover (Telugu script)
+    # A book taken down after a claim: its chapters have the status "withdrawn" until it is restored.
+    withdrawn_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    withdrawn_reason: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = now_column()
     updated_at: Mapped[datetime] = now_column(onupdate=func.now())
@@ -499,6 +510,25 @@ class StoryRating(Base):
     story_rating: Mapped[int | None] = mapped_column(SmallInteger)
     narration_rating: Mapped[int | None] = mapped_column(SmallInteger)
     reaction: Mapped[str | None] = mapped_column(String(16))
+    weight: Mapped[float] = mapped_column(Float, nullable=False, server_default="1")  # rater trust, 0.2-1
+    excluded: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))  # brigading
+    created_at: Mapped[datetime] = now_column()
+    updated_at: Mapped[datetime] = now_column(onupdate=func.now())
+
+
+class NarratorRating(Base):
+    """A grown-up's rating of a narrator as a whole (1-5), beside the narration stars on each story; both count
+    toward the narrator's score. Keyed like follows (assets.person_key): "id:<user>" for narrators with an
+    account, "name:<name>" for narrators the catalog credits by name only."""
+
+    __tablename__ = "narrator_ratings"
+    __table_args__ = (UniqueConstraint("profile_id", "narrator_key", name="uq_narrator_ratings_profile_narrator"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
+    household_id: Mapped[int] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), nullable=False)
+    narrator_key: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
+    rating: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     weight: Mapped[float] = mapped_column(Float, nullable=False, server_default="1")  # rater trust, 0.2-1
     excluded: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))  # brigading
     created_at: Mapped[datetime] = now_column()

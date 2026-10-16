@@ -1,10 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { FlatList, Pressable, TextInput, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
 
 import { BookRow, SetRow } from '@/components/sets';
-import { NarratorRow, StoryRow } from '@/components/stories';
+import { NarratorRow, StoryList } from '@/components/stories';
 import { Screen, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
@@ -56,9 +56,10 @@ export default function Search() {
           ) : null}
         </View>
       </View>
-      <FlatList data={items} keyExtractor={(item) => item.id} keyboardShouldPersistTaps="handled"
-        renderItem={({ item }) => <StoryRow story={item} />}
-        ListHeaderComponent={
+      <StoryList stories={items} keyboardShouldPersistTaps="handled"
+        title={narrators.length || sets.length || books.length
+          ? <Text variant="label" muted>{t('search.stories')}</Text> : null}
+        header={
           <View style={{ gap: space.md, paddingBottom: space.md }}>
             {!query ? <Text muted style={{ paddingTop: space.lg }}>{t('search.hint')}</Text> : null}
             {sets.length ? (
@@ -79,8 +80,6 @@ export default function Search() {
                 {narrators.map((person) => <NarratorRow key={`${person.id ?? person.name}`} person={person} />)}
               </View>
             ) : null}
-            {(narrators.length || sets.length || books.length) && items.length
-              ? <Text variant="label" muted style={{ paddingTop: space.md }}>{t('search.stories')}</Text> : null}
           </View>}
         ListEmptyComponent={query && !narrators.length && !sets.length && !books.length ? (
           <Text muted style={{ paddingVertical: space.lg }}>
