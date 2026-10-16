@@ -119,9 +119,9 @@ export default function Queue() {
 
   return (
     <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.lg, maxWidth: 1280, width: '100%', alignSelf: 'center' }}>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+      <View accessibilityRole="radiogroup" accessibilityLabel={"Queue"} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
         {VIEWS.map((v) => (
-          <Chip key={v.id} label={`${v.label}${queue.data?.counts[v.id] != null ? ` · ${queue.data.counts[v.id]}` : ''}`}
+          <Chip key={v.id} role="radio" label={`${v.label}${queue.data?.counts[v.id] != null ? ` · ${queue.data.counts[v.id]}` : ''}`}
             selected={view === v.id} onPress={() => changeView(v.id)} />
         ))}
       </View>
@@ -204,7 +204,7 @@ export default function Queue() {
 function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
   const colors = useColors();
   return (
-    <Pressable accessibilityRole="checkbox" accessibilityState={{ checked }} onPress={() => onChange(!checked)}
+    <Pressable accessibilityRole="checkbox" aria-checked={checked} onPress={() => onChange(!checked)}
       style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
       <Ionicons name={checked ? 'checkbox' : 'square-outline'} size={20} color={colors.primary} />
       <Text variant="small">{label}</Text>
@@ -228,7 +228,7 @@ function Row({ item, focused, selected, showBlockers, collections, onToggle }: {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.sm, borderRadius: radius.md,
       backgroundColor: focused ? colors.surfaceAlt : colors.surface, borderWidth: 1, borderColor: focused ? colors.primary : colors.border }}>
-      <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: selected }} accessibilityLabel={`Select ${item.title}`}
+      <Pressable accessibilityRole="checkbox" aria-checked={selected} accessibilityLabel={`Select ${item.title}`}
         onPress={onToggle} hitSlop={8}>
         <Ionicons name={selected ? 'checkbox' : 'square-outline'} size={22} color={colors.primary} />
       </Pressable>

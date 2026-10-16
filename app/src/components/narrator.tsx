@@ -73,7 +73,7 @@ export function HowItWorks({ initiallyOpen }: { initiallyOpen: boolean }) {
   const [open, setOpen] = useState(initiallyOpen);
   return (
     <View style={{ padding: space.md, borderRadius: 14, backgroundColor: colors.surfaceAlt, gap: space.sm }}>
-      <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" accessibilityState={{ expanded: open }}
+      <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" aria-expanded={open}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
         <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
         <Text variant="heading" style={{ flex: 1 }}>{t('guide.how')}</Text>

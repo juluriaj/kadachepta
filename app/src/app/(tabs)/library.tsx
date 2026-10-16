@@ -51,11 +51,11 @@ export default function Library() {
     <Screen tabs>
       <ScrollView contentContainerStyle={{ gap: space.lg, paddingVertical: space.lg }}>
         <Text variant="title" accessibilityRole="header">{t('tabs.library')}</Text>
-        <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
-          <Chip label={t('playlist.title')} selected={tab === 'playlists'} onPress={() => setTab('playlists')} />
-          <Chip label={t('library.favorites')} selected={tab === 'favorites'} onPress={() => setTab('favorites')} />
-          <Chip label={t('library.downloads')} selected={tab === 'downloads'} onPress={() => setTab('downloads')} />
-          <Chip label={t('library.history')} selected={tab === 'history'} onPress={() => setTab('history')} />
+        <View accessibilityRole="radiogroup" accessibilityLabel={t('tabs.library')} style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
+          <Chip role="radio" label={t('playlist.title')} selected={tab === 'playlists'} onPress={() => setTab('playlists')} />
+          <Chip role="radio" label={t('library.favorites')} selected={tab === 'favorites'} onPress={() => setTab('favorites')} />
+          <Chip role="radio" label={t('library.downloads')} selected={tab === 'downloads'} onPress={() => setTab('downloads')} />
+          <Chip role="radio" label={t('library.history')} selected={tab === 'history'} onPress={() => setTab('history')} />
         </View>
         {catalog.error ? <ErrorState error={catalog.error} onRetry={() => void catalog.refetch()} /> : null}
 
