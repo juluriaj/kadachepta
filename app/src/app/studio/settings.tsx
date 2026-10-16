@@ -115,7 +115,7 @@ function SettingField({ spec, value, json, models, onChange, onJson }: {
   return (
     <View style={{ gap: space.xs, paddingVertical: space.sm }}>
       {spec.kind === 'bool' ? (
-        <Pressable accessibilityRole="switch" accessibilityState={{ checked: !!value }} onPress={() => onChange(!value)}
+        <Pressable accessibilityRole="switch" aria-checked={!!value} onPress={() => onChange(!value)}
           style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
           <Ionicons name={value ? 'toggle' : 'toggle-outline'} size={32} color={value ? colors.primary : colors.muted} />
           <Text variant="heading">{spec.label}</Text>

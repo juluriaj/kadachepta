@@ -97,7 +97,7 @@ export function AddToPlaylist({ storyId }: { storyId: string }) {
         const inside = playlist.storyIds.includes(storyId);
         return (
           <Pressable key={playlist.id} onPress={() => void toggle(playlist)} accessibilityRole="checkbox"
-            accessibilityState={{ checked: inside }}
+            aria-checked={inside}
             style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: touch }}>
             <Ionicons name={inside ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={inside ? colors.primary : colors.muted} />
             <Text style={{ flex: 1 }}>{playlist.name}</Text>

@@ -93,10 +93,10 @@ export default function BatchReview() {
           the age band against the safety notes, fix the titles and teaser if needed, then publish. Captions are shown only if you
           tick that you read the transcript. Cards marked “Full review” have something that needs a closer look.
         </Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-          <Chip label={`All · ${data?.groups.reduce((sum, g) => sum + g.count, 0) ?? ''}`} selected={!group} onPress={() => pick(null)} />
+        <View accessibilityRole="radiogroup" accessibilityLabel={"Group"} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+          <Chip role="radio" label={`All · ${data?.groups.reduce((sum, g) => sum + g.count, 0) ?? ''}`} selected={!group} onPress={() => pick(null)} />
           {data?.groups.map((g) => (
-            <Chip key={g.name ?? '-'} label={`${g.name ?? 'Other'} · ${g.count}`} selected={group === g.name}
+            <Chip key={g.name ?? '-'} role="radio" label={`${g.name ?? 'Other'} · ${g.count}`} selected={group === g.name}
               onPress={() => pick(g.name)} />
           ))}
         </View>
@@ -204,9 +204,9 @@ function BatchCard({ item, onPublished }: { item: Item; onPublished: () => void 
           {item.warnings.length ? <Text variant="small" muted>Warnings: {item.warnings.join(', ')}</Text> : null}
         </View>
       ) : null}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, alignItems: 'center' }}>
+      <View accessibilityRole="radiogroup" accessibilityLabel={"Age"} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, alignItems: 'center' }}>
         <Text variant="small" muted>Age:</Text>
-        {AGE_RANGES.map((band) => <Chip key={band} label={band} selected={age === band} onPress={() => setAge(band)} />)}
+        {AGE_RANGES.map((band) => <Chip key={band} role="radio" label={band} selected={age === band} onPress={() => setAge(band)} />)}
       </View>
 
       {Object.keys(teasers).map((lang) => (
@@ -266,7 +266,7 @@ function Input({ label, value, onChange, multiline }: { label: string; value: st
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
   const colors = useColors();
   return (
-    <Pressable accessibilityRole="checkbox" accessibilityState={{ checked }} onPress={() => onChange(!checked)}
+    <Pressable accessibilityRole="checkbox" aria-checked={checked} onPress={() => onChange(!checked)}
       style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
       <Ionicons name={checked ? 'checkbox' : 'square-outline'} size={20} color={colors.primary} />
       <Text variant="small" style={{ flex: 1 }}>{label}</Text>

@@ -119,9 +119,9 @@ export default function Family() {
         ))}
         <Card>
           <Field label={t('onboarding.kidName')} value={childName} onChangeText={setChildName} />
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+          <View accessibilityRole="radiogroup" accessibilityLabel={t('age.label')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
             {(['3-5', '6-8', '9-12'] as const).map((band) => (
-              <Chip key={band} label={t(`age.${band}`)} selected={childBand === band} onPress={() => setChildBand(band)} />
+              <Chip key={band} role="radio" label={t(`age.${band}`)} selected={childBand === band} onPress={() => setChildBand(band)} />
             ))}
           </View>
           <Button title={t('profiles.add')} kind="secondary" disabled={!childName.trim()} onPress={() => void act(async () => {
@@ -135,9 +135,9 @@ export default function Family() {
         <Button title={hasPin ? t('family.pinSet') : t('family.pinNew')} kind="secondary" onPress={() => setPinMode('create')} />
 
         <Text variant="heading">{t('family.language')}</Text>
-        <View style={{ flexDirection: 'row', gap: space.sm }}>
+        <View accessibilityRole="radiogroup" accessibilityLabel={t('family.language')} style={{ flexDirection: 'row', gap: space.sm }}>
           {(['en', 'te'] as const).map((code) => (
-            <Chip key={code} label={code === 'en' ? 'English' : 'తెలుగు'} selected={language === code}
+            <Chip key={code} role="radio" label={code === 'en' ? 'English' : 'తెలుగు'} selected={language === code}
               onPress={() => void act(() => changeLanguage(code))} />
           ))}
         </View>

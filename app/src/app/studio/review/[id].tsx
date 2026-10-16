@@ -470,7 +470,7 @@ function Toggle({ label, value, onChange, highlight }: { label: string; value: b
   highlight?: boolean }) {
   const colors = useColors();
   return (
-    <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: value }} onPress={() => onChange(!value)}
+    <Pressable accessibilityRole="checkbox" aria-checked={value} onPress={() => onChange(!value)}
       style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 36 }}>
       <Ionicons name={value ? 'checkbox' : 'square-outline'} size={22} color={highlight ? colors.danger : colors.primary} />
       <Text style={{ flex: 1 }} color={highlight ? colors.danger : undefined}>{label}</Text>
