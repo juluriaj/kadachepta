@@ -516,6 +516,25 @@ class StoryRating(Base):
     updated_at: Mapped[datetime] = now_column(onupdate=func.now())
 
 
+class NarratorRating(Base):
+    """A grown-up's rating of a narrator as a whole (1-5), beside the narration stars on each story; both count
+    toward the narrator's score. Keyed like follows (assets.person_key): "id:<user>" for narrators with an
+    account, "name:<name>" for narrators the catalog credits by name only."""
+
+    __tablename__ = "narrator_ratings"
+    __table_args__ = (UniqueConstraint("profile_id", "narrator_key", name="uq_narrator_ratings_profile_narrator"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
+    household_id: Mapped[int] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), nullable=False)
+    narrator_key: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
+    rating: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    weight: Mapped[float] = mapped_column(Float, nullable=False, server_default="1")  # rater trust, 0.2-1
+    excluded: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))  # brigading
+    created_at: Mapped[datetime] = now_column()
+    updated_at: Mapped[datetime] = now_column(onupdate=func.now())
+
+
 class RatingFlag(Base):
     __tablename__ = "rating_flags"
 

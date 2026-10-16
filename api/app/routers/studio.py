@@ -701,11 +701,13 @@ def _catalog_narrators(db: Session) -> list[dict[str, Any]]:
             if asset.language not in entry["languages"]:
                 entry["languages"].append(asset.language)
             entry["stories"].append({"id": asset.id, "title": asset.title, "status": asset.status})
-    for entry in people.values():
-        published = [story["id"] for story in entry["stories"] if story["status"] == "published"]
+    published = {key: [story["id"] for story in entry["stories"] if story["status"] == "published"]
+                 for key, entry in people.items()}
+    scores = ratings.people_scores(db, {key: ids for key, ids in published.items() if ids})
+    for key, entry in people.items():
         rejected = sum(story["status"] == "rejected" for story in entry["stories"])
-        entry.update(published=len(published), rejected=rejected, notPublished=len(entry["stories"]) - len(published) - rejected,
-                     narration=ratings.narration_score(db, published) if published else None)
+        entry.update(published=len(published[key]), rejected=rejected,
+                     notPublished=len(entry["stories"]) - len(published[key]) - rejected, narration=scores.get(key))
     return sorted(people.values(), key=lambda p: (-p["published"], -len(p["stories"]), p["name"].casefold()))
 
 

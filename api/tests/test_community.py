@@ -8,7 +8,8 @@ from sqlalchemy import select
 
 from app.auth import utcnow
 from app.models import (
-    AudioAsset, EditorialEvent, Household, Notification, Profile, RatingFlag, Review, StoryEmbedding, StoryRating,
+    AudioAsset, EditorialEvent, Household, NarratorRating, Notification, Profile, RatingFlag, Review, StoryEmbedding,
+    StoryRating,
 )
 from app.services import ratings
 
@@ -223,12 +224,59 @@ def test_narrators_credited_by_name_have_a_page_of_their_stories(client, db):
     assert [(p["name"], p["id"], p["stories"]) for p in people] == [
         ("Vimala Mare", None, 2), ("Chaitanya Sagar", None, 1), ("Leo Tolstoy", None, 1), ("narr", narrator.id, 1),
         ("Sahiti Sagar", None, 1)]
+    shelves = {shelf["id"]: shelf for shelf in client.get("/api/home", headers=headers).json()["shelves"]}
+    assert shelves["narrators"]["narrators"] == people and shelves["narrators"]["items"] == []  # found from home too
 
     page = client.get("/api/narrators/named/VIMALA MARE", headers=headers).json()
     assert page["name"] == "Vimala Mare" and page["canFollow"] and page["languages"] == ["te-IN"]  # see test_follows
     assert sorted(s["id"] for s in page["stories"]) == [STORY, "b" * 16]
     assert client.get("/api/narrators/named/Sahiti Sagar", headers=headers).json()["stories"][0]["id"] == "c" * 16
     assert client.get("/api/narrators/named/narr", headers=headers).status_code == 404  # has an account page instead
+
+
+def test_grown_ups_rate_narrators_they_have_heard(client, db):
+    narrator = make_user(db, "narr", "narrator")
+    make_asset(db, STORY, ready_to_publish=True, status="published", narrator_name="Vimala Mare")
+    make_asset(db, "b" * 16, ready_to_publish=True, status="published", narrator=narrator)
+    profiles = family(client, db)
+    mom, anu = {"X-Profile-Id": str(profiles["mom"]["id"])}, {"X-Profile-Id": str(profiles["Anu"]["id"])}
+    named = "/api/narrators/named/Vimala Mare"
+
+    assert client.get(named, headers=mom).json()["rating"] == {"eligible": False, "mine": None}
+    assert client.post(f"{named}/rating", json={"rating": 5}, headers=mom).status_code == 409  # heard nothing yet
+    listen(client, profiles["Anu"]["id"])  # the child heard one of her stories: the parent may rate the narrator
+    assert client.post(f"{named}/rating", json={"rating": 5}, headers=anu).status_code == 403  # not children
+    assert client.post(f"{named}/rating", json={"rating": 6}, headers=mom).status_code == 422
+    rated = client.post(f"{named}/rating", json={"rating": 4}, headers=mom)
+    assert rated.status_code == 200, rated.text
+    assert rated.json()["rating"] == {"eligible": True, "mine": 4}
+    client.post(f"{named}/rating", json={"rating": 5}, headers=mom)  # changes, not a second rating
+    assert db.query(NarratorRating).count() == 1
+
+    # The narration stars on a story and the narrator's own rating make one score, wherever narrators are listed.
+    client.post(f"/api/stories/{STORY}/rating", json={"narration": 3}, headers=mom)
+    page = client.get(named, headers=mom).json()
+    assert page["rating"]["mine"] == 5 and page["narration"]["count"] == 2 and page["narration"]["score"] is None
+    people = {p["name"]: p for p in client.get("/api/narrators", headers=mom).json()["items"]}
+    assert people["Vimala Mare"]["narration"]["count"] == 2 and people["narr"]["narration"]["count"] == 0
+    shelf = {p["name"]: p for p in {s["id"]: s for s in client.get("/api/home", headers=mom).json()["shelves"]}
+             ["narrators"]["narrators"]}
+    assert shelf["Vimala Mare"]["narration"]["count"] == 2
+    child = client.get(named, headers=anu).json()
+    assert child["rating"] is None and child["narration"] is None  # children never see scores
+    assert all("narration" not in p for p in client.get("/api/narrators", headers=anu).json()["items"])
+
+    listen(client, profiles["mom"]["id"], "b" * 16)  # a narrator with an account
+    assert client.post(f"/api/narrators/{narrator.id}/rating", json={"rating": 5}, headers=mom).json()["narration"]["count"] == 1
+    assert client.get(f"/api/narrators/{narrator.id}", headers=mom).json()["rating"] == {"eligible": True, "mine": 5}
+
+    client.post("/api/logout")
+    login(client, "narr")  # narrators can't rate themselves
+    own = client.get("/api/household").json()["profiles"][0]["id"]
+    listen(client, own, "b" * 16)
+    headers = {"X-Profile-Id": str(own)}
+    assert client.get(f"/api/narrators/{narrator.id}", headers=headers).json()["rating"] is None
+    assert client.post(f"/api/narrators/{narrator.id}/rating", json={"rating": 5}, headers=headers).status_code == 403
 
 
 def test_migration_moves_authors_out_of_the_narrator_credit(client, db):

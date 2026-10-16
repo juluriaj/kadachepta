@@ -6,6 +6,7 @@ import json
 import re
 from datetime import datetime
 from pathlib import PurePosixPath
+from collections.abc import Iterable
 from typing import Any
 
 from ..models import AudioAsset, Series
@@ -154,6 +155,18 @@ def narrator_people(asset: AudioAsset) -> list[dict[str, Any]]:
 def person_key(person: dict[str, Any]) -> str:
     """One key per narrator: their account when they have one, otherwise their name (case and spacing aside)."""
     return f"id:{person['id']}" if person["id"] is not None else f"name:{' '.join(person['name'].split()).casefold()}"
+
+
+def narrator_summaries(assets: Iterable[AudioAsset]) -> list[dict[str, Any]]:
+    """Everyone credited with narrating these stories, most stories first, with the languages they narrate in."""
+    people: dict[str, dict[str, Any]] = {}
+    for asset in assets:
+        for person in narrator_people(asset):
+            entry = people.setdefault(person_key(person), {**person, "stories": 0, "languages": []})
+            entry["stories"] += 1
+            if asset.language not in entry["languages"]:
+                entry["languages"].append(asset.language)
+    return sorted(people.values(), key=lambda p: (-p["stories"], p["name"].casefold()))
 
 
 def asset_payload(asset: AudioAsset, *, include_original: bool = False, **extra: Any) -> dict[str, Any]:

@@ -171,6 +171,25 @@ export default function Player() {
           )}
         </View>
 
+        <Section title={t('player.speed')}>
+          {SPEEDS.map((speed) => (
+            <Chip key={speed} label={`${speed}×`} selected={player.rate === speed} onPress={() => player.setRate(speed)} />
+          ))}
+        </Section>
+
+        {/* Bedtime mode lives with the sleep timer: it starts one, and the story fades out when it runs down. */}
+        <Section title={t('player.sleep')} detail={player.sleepSecondsLeft != null
+          ? t('player.sleepIn', { time: formatClock(player.sleepSecondsLeft) }) : undefined}>
+          {SLEEP_CHOICES.map((mode) => (
+            <Chip key={String(mode)} label={sleepLabel(mode)} selected={player.sleep === mode} onPress={() => player.setSleep(mode)} />
+          ))}
+          <Chip label={t('player.bedtime')} selected={player.bedtime} onPress={() => player.setBedtime(!player.bedtime)}
+            icon={<Ionicons name="moon-outline" size={16} color={player.bedtime ? colors.onPrimary : colors.text} />} />
+        </Section>
+        {player.bedtime ? <Text variant="small" muted style={{ marginTop: -space.md }}>{t('player.bedtimeOn')}</Text> : null}
+
+        <UpNext />
+
         {showRating ? <RatingCard storyId={story.id} compact onDismiss={() => setRatingDismissed(story.id)} /> : null}
 
         <View style={{ gap: space.md }}>
@@ -180,29 +199,6 @@ export default function Player() {
             <Text variant="small" color={colors.danger}>{downloadNote.message}</Text>
           ) : null}
         </View>
-
-        <UpNext />
-
-        <Section title={t('player.sleep')} detail={player.sleepSecondsLeft != null
-          ? t('player.sleepIn', { time: formatClock(player.sleepSecondsLeft) }) : undefined}>
-          {SLEEP_CHOICES.map((mode) => (
-            <Chip key={String(mode)} label={sleepLabel(mode)} selected={player.sleep === mode} onPress={() => player.setSleep(mode)} />
-          ))}
-        </Section>
-
-        <Section title={t('player.speed')}>
-          {SPEEDS.map((speed) => (
-            <Chip key={speed} label={`${speed}×`} selected={player.rate === speed} onPress={() => player.setRate(speed)} />
-          ))}
-        </Section>
-
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-          <Chip label={t('player.bedtime')} selected={player.bedtime} onPress={() => player.setBedtime(!player.bedtime)}
-            icon={<Ionicons name="moon-outline" size={16} color={player.bedtime ? colors.onPrimary : colors.text} />} />
-          <Chip label={t('player.dataSaver')} selected={player.dataSaver} onPress={() => player.setDataSaver(!player.dataSaver)}
-            icon={<Ionicons name="cellular-outline" size={16} color={player.dataSaver ? colors.onPrimary : colors.text} />} />
-        </View>
-        {player.bedtime ? <Text variant="small" muted>{t('player.bedtimeOn')}</Text> : null}
       </ScrollView>
     </Screen>
   );

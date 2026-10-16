@@ -114,7 +114,7 @@ class ReviewIn(BaseModel):
 
 def _adult(profile: Profile) -> None:
     if profile.kind != "adult":
-        raise HTTPException(status_code=403, detail="Reviews and follows are for grown-ups' profiles.")
+        raise HTTPException(status_code=403, detail="Reviews, follows and narrator ratings are for grown-ups' profiles.")
 
 
 @router.post("/api/stories/{asset_id}/review")
@@ -159,18 +159,32 @@ def report(review_id: int, payload: ReportIn, profile: Profile = Depends(current
 @router.get("/api/narrators")
 def narrators(profile: Profile = Depends(current_profile), db: Session = Depends(get_db)):
     """Everyone who narrated a story this profile can hear, most stories first: a way to find a voice you like."""
-    people: dict[str, dict[str, Any]] = {}
-    for asset, _ in published_stories(db, profile):
-        for person in narrator_people(asset):
-            entry = people.setdefault(person_key(person), {**person, "stories": 0, "languages": []})
-            entry["stories"] += 1
-            if asset.language not in entry["languages"]:
-                entry["languages"].append(asset.language)
-    return {"items": sorted(people.values(), key=lambda p: (-p["stories"], p["name"].casefold()))}
+    return {"items": ratings.narrator_list(db, profile, [asset for asset, _ in published_stories(db, profile)])}
 
 
 class FollowIn(BaseModel):
     following: bool
+
+
+class NarratorRatingIn(BaseModel):
+    rating: int = Field(ge=1, le=5)
+
+
+def _narrator_rating(db: Session, profile: Profile, key: str, assets: list[AudioAsset]) -> dict[str, Any] | None:
+    """Rating a narrator from their page: grown-ups only, never the narrator themselves (or staff)."""
+    if profile.kind != "adult" or ratings.own_narration(_owner(db, profile), key):
+        return None
+    return {"eligible": ratings.narrator_eligible(db, profile, assets), "mine": ratings.my_narrator_rating(db, profile, key)}
+
+
+def _rate_narrator(db: Session, profile: Profile, key: str, assets: list[AudioAsset], value: int) -> None:
+    _adult(profile)
+    if ratings.own_narration(_owner(db, profile), key):
+        raise HTTPException(status_code=403, detail="You can't rate your own narration, or narrators whose stories you edit.")
+    if not ratings.narrator_eligible(db, profile, assets):
+        raise HTTPException(status_code=409, detail="Listen to one of their stories first, then rate the narrator.")
+    ratings.rate_narrator(db, profile, key, value)
+    db.commit()
 
 
 def _named_stories(db: Session, profile: Profile, name: str):
@@ -193,13 +207,28 @@ def named_narrator_page(name: str, profile: Profile = Depends(current_profile), 
     key, shown, stories = _named_stories(db, profile, name)
     progress, favorites = _progress_map(db, profile), _favorite_set(db, profile)
     languages = [lang for lang, _ in Counter(a.language for a, _ in stories).most_common()]
+    assets = [a for a, _ in stories]
     return {
         "id": None, "name": shown, "biography": None, "languages": languages, "since": None,
         "stories": [story_card(a, t, profile, progress.get(a.id), a.id in favorites) for a, t in stories],
-        "narration": ratings.narration_score(db, [a.id for a, _ in stories]) if profile.kind == "adult" else None,
+        "narration": _named_score(db, key, assets) if profile.kind == "adult" else None,
+        "rating": _narrator_rating(db, profile, key, assets),
         "followers": follows.follower_count(db, "narrators", key),
         "following": key in follows.followed(_owner(db, profile), "narrators"), "canFollow": profile.kind == "adult",
     }
+
+
+def _named_score(db: Session, key: str, assets: list[AudioAsset]) -> dict[str, Any]:
+    return ratings.people_scores(db, {key: [a.id for a in assets]})[key]
+
+
+@router.post("/api/narrators/named/{name}/rating")
+def rate_named(name: str, payload: NarratorRatingIn, profile: Profile = Depends(current_profile),
+               db: Session = Depends(get_db)):
+    key, _, stories = _named_stories(db, profile, name)
+    assets = [a for a, _ in stories]
+    _rate_narrator(db, profile, key, assets, payload.rating)
+    return {"narration": _named_score(db, key, assets), "rating": _narrator_rating(db, profile, key, assets)}
 
 
 @router.post("/api/narrators/named/{name}/follow")
@@ -256,8 +285,21 @@ def narrator_page(user_id: int, profile: Profile = Depends(current_profile), db:
         "biography": narrator.biography, "languages": narrator.languages, "since": iso(narrator.onboarded_at),
         "stories": [story_card(a, t, profile, progress.get(a.id), a.id in favorites) for a, t in stories],
         "narration": score if profile.kind == "adult" else None,
+        "rating": _narrator_rating(db, profile, f"id:{user_id}", [a for a, _ in stories]),
         "followers": followers or 0, "following": following, "canFollow": profile.kind == "adult",
     }
+
+
+@router.post("/api/narrators/{user_id}/rating")
+def rate_account_narrator(user_id: int, payload: NarratorRatingIn, profile: Profile = Depends(current_profile),
+                          db: Session = Depends(get_db)):
+    user = db.get(User, user_id)
+    if not user or user.role != "narrator":
+        raise HTTPException(status_code=404, detail="Narrator not found.")
+    assets = [a for a, _ in published_stories(db, profile) if a.narrator_user_id == user_id]
+    key = f"id:{user_id}"
+    _rate_narrator(db, profile, key, assets, payload.rating)
+    return {"narration": ratings.narrator_scores(db, [user_id])[user_id], "rating": _narrator_rating(db, profile, key, assets)}
 
 
 @router.post("/api/narrators/{user_id}/follow")

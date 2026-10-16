@@ -212,10 +212,44 @@ export function NarratorRow({ person }: { person: NarratorSummary }) {
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <Text variant="heading" numberOfLines={1} style={{ fontSize: 15 }}>{person.name}</Text>
-        <Text variant="small" muted>{t('narrator.storyCount', { n: person.stories })}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+          <Text variant="small" muted>{t('narrator.storyCount', { n: person.stories })}</Text>
+          <NarratorScore person={person} />
+        </View>
       </View>
       <Ionicons name="chevron-forward" size={18} color={colors.muted} />
     </Pressable>
+  );
+}
+
+// A narrator on the home shelf: a round tile with their initial, so voices read differently from story covers.
+export function NarratorTile({ person, width = 110 }: { person: NarratorSummary; width?: number }) {
+  const { t } = useI18n();
+  return (
+    <Pressable onPress={() => router.push(narratorHref(person))} testID="story-card" accessibilityRole="link"
+      accessibilityLabel={[person.name, t('narrator.storyCount', { n: person.stories }),
+        person.narration?.score != null ? `${t('narrator.score')} ${person.narration.score.toFixed(1)}` : null].filter(Boolean).join(', ')}
+      style={({ pressed }) => ({ width, alignItems: 'center', gap: space.sm, opacity: pressed ? 0.8 : 1 })}>
+      <Cover id={`narrator-${person.id ?? person.name}`} title={person.name} artworkUrl={null} size={width} rounded={width / 2} />
+      <Text variant="heading" numberOfLines={2} style={{ fontSize: 15, lineHeight: 21, textAlign: 'center' }}>{person.name}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        <Text variant="small" muted>{t('narrator.storyCount', { n: person.stories })}</Text>
+        <NarratorScore person={person} />
+      </View>
+    </Pressable>
+  );
+}
+
+// "★ 4.6": the narrator's score, once enough grown-ups rated them (children's lists carry no scores).
+function NarratorScore({ person }: { person: NarratorSummary }) {
+  const colors = useColors();
+  const score = person.narration?.score;
+  if (score == null) return null;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+      <Ionicons name="star" size={12} color={colors.accent} />
+      <Text variant="small">{score.toFixed(1)}</Text>
+    </View>
   );
 }
 
