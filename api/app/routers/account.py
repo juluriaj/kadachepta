@@ -1,8 +1,9 @@
 """Everyone's own account details: name, email, phone, and how they'd like to be contacted.
 
 Listeners, parents, narrators, editors, and admins all use the same endpoints. In a household with a parent
-PIN, changes need the PIN (children share the device). A new email address must be confirmed with a code
-sent to it, because email is also how people sign in.
+PIN, changes need the PIN (children share the device). When email is on (KC_EMAIL_ENABLED), a new email
+address must be confirmed with a code sent to it, because email is also how people sign in. When it's off, the
+address is saved as given: it's contact information, and the password still protects the account.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from .. import ratelimit
@@ -21,9 +22,10 @@ from ..auth import Identity, audit, require_identity, utcnow
 from ..config import get_settings
 from ..db import get_db
 from ..mailer import send_email
-from ..models import EmailOtp, Household, User
-from ..security import new_otp_code, token_hash
+from ..models import AuthSession, EmailOtp, Household, User
+from ..security import hash_password, new_otp_code, token_hash, verify_password
 from ..services.households import require_parent
+from .auth import check_new_password
 
 router = APIRouter(prefix="/api/me", tags=["account"])
 
@@ -51,7 +53,8 @@ def contact_payload(user: User) -> dict:
     preferences = user.contact_preferences or {}
     return {"userId": user.id, "username": user.username, "displayName": user.display_name, "email": user.email,
             "phone": user.phone, "contactChannel": preferences.get("channel") or "email",
-            "contactNotes": preferences.get("notes") or "", "role": user.role, "uiLanguage": user.ui_language}
+            "contactNotes": preferences.get("notes") or "", "role": user.role, "uiLanguage": user.ui_language,
+            "hasPassword": bool(user.password_hash), "emailCodes": get_settings().email_enabled}
 
 
 def _guard(db: Session, identity: Identity, pin: str | None) -> None:
@@ -114,6 +117,12 @@ def request_email_change(payload: EmailChange, request: Request, x_parent_pin: s
     if db.scalar(select(User.id).where(func.lower(User.email) == email)):
         raise HTTPException(status_code=409, detail="Another account already uses that email address.")
     ratelimit.check(f"email-change:{identity.user.id}", 3, 10 * 60)
+    if not get_settings().email_enabled:
+        user = db.get(User, identity.user.id)
+        previous, user.email = user.email, email
+        audit(db, "profile.email-changed", request, user.id, previous=previous, new=email, confirmed=False)
+        db.commit()
+        return {"ok": True, "codeSent": False, "profile": contact_payload(user)}
     key = f"change:{identity.user.id}:{email}"
     code = new_otp_code()
     db.execute(update(EmailOtp).where(EmailOtp.email == key, EmailOtp.consumed_at.is_(None)).values(consumed_at=utcnow()))
@@ -123,7 +132,7 @@ def request_email_change(payload: EmailChange, request: Request, x_parent_pin: s
     send_email(email, f"Confirm your new KathaChepta email: {code}",
                f"Enter {code} in KathaChepta to use this address for your account. It expires in "
                f"{get_settings().otp_ttl_minutes} minutes.\n\nIf you didn't ask for this, you can ignore this email.")
-    return {"ok": True}
+    return {"ok": True, "codeSent": True}
 
 
 class EmailConfirm(BaseModel):
@@ -158,4 +167,32 @@ def confirm_email_change(payload: EmailConfirm, request: Request, identity: Iden
                        f"Your account now uses {email}. If this wasn't you, reply to this email right away.")
         except OSError:
             pass
+    return contact_payload(user)
+
+
+class PasswordChange(BaseModel):
+    currentPassword: str | None = Field(default=None, max_length=512)  # not needed when the account has none yet
+    newPassword: str = Field(max_length=128)
+
+
+@router.post("/password")
+def change_password(payload: PasswordChange, request: Request, x_parent_pin: str | None = Header(None),
+                    identity: Identity = Depends(require_identity), db: Session = Depends(get_db)):
+    _guard(db, identity, x_parent_pin)
+    ratelimit.check(f"password-change:{identity.user.id}", 10, 15 * 60)
+    user = db.get(User, identity.user.id)
+    if user.password_hash and not verify_password(payload.currentPassword or "", user.password_hash)[0]:
+        audit(db, "password.change-failed", request, user.id)
+        db.commit()
+        # 400, not 401: a wrong password here must not look like a signed-out session to the app.
+        raise HTTPException(status_code=400, detail="Your current password isn't right.")
+    check_new_password(payload.newPassword)
+    user.password_hash = hash_password(payload.newPassword)
+    # Sign out everywhere else. This device stays signed in (on a phone, with its refresh token).
+    others = [AuthSession.user_id == user.id, AuthSession.id != identity.session.id, AuthSession.revoked_at.is_(None)]
+    if identity.session.family_id:
+        others.append(or_(AuthSession.family_id.is_(None), AuthSession.family_id != identity.session.family_id))
+    db.execute(update(AuthSession).where(*others).values(revoked_at=utcnow()))
+    audit(db, "password.changed", request, user.id)
+    db.commit()
     return contact_payload(user)

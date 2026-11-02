@@ -13,14 +13,19 @@ automated pipeline) complete, awaiting review** on branch `phase-2-studio-pipeli
 | `postgres` | PostgreSQL 16 + pgvector. Host port 127.0.0.1:5433 for tests and admin tools only |
 | `api` | FastAPI (Uvicorn, 2 processes). Runs `alembic upgrade head` on start |
 | `worker-media` (×`KC_MEDIA_WORKERS`) | Pulls `media.process` and `transcription` jobs |
-| `caddy` | Reverse proxy on :8080 (LAN-reachable). TLS on Lightsail in Phase 6 |
+| `caddy` | Reverse proxy on :8080 (LAN-reachable). On Lightsail: TLS for the real domains (`infra/lightsail/Caddyfile.production`) |
 | `mailpit` | Catches development email (sign-in codes) at http://localhost:8025 |
 | `backup` | `pg_dump` at start and daily at 02:30 UTC into `data/backups/`, kept 14 days |
-| GPU worker (not in Docker) | `scripts/run_gpu_worker.ps1`: pulls `teaser` (LM Studio) and `artwork` jobs |
+| GPU worker (not in Docker) | `scripts/run_gpu_worker.ps1`: pulls `teaser` (LM Studio) and `artwork` jobs; `-Install` runs it 19:00-06:00 only (`KC_GPU_HOURS`) |
 
 Secrets live in `.env` (created by `scripts/setup_local.py`, never committed). `/api/health` reports the
 running build, process ID, and supported processing actions; every response carries
 `X-KathaChepta-Server` and `X-Request-Id` headers.
+
+On Lightsail the same services run with `infra/lightsail/docker-compose.prod.yml`: the API image has the web
+app baked in, media and the seed recordings live on the VM disk, and the desktop runs only the GPU worker.
+Runbook and pilot stages: [docs/lightsail-pilot.md](docs/lightsail-pilot.md). Desktop helper:
+`npm run server -- status|deploy|sync|cutover|logs|ssh`.
 
 ## Accounts and roles
 
@@ -42,7 +47,7 @@ Sign-in methods:
 - Staff two-factor (TOTP): `/api/auth/totp/setup` and `/api/auth/totp/verify`. Required in production
   (`KC_STAFF_MFA_REQUIRED=true`); optional locally. Until verified, staff sessions have no permissions.
 
-Operator CLI: `docker compose exec api python -m app.cli create-user|set-password|set-role|reset-mfa|create-worker|seed-demo`.
+Operator CLI: `docker compose exec api python -m app.cli create-user|set-password|set-role|reset-mfa|create-worker|seed-demo|import-wordpress`. `import-wordpress <csv> [--apply]` brings listener accounts over from the old WordPress site (dry run without `--apply`; WordPress password hashes keep working and are upgraded to argon2 at first sign-in).
 
 ## Jobs and workers
 
@@ -117,6 +122,7 @@ CI (`.github/workflows/ci.yml`) runs the same plus image builds.
   sign-off; `/` now sends staff to the new studio at `/studio`.
 - App lockfile: regenerate on Linux (`docker run --rm -v "${PWD}/app:/w" -w /w node:24 npm install
   --package-lock-only`), because npm on Windows leaves out packages CI's `npm ci` requires.
-- The Lightsail bucket storage backend (`KC_STORAGE_BACKEND=s3`) is not implemented yet (Phase 6).
+- The Lightsail bucket storage backend (`KC_STORAGE_BACKEND=s3`) is not implemented yet; the pilot keeps media on
+  the VM disk with daily snapshots.
 - Artwork still uses Pollinations; the local SDXL provider is Phase 2.
 - Rate limiting is per API process (in memory), fine for one VM.

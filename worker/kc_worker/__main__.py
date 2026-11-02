@@ -5,6 +5,7 @@ Environment:
   KC_WORKER_TOKEN            token registered for this worker
   KC_WORKER_CAPABILITIES     subset to run here, e.g. "media,stt" or "llm,image"
   KC_WORKDIR                 scratch directory (default: system temp)
+  KC_WORKER_UNTIL            optional HH:MM (local time): finish the current job and exit when it's that time
 Handler-specific settings are documented in each handler module.
 """
 
@@ -19,6 +20,7 @@ import sys
 import tempfile
 import time
 import traceback
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from .client import ApiClient, ApiError, Heartbeat
@@ -34,6 +36,16 @@ def _stop(*_):
     log.info("Stopping after the current job...")
 
 
+def stop_time(value: str, now: datetime | None = None) -> datetime | None:
+    """The next time the clock shows HH:MM, or None when no stop time is set. Raises ValueError for bad input."""
+    if not value:
+        return None
+    hour, minute = (int(part) for part in value.split(":"))
+    now = now or datetime.now()
+    stop = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    return stop if stop > now else stop + timedelta(days=1)
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     api_url = os.environ.get("KC_API_URL", "http://localhost:8080")
@@ -47,6 +59,11 @@ def main() -> int:
     if unknown:
         log.error("Unknown capabilities %s. Known: %s", unknown, sorted({h.capability for h in HANDLERS.values()}))
         return 2
+    try:
+        stop_at = stop_time(os.environ.get("KC_WORKER_UNTIL", "").strip())
+    except ValueError:
+        log.error("KC_WORKER_UNTIL must be a time like 06:00, not %r", os.environ["KC_WORKER_UNTIL"])
+        return 2
     signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
     client = ApiClient(api_url, token)
@@ -57,9 +74,13 @@ def main() -> int:
                 **{name: handler.describe() for name, handler in HANDLERS.items() if handler.capability in capabilities}}
 
     info, described_at = describe(), time.monotonic()
-    log.info("Worker started: api=%s capabilities=%s", api_url, capabilities)
+    log.info("Worker started: api=%s capabilities=%s%s", api_url, capabilities,
+             f" until {stop_at:%Y-%m-%d %H:%M}" if stop_at else "")
     idle, last_type = 1.0, None
     while not _stopping:
+        if stop_at and datetime.now() >= stop_at:
+            log.info("It's %s: stopping for the day.", f"{stop_at:%H:%M}")
+            break
         if time.monotonic() - described_at > 300:
             info, described_at = describe(), time.monotonic()
         try:

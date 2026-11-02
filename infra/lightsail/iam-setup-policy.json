@@ -1,0 +1,79 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LightsailRead",
+      "Effect": "Allow",
+      "Action": [
+        "lightsail:GetAlarms",
+        "lightsail:GetAutoSnapshots",
+        "lightsail:GetBlueprints",
+        "lightsail:GetBundles",
+        "lightsail:GetContactMethods",
+        "lightsail:GetInstance",
+        "lightsail:GetInstanceMetricData",
+        "lightsail:GetInstancePortStates",
+        "lightsail:GetInstances",
+        "lightsail:GetInstanceSnapshot",
+        "lightsail:GetInstanceSnapshots",
+        "lightsail:GetInstanceState",
+        "lightsail:GetKeyPair",
+        "lightsail:GetKeyPairs",
+        "lightsail:GetOperation",
+        "lightsail:GetOperations",
+        "lightsail:GetOperationsForResource",
+        "lightsail:GetRegions",
+        "lightsail:GetStaticIp",
+        "lightsail:GetStaticIps"
+      ],
+      "Resource": "*",
+      "Condition": {"StringEquals": {"aws:RequestedRegion": "ap-south-1"}}
+    },
+    {
+      "Sid": "LightsailCreateAndConfigure",
+      "Effect": "Allow",
+      "Action": [
+        "lightsail:AllocateStaticIp",
+        "lightsail:AttachStaticIp",
+        "lightsail:CreateContactMethod",
+        "lightsail:CreateInstances",
+        "lightsail:CreateInstanceSnapshot",
+        "lightsail:CreateInstancesFromSnapshot",
+        "lightsail:EnableAddOn",
+        "lightsail:ImportKeyPair",
+        "lightsail:OpenInstancePublicPorts",
+        "lightsail:PutAlarm",
+        "lightsail:PutInstancePublicPorts",
+        "lightsail:RebootInstance",
+        "lightsail:SendContactMethodVerification",
+        "lightsail:TagResource",
+        "lightsail:TestAlarm"
+      ],
+      "Resource": "*",
+      "Condition": {"StringEquals": {"aws:RequestedRegion": "ap-south-1"}}
+    },
+    {
+      "Sid": "SesDomainIdentity",
+      "Effect": "Allow",
+      "Action": [
+        "ses:CreateEmailIdentity",
+        "ses:GetEmailIdentity",
+        "ses:PutEmailIdentityMailFromAttributes",
+        "ses:TagResource"
+      ],
+      "Resource": "arn:aws:ses:ap-south-1:*:identity/kathachepta.com",
+      "Condition": {"StringEquals": {"aws:RequestedRegion": "ap-south-1"}}
+    },
+    {
+      "Sid": "SesAccountAndProductionAccess",
+      "Effect": "Allow",
+      "Action": [
+        "ses:GetAccount",
+        "ses:ListEmailIdentities",
+        "ses:PutAccountDetails"
+      ],
+      "Resource": "*",
+      "Condition": {"StringEquals": {"aws:RequestedRegion": "ap-south-1"}}
+    }
+  ]
+}

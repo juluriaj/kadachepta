@@ -195,7 +195,8 @@ audit_log, notifications, devices (push tokens)
 
 - Docker Compose services: `caddy`, `api` (Uvicorn workers), `worker`,
   `postgres`, optional `lmstudio`.
-- Lightsail bucket (private) + Lightsail CDN distribution for media delivery.
+- Lightsail bucket (private) + Lightsail CDN distribution for media delivery. The pilot starts with media on
+  the VM disk (13 GB today) and adds the bucket when media nears ~50 GB ([docs/lightsail-pilot.md](docs/lightsail-pilot.md)).
 - Backups: Lightsail automatic snapshots (daily), nightly `pg_dump` to the
   bucket, WAL archiving for point-in-time recovery before launch (Phase 6).
   Target: lose at most 15 minutes of data; restore within 2 hours.

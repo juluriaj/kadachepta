@@ -1,5 +1,5 @@
 # KathaChepta local stack. Start with:  python scripts/setup_local.py && docker compose up -d --build
-# The same services run on Lightsail in Phase 6 (with the bucket storage backend and TLS on real domains).
+# The same services run on Lightsail with infra/lightsail/docker-compose.prod.yml (docs/lightsail-pilot.md).
 
 name: kathachepta
 
@@ -12,8 +12,12 @@ x-api-env: &api-env
   KC_LEGACY_AUDIO_ROOT: /data/legacy-audio
   KC_APP_ROOT: /srv/app
   KC_BOOTSTRAP_WORKERS: ${KC_BOOTSTRAP_WORKERS}
+  KC_EMAIL_ENABLED: ${KC_EMAIL_ENABLED:-false}
   KC_SMTP_HOST: ${KC_SMTP_HOST:-mailpit}
   KC_SMTP_PORT: ${KC_SMTP_PORT:-1025}
+  KC_SMTP_USERNAME: ${KC_SMTP_USERNAME:-}
+  KC_SMTP_PASSWORD: ${KC_SMTP_PASSWORD:-}
+  KC_SMTP_FROM: ${KC_SMTP_FROM:-KathaChepta <no-reply@kathachepta.com>}
   KC_STAFF_MFA_REQUIRED: ${KC_STAFF_MFA_REQUIRED:-false}
   KC_COOKIE_SECURE: ${KC_COOKIE_SECURE:-false}
 
@@ -36,7 +40,7 @@ services:
       retries: 20
 
   api:
-    build: { context: ., dockerfile: api/Dockerfile }
+    build: { context: ., dockerfile: api/Dockerfile, target: api }
     restart: unless-stopped
     environment:
       <<: *api-env
@@ -52,7 +56,7 @@ services:
 
   api-test:
     profiles: ["test"]
-    build: { context: ., dockerfile: api/Dockerfile, args: { INSTALL_DEV: "true" } }
+    build: { context: ., dockerfile: api/Dockerfile, target: api, args: { INSTALL_DEV: "true" } }
     environment:
       KC_DATABASE_URL: postgresql+psycopg://kathachepta:${POSTGRES_PASSWORD}@postgres:5432/kathachepta
     volumes:

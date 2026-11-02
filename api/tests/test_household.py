@@ -147,7 +147,7 @@ def test_export_and_delete_account(client, db):
     assert export["account"]["username"] == "mom" and export["favorites"][0]["storyId"] == "a" * 16
     assert client.post("/api/me/delete", json={"confirm": "nope"}).status_code == 400
     assert client.post("/api/me/delete", json={"confirm": "DELETE"}).status_code == 200
-    assert client.get("/api/session").json() == {"authenticated": False}
+    assert client.get("/api/session").json()["authenticated"] is False
     assert client.post("/api/login", json={"username": "mom", "password": "correct horse battery"}).status_code == 401
     user = db.scalars(select(User)).one()
     db.refresh(user)

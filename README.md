@@ -39,8 +39,19 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_gpu_worker.ps1   # once: 
 powershell -ExecutionPolicy Bypass -File scripts\run_gpu_worker.ps1
 ```
 
+To keep the GPU free during the day, `npm run worker:gpu:schedule` adds a Windows task that runs the worker
+only within `KC_GPU_HOURS` (default `19:00-06:00`). It loads the model, restarts the worker if it crashes, and at
+closing time lets the current job finish and unloads LM Studio. `npm run worker:gpu:stop` ends a night early;
+`-Uninstall` removes the task. Logs are in `data\logs\gpu-schedule.log` and `data\logs\gpu-worker-*.log`.
+
 Models, prompts, the artwork provider, and pipeline limits are chosen in the studio under
 **AI & processing** (admins), not in `.env`.
+
+## Hosting on Lightsail
+
+The live server is one AWS Lightsail VM, piloted on the web first, then Android, then iPhone. Steps, defaults
+and exit criteria for each stage: [docs/lightsail-pilot.md](docs/lightsail-pilot.md). From the desktop:
+`npm run server -- status|deploy|sync|cutover|logs|ssh`.
 
 The model is set by `KC_LLM_MODEL` in `.env`. Compare models on real transcripts with
 `python worker/bench/llm_benchmark.py --models qwen/qwen3-8b google/gemma-3-12b`.
@@ -63,7 +74,7 @@ npm run stop
 | `app/` | The app (Expo, TypeScript): listeners and narrators on iOS, Android, and web; the editor studio at `/studio` |
 | `web/` | Prototype editor and narrator pages (fallback until Phase 2 sign-off) |
 | `docs/` | Review checklists per phase, the content policy, benchmarks |
-| `infra/` | Caddy config, backup script, Lightsail provisioning (Phase 6) |
+| `infra/` | Caddy config, backup script, Lightsail provisioning, deploy and restore ([runbook](docs/lightsail-pilot.md)) |
 | `scripts/` | Local setup and the GPU worker launcher |
 | `legacy/` | Retired prototype code, kept until Phase 0 sign-off |
 | `data/` (ignored) | Local media storage and database backups |

@@ -1,0 +1,23 @@
+# Keep image builds small and free of secrets: media, seed recordings and backups are mounted, never baked in.
+.git
+.github
+.claude
+.env
+.env.*
+audio/
+data/
+catalog/
+config/
+legacy/
+docs/
+models/
+**/__pycache__
+**/*.pyc
+**/.venv*
+**/.pytest_cache
+**/.ruff_cache
+**/node_modules
+app/.expo
+app/dist
+app/dist-update
+app/store

@@ -20,7 +20,7 @@ def notify(db: Session, user_id: int | None, kind: str, title: str, body: str | 
         return
     db.add(Notification(user_id=user_id, kind=kind, title=title, body=body, audio_asset_id=asset_id))
     user = db.get(User, user_id)
-    if kind in EMAIL_KINDS and user and user.email:
+    if get_settings().email_enabled and kind in EMAIL_KINDS and user and user.email:
         link = f"{get_settings().public_base_url}/narrate" + (f"/submission/{asset_id}" if asset_id else "")
         try:
             mailer.send_email(user.email, f"KathaChepta: {title}", f"{body or title}\n\nOpen your studio: {link}\n")

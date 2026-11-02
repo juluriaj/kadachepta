@@ -1,11 +1,13 @@
 """Operator commands: python -m app.cli <command> ...
 
   create-user <username> <role> [--email E] [--password P]   (prints a generated password if none given)
-  set-password <username> [--password P]
+  set-password <username or email> [--password P]             (for a forgotten password; prints a new one)
   set-role <username> <role>
   reset-mfa <username>
   create-worker <name> <cap1,cap2>                             (prints the worker token once)
   seed-demo                                                    (development only: demo accounts)
+  import-wordpress <users.csv> [--apply]                       (listeners from the old WordPress site; dry run
+                                                                without --apply. See services/wordpress_import.py)
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ from __future__ import annotations
 import argparse
 import secrets
 import sys
+from pathlib import Path
 
 from sqlalchemy import func, select
 
@@ -20,15 +23,17 @@ from .config import get_settings
 from .db import get_sessionmaker
 from .models import NarratorProfile, User, Worker
 from .security import ROLE_PERMISSIONS, hash_password, new_token, token_hash
+from .services import wordpress_import
 
 DEMO_ACCOUNTS = [("listener", "listener"), ("parent", "parent"), ("narrator", "narrator"),
                  ("editor", "editor"), ("admin", "admin")]
 
 
 def _user(db, username: str) -> User:
-    user = db.scalars(select(User).where(func.lower(User.username) == username.lower())).first()
+    name = username.strip().lower()
+    user = db.scalars(select(User).where((func.lower(User.username) == name) | (func.lower(User.email) == name))).first()
     if not user:
-        sys.exit(f"No user named {username!r}.")
+        sys.exit(f"No user named {username!r}, and no account with that email.")
     return user
 
 
@@ -57,6 +62,9 @@ def main(argv: list[str] | None = None) -> int:
     worker.add_argument("name")
     worker.add_argument("capabilities")
     sub.add_parser("seed-demo")
+    wordpress = sub.add_parser("import-wordpress")
+    wordpress.add_argument("file")
+    wordpress.add_argument("--apply", action="store_true", help="create the accounts (without it: report only)")
     args = parser.parse_args(argv)
 
     with get_sessionmaker()() as db:
@@ -110,6 +118,20 @@ def main(argv: list[str] | None = None) -> int:
             db.commit()
             print("Demo accounts ready (development only): " + ", ".join(u for u, _ in DEMO_ACCOUNTS)
                   + " — password 'change-me'.")
+        elif args.command == "import-wordpress":
+            try:
+                text, warning = wordpress_import.decode_export(Path(args.file).read_bytes())
+                plan = wordpress_import.plan_import(db, wordpress_import.read_export(text))
+            except (OSError, wordpress_import.ImportProblem) as error:
+                sys.exit(f"Can't import {args.file}: {error}")
+            if warning:
+                print(f"Warning: {warning}")
+            print(wordpress_import.report(plan))
+            if args.apply:
+                wordpress_import.apply_import(db, plan, Path(args.file).name)
+                print(f"Created {len(plan.new_users)} listener accounts.")
+            else:
+                print("Dry run: nothing was saved. Run again with --apply to create the accounts.")
     return 0
 
 

@@ -5,6 +5,7 @@ import pyotp
 from sqlalchemy import select
 
 from app import mailer
+from app.config import get_settings
 from app.models import AuditLog, AuthSession, User
 
 from .conftest import login, make_user
@@ -18,7 +19,7 @@ def test_password_login_session_and_logout(client, db):
     session = client.get("/api/session").json()
     assert session["authenticated"] and session["username"] == "editor1"
     assert client.post("/api/logout").status_code == 200
-    assert client.get("/api/session").json() == {"authenticated": False}
+    assert client.get("/api/session").json() == {"authenticated": False, "emailSignIn": True}
 
 
 def test_legacy_pbkdf2_password_is_accepted_and_upgraded(client, db):
@@ -70,6 +71,27 @@ def test_email_otp_creates_listener_account(client, db):
     assert body["role"] == "listener" and body["email"] == "parent@example.com"
     # A code works once.
     assert client.post("/api/auth/otp/verify", json={"email": "parent@example.com", "code": code}).status_code == 401
+
+
+def test_listener_signs_up_with_a_username_and_password(client, db):
+    short = client.post("/api/auth/register", json={"username": "asha", "password": "short"})
+    assert short.status_code == 422 and "8 characters" in short.json()["error"]
+    for bad in ("a@example.com", "ab", "-asha", "asha k"):
+        assert client.post("/api/auth/register", json={"username": bad, "password": "long enough"}).status_code == 422
+    body = client.post("/api/auth/register", json={"username": " Asha.K ", "password": "long enough"}).json()
+    assert body["role"] == "listener" and body["username"] == "asha.k" and "kc_session" in client.cookies
+    client.post("/api/logout")
+    assert client.post("/api/auth/register", json={"username": "ASHA.K", "password": "other one"}).status_code == 409
+    assert login(client, "Asha.K", "long enough")["username"] == "asha.k"
+    assert db.scalars(select(AuditLog).where(AuditLog.action == "account.created")).one().detail["method"] == "password"
+
+
+def test_without_email_only_passwords_sign_in(client, monkeypatch):
+    monkeypatch.setattr(get_settings(), "email_enabled", False)
+    assert client.get("/api/session").json() == {"authenticated": False, "emailSignIn": False}
+    assert client.post("/api/auth/otp/request", json={"email": "a@example.com"}).status_code == 404
+    assert client.post("/api/auth/otp/verify", json={"email": "a@example.com", "code": "123456"}).status_code == 404
+    assert not mailer.sent_messages
 
 
 def test_otp_request_is_rate_limited_per_email(client):

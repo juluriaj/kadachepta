@@ -1,25 +1,30 @@
-# Production overrides on Lightsail (Phase 6):
-#   docker compose -f docker-compose.yml -f infra/lightsail/docker-compose.prod.yml up -d --build
+# Production overrides on Lightsail. infra/lightsail/deploy.sh uses them; for anything else on the server run
+#   bash infra/lightsail/compose.sh <ps | logs -f api | exec api python -m app.cli ...>
+# Images are tagged with the deployed commit (KC_RELEASE) so a failed deploy rolls back without rebuilding.
 services:
   postgres:
     ports: !reset []            # never expose PostgreSQL on the VM
   api:
+    image: kathachepta/api:${KC_RELEASE:-latest}
+    build: { target: production }   # the listener web app is baked into the image
     environment:
       KC_ENVIRONMENT: production
       KC_COOKIE_SECURE: "true"
       KC_STAFF_MFA_REQUIRED: "true"
-      KC_API_WORKERS: "3"
+      KC_API_WORKERS: ${KC_API_WORKERS:-3}
+      KC_BUILD: ${KC_RELEASE:-unknown}
     volumes: !override
       - ./data/media:/data/media
+      - ./audio:/data/legacy-audio:ro   # the seed recordings, copied from the desktop (scripts/lightsail.ps1 sync)
   worker-media:
-    deploy:
-      replicas: 2
+    image: kathachepta/worker:${KC_RELEASE:-latest}
   caddy:
     ports: !override
       - "80:80"
       - "443:443"
+      - "443:443/udp"           # HTTP/3
     volumes: !override
       - ./infra/lightsail/Caddyfile.production:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
   mailpit:
-    profiles: ["never"]         # production mail goes through Amazon SES (KC_SMTP_* settings)
+    profiles: ["never"]         # production mail, when KC_EMAIL_ENABLED=true, goes through KC_SMTP_* in .env

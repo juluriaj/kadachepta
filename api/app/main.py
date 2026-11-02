@@ -163,6 +163,8 @@ def startup() -> None:
         log.error("Configuration problem: %s", problem)
     if settings.validate_for_runtime() and settings.is_production:
         raise RuntimeError("Refusing to start with an unsafe production configuration.")
+    for warning in settings.runtime_warnings():
+        log.warning("Configuration warning: %s", warning)
     register_bootstrap_workers()
     log.info("KathaChepta API ready: pid %s build %s env %s", SERVER_INFO["pid"], SERVER_INFO["build"],
              settings.environment)
