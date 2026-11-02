@@ -10,7 +10,8 @@
 # -Install adds a Windows task that leaves the GPU alone during the day: the worker runs only within
 # KC_GPU_HOURS (default 19:00-06:00 on this PC's clock), from the opening time or from sign-in if that is later.
 # The task loads the model, restarts the worker if it crashes, and at the closing time lets the current job
-# finish and unloads LM Studio. Logs: data\logs\gpu-schedule.log and data\logs\gpu-worker-*.log.
+# finish and closes LM Studio (models, server and daemon). LM Studio needn't start at sign-in: the task starts it.
+# Logs: data\logs\gpu-schedule.log and data\logs\gpu-worker-*.log.
 
 param([switch]$Install, [switch]$Uninstall, [switch]$Stop, [switch]$Scheduled)
 
@@ -22,6 +23,15 @@ $lms = Join-Path $env:USERPROFILE ".lmstudio\bin\lms.exe"
 # The worker's Python processes (a virtualenv's python.exe starts a second, real one).
 function Get-WorkerProcess {
     Get-CimInstance Win32_Process -Filter "Name LIKE 'python%'" | Where-Object { $_.CommandLine -match "-m kc_worker" }
+}
+
+# Nothing of LM Studio stays running during the day: the models leave the GPU, then the server and its daemon stop.
+function Stop-LmStudio {
+    & $lms unload --all | Out-Null
+    & $lms server stop | Out-Null
+    & $lms daemon down | Out-Null
+    # The daemon won't stop while the LM Studio app is open, and lms commands open the app when nothing is running.
+    Get-Process "LM Studio" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 }
 
 if ($Uninstall) {
@@ -36,8 +46,8 @@ if ($Stop) {
         Where-Object { $_.CommandLine -match "run_gpu_worker\.ps1.*-Scheduled" } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     Get-WorkerProcess | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-    if (Test-Path $lms) { & $lms unload --all | Out-Null }
-    Write-Host "GPU worker stopped and LM Studio's models unloaded. A job it was in the middle of goes back"
+    if (Test-Path $lms) { Stop-LmStudio }
+    Write-Host "GPU worker stopped and LM Studio closed. A job it was in the middle of goes back"
     Write-Host "in the queue when its lease runs out (up to 15 minutes). The task starts again at the next opening time."
     return
 }
@@ -115,6 +125,7 @@ if ($Scheduled) {
     try {
         if ($noVenv) { Write-Log $noVenv }
         # One request at a time gets the whole 8K context; LM Studio's defaults split it and teasers overflow.
+        & $lms daemon up | Out-Null  # closed at the last closing time
         & $lms server start | Out-Null
         & $lms unload --all | Out-Null
         & $lms load $model --context-length 8192 --parallel 1 --gpu max -y | Out-Null
@@ -131,8 +142,8 @@ if ($Scheduled) {
     } catch {
         Write-Log "Failed: $_"
     } finally {
-        & $lms unload --all | Out-Null
-        Write-Log "Closed: LM Studio's models are unloaded and the GPU is free."
+        Stop-LmStudio
+        Write-Log "Closed: LM Studio's models are unloaded, its server and daemon stopped, and the GPU is free."
     }
     return
 }
