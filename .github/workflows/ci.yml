@@ -80,5 +80,5 @@ jobs:
     needs: [api, worker, app, web]
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -f api/Dockerfile -t kathachepta-api .
+      - run: docker build -f api/Dockerfile --target production -t kathachepta-api .   # the Lightsail image
       - run: docker build -f worker/Dockerfile -t kathachepta-worker .

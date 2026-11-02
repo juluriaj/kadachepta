@@ -16,6 +16,16 @@
       },
       "channel": "preview"
     },
+    "pilot": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.kathachepta.com"
+      },
+      "channel": "pilot"
+    },
     "production": {
       "autoIncrement": true,
       "env": {

@@ -6,6 +6,7 @@ alembic==1.16.*
 pydantic==2.*
 pydantic-settings==2.*
 argon2-cffi==25.*
+bcrypt==5.*
 pyotp==2.9.*
 python-multipart==0.0.*
 email-validator==2.*

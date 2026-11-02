@@ -18,6 +18,7 @@ export type Session = {
   uiLanguage?: UiLanguage;
   mfaRequired?: boolean;
   mfaEnrollmentRequired?: boolean;
+  emailSignIn?: boolean;  // signed out: whether the server sends email sign-in codes
 };
 
 export type Profile = {
@@ -44,7 +45,7 @@ type SessionContext = {
   isStaff: boolean;
   isNarrator: boolean;
   selectProfile: (id: number | null) => Promise<void>;
-  signIn: (body: Record<string, unknown>) => Promise<Session>;
+  signIn: (body: Record<string, unknown>, path?: string) => Promise<Session>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
   changeLanguage: (language: UiLanguage) => Promise<void>;
@@ -116,9 +117,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await setProfileId(id);
       await queryClient.invalidateQueries({ predicate: (q) => !['session', 'household'].includes(String(q.queryKey[0])) });
     },
-    signIn: async (body) => {
+    signIn: async (body, path) => {
       const result = await api<Session & { accessToken?: string; refreshToken?: string }>(
-        body.code ? '/api/auth/otp/verify' : '/api/login',
+        path ?? (body.code ? '/api/auth/otp/verify' : '/api/login'),
         { method: 'POST', body: { ...body, client: clientKind }, profile: false });
       if (result.accessToken && result.refreshToken) await storeTokens(result.accessToken, result.refreshToken);
       markSignedIn();

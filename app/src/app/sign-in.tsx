@@ -9,17 +9,21 @@ import { useI18n } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { space } from '@/lib/theme';
 
-type Step = 'email' | 'code' | 'staff' | 'mfa';
+type Step = 'email' | 'code' | 'password' | 'create' | 'mfa';
 
 export default function SignIn() {
   const { t } = useI18n();
   const colors = useColors();
   const { signIn, session, refresh } = useSession();
-  const [step, setStep] = useState<Step>(session.mfaRequired || session.mfaEnrollmentRequired ? 'mfa' : 'email');
+  // Email codes only when the server sends email (the pilot doesn't): otherwise everyone uses a password.
+  const emailSignIn = session.emailSignIn === true;
+  const [step, setStep] = useState<Step>(session.mfaRequired || session.mfaEnrollmentRequired ? 'mfa'
+    : emailSignIn ? 'email' : 'password');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [repeat, setRepeat] = useState('');
   const [secret, setSecret] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,15 +86,42 @@ export default function SignIn() {
             </View>
           ) : null}
 
-          {step === 'staff' ? (
+          {step === 'password' ? (
             <View style={{ gap: space.lg }}>
-              <Text variant="title">{t('signin.staffTitle')}</Text>
-              <Field label={t('signin.username')} value={username} onChangeText={setUsername} autoCapitalize="none" autoComplete="username" />
+              {emailSignIn ? <Text variant="title">{t('signin.staffTitle')}</Text> : (
+                <>
+                  <Text variant="display">{t('signin.title')}</Text>
+                  <Text muted>{t('signin.passwordSubtitle')}</Text>
+                </>
+              )}
+              <Field label={t('signin.username')} value={username} onChangeText={setUsername} autoCapitalize="none" autoCorrect={false}
+                autoComplete="username" />
               <Field label={t('signin.password')} value={password} onChangeText={setPassword} secureTextEntry autoComplete="password"
                 onSubmitEditing={() => run(async () => finish(await signIn({ username, password })))} />
               <Button title={t('signin.verify')} loading={busy} disabled={!username || !password}
                 onPress={() => run(async () => finish(await signIn({ username, password })))} />
-              <Button title={t('common.back')} kind="ghost" onPress={() => setStep('email')} />
+              <Text variant="small" muted>{t('signin.forgot')}</Text>
+              <Button title={t('signin.createAccount')} kind="ghost" onPress={() => { setError(null); setStep('create'); }} />
+              {emailSignIn ? <Button title={t('signin.useEmail')} kind="ghost" onPress={() => { setError(null); setStep('email'); }} /> : null}
+            </View>
+          ) : null}
+
+          {step === 'create' ? (
+            <View style={{ gap: space.lg }}>
+              <Text variant="display">{t('signin.createTitle')}</Text>
+              <View style={{ gap: space.xs }}>
+                <Field label={t('signin.newUsername')} value={username} onChangeText={(v) => setUsername(v.trim().toLowerCase())}
+                  autoCapitalize="none" autoCorrect={false} autoComplete="username-new" maxLength={30} />
+                <Text variant="small" muted>{t('signin.usernameHint')}</Text>
+              </View>
+              <Field label={t('signin.newPassword')} value={password} onChangeText={setPassword} secureTextEntry
+                autoComplete="password-new" textContentType="newPassword" />
+              <Field label={t('signin.repeatPassword')} value={repeat} onChangeText={setRepeat} secureTextEntry
+                autoComplete="password-new" textContentType="newPassword" onSubmitEditing={() => void create()} />
+              {repeat && repeat !== password ? <Text variant="small" color={colors.danger}>{t('signin.passwordsDiffer')}</Text> : null}
+              <Button title={t('signin.create')} loading={busy}
+                disabled={username.length < 3 || password.length < 8 || repeat !== password} onPress={() => void create()} />
+              <Button title={t('signin.haveAccount')} kind="ghost" onPress={() => { setError(null); setStep('password'); }} />
             </View>
           ) : null}
 
@@ -113,7 +144,7 @@ export default function SignIn() {
           {error ? <Text color={colors.danger} accessibilityLiveRegion="polite">{error}</Text> : null}
 
           {step === 'email' || step === 'code' ? (
-            <Button title={t('signin.staff')} kind="ghost" onPress={() => { setError(null); setStep('staff'); }} />
+            <Button title={t('signin.staff')} kind="ghost" onPress={() => { setError(null); setStep('password'); }} />
           ) : null}
           {CAN_CHANGE_SERVER ? <ServerAddress onChanged={() => void refresh()} /> : null}
         </ScrollView>
@@ -126,6 +157,11 @@ export default function SignIn() {
       await api('/api/auth/otp/request', { method: 'POST', body: { email: email.trim() }, profile: false });
       setStep('code');
     });
+  }
+
+  async function create() {
+    if (username.length < 3 || password.length < 8 || repeat !== password) return;
+    await run(async () => finish(await signIn({ username, password }, '/api/auth/register')));
   }
 }
 

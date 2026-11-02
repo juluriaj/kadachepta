@@ -2,8 +2,12 @@
 
 import re
 
+from fastapi.testclient import TestClient
+
 from app import mailer
-from app.models import Household
+from app.config import get_settings
+from app.main import app
+from app.models import Household, User
 from app.security import hash_password
 
 from .conftest import login, make_asset, make_user
@@ -57,6 +61,47 @@ def test_changing_email_needs_the_code_sent_to_the_new_address(client, db):
     done = client.post("/api/me/email/confirm", json={"email": "new@example.com", "code": code})
     assert done.json()["email"] == "new@example.com"
     assert mailer.sent_messages[-1]["To"] == "old@example.com"  # the old address hears about it
+
+
+def test_without_email_a_new_address_is_saved_as_given(client, db, monkeypatch):
+    monkeypatch.setattr(get_settings(), "email_enabled", False)
+    make_user(db, "lis", "listener")
+    login(client, "lis")
+    assert client.get("/api/me/profile").json()["emailCodes"] is False
+    body = client.post("/api/me/email/request", json={"email": "Lis@Example.com"}).json()
+    assert body["codeSent"] is False and body["profile"]["email"] == "lis@example.com"
+    assert not mailer.sent_messages
+    assert login(client, "lis@example.com")["username"] == "lis"  # the email signs in too, with the password
+
+
+def test_changing_the_password_signs_out_other_devices(client, db):
+    make_user(db, "lis", "listener")
+    with TestClient(app) as other_device:
+        login(other_device, "lis")
+        login(client, "lis")
+        wrong = client.post("/api/me/password", json={"currentPassword": "nope", "newPassword": "a new password"})
+        assert wrong.status_code == 400  # never 401: that would sign the app out
+        short = client.post("/api/me/password", json={"currentPassword": "correct horse battery", "newPassword": "short"})
+        assert short.status_code == 422
+        done = client.post("/api/me/password", json={"currentPassword": "correct horse battery",
+                                                     "newPassword": "a new password"})
+        assert done.status_code == 200 and done.json()["hasPassword"] is True
+        assert client.get("/api/session").json()["authenticated"]
+        assert not other_device.get("/api/session").json()["authenticated"]
+    client.post("/api/logout")
+    assert client.post("/api/login", json={"username": "lis", "password": "correct horse battery"}).status_code == 401
+    login(client, "lis", "a new password")
+
+
+def test_an_account_without_a_password_can_set_one(client, db):
+    db.add(User(email="code@example.com", role="listener", display_name="code"))
+    db.commit()
+    assert client.post("/api/auth/otp/request", json={"email": "code@example.com"}).status_code == 202
+    client.post("/api/auth/otp/verify", json={"email": "code@example.com", "code": code_in_last_email()})
+    assert client.get("/api/me/profile").json()["hasPassword"] is False
+    assert client.post("/api/me/password", json={"newPassword": "first password"}).status_code == 200
+    client.post("/api/logout")
+    login(client, "code@example.com", "first password")
 
 
 def test_editors_see_how_to_reach_a_narrator(client, db):

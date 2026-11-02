@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     secret_key: str = "dev-only-secret-change-me"
     public_base_url: str = "http://localhost:8080"
 
-    # Storage: "local" keeps files under media_root; "s3" is wired for Lightsail buckets in Phase 6.
+    # Storage: "local" keeps files under media_root (also on the Lightsail pilot); "s3" for a Lightsail bucket comes later.
     storage_backend: str = "local"
     media_root: Path = Path("/data/media")
     legacy_audio_root: Path = Path("/data/legacy-audio")
@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     staff_mfa_required: bool = False  # forced on in production by validate()
     cookie_secure: bool = False
 
+    # Email: sign-in codes, confirming a new address, and narrator notices. Off for the pilot: people sign up and
+    # sign in with a username and password, and nothing is sent.
+    email_enabled: bool = False
     smtp_host: str = "localhost"
     smtp_port: int = 1025
     smtp_username: str = ""
@@ -59,7 +62,19 @@ class Settings(BaseSettings):
                 problems.append("KC_COOKIE_SECURE must be true in production.")
             if not self.staff_mfa_required:
                 problems.append("KC_STAFF_MFA_REQUIRED must be true in production.")
+            if not self.public_base_url.startswith("https://"):
+                problems.append("KC_PUBLIC_BASE_URL must be the https:// address of the web app in production.")
         return problems
+
+    def runtime_warnings(self) -> list[str]:
+        """Settings that don't stop the server but break a feature; logged at startup."""
+        warnings = []
+        no_mail_server = self.smtp_host in {"mailpit", "localhost"} or not self.smtp_username
+        if self.is_production and self.email_enabled and no_mail_server:
+            warnings.append(f"Email can't be delivered through {self.smtp_host}:{self.smtp_port}, so email sign-in "
+                            "codes fail. Set KC_SMTP_HOST, KC_SMTP_USERNAME and KC_SMTP_PASSWORD (Amazon SES or "
+                            "Zoho), or KC_EMAIL_ENABLED=false.")
+        return warnings
 
 
 @lru_cache

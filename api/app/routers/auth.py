@@ -1,12 +1,13 @@
 """Sign-in flows.
 
-- Staff and legacy accounts: username/email + password, then TOTP for staff.
-- Listeners: passwordless email one-time code (creates the account on first use).
+- Everyone: username/email + password, then TOTP for staff. Listeners create their own account with a username.
+- Listeners, when email is on (KC_EMAIL_ENABLED): passwordless email one-time code (creates the account on first use).
 - Web gets an httpOnly session cookie; mobile gets access + rotating refresh tokens.
 """
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import timedelta
 from typing import Literal
@@ -14,6 +15,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import ratelimit
@@ -32,12 +34,26 @@ from ..security import (
 router = APIRouter(prefix="/api", tags=["auth"])
 
 Client = Literal["web", "mobile"]
+# No "@", so a username can never be mistaken for someone's email address at sign-in.
+USERNAME = re.compile(r"^[a-z0-9][a-z0-9._-]{2,29}$")
+MIN_PASSWORD = 8
 
 
 class PasswordLogin(BaseModel):
     username: str = Field(min_length=1, max_length=254)
     password: str = Field(min_length=1, max_length=512)
     client: Client = "web"
+
+
+class Registration(BaseModel):
+    username: str = Field(max_length=64)
+    password: str = Field(max_length=128)
+    client: Client = "web"
+
+
+def check_new_password(password: str) -> None:
+    if len(password) < MIN_PASSWORD:
+        raise HTTPException(status_code=422, detail=f"Use a password of at least {MIN_PASSWORD} characters.")
 
 
 class OtpRequest(BaseModel):
@@ -114,8 +130,37 @@ def password_login(payload: PasswordLogin, request: Request, response: Response,
     return _session_response(db, user, request, response, payload.client)
 
 
+@router.post("/auth/register")
+def register(payload: Registration, request: Request, response: Response, db: Session = Depends(get_db)):
+    ratelimit.limit_ip(request, "register", 10, 60 * 60)
+    username = payload.username.strip().lower()
+    if not USERNAME.match(username):
+        raise HTTPException(status_code=422, detail="Use 3 to 30 letters, numbers, dots, dashes or underscores for "
+                                                    "your username, starting with a letter or number.")
+    check_new_password(payload.password)
+    taken = HTTPException(status_code=409, detail="That username is taken. Try another one.")
+    if db.scalar(select(User.id).where(func.lower(User.username) == username)):
+        raise taken
+    user = User(username=username, role="listener", display_name=username, password_hash=hash_password(payload.password))
+    db.add(user)
+    try:
+        db.flush()
+    except IntegrityError:  # someone took it a moment ago
+        db.rollback()
+        raise taken from None
+    audit(db, "account.created", request, user.id, method="password")
+    return _session_response(db, user, request, response, payload.client)
+
+
+def _require_email() -> None:
+    if not get_settings().email_enabled:
+        raise HTTPException(status_code=404, detail="Email sign-in isn't available. Sign in with your username "
+                                                    "and password.")
+
+
 @router.post("/auth/otp/request", status_code=202)
 def request_otp(payload: OtpRequest, request: Request, db: Session = Depends(get_db)):
+    _require_email()
     email = payload.email.lower()
     ratelimit.limit_ip(request, "otp-request", 10, 15 * 60)
     ratelimit.check(f"otp-request:email:{email}", 3, 10 * 60)
@@ -133,6 +178,7 @@ def request_otp(payload: OtpRequest, request: Request, db: Session = Depends(get
 
 @router.post("/auth/otp/verify")
 def verify_otp(payload: OtpVerify, request: Request, response: Response, db: Session = Depends(get_db)):
+    _require_email()
     email = payload.email.lower()
     ratelimit.limit_ip(request, "otp-verify", 20, 15 * 60)
     otp = db.scalars(select(EmailOtp).where(EmailOtp.email == email, EmailOtp.consumed_at.is_(None))
@@ -198,7 +244,7 @@ def logout(request: Request, response: Response, identity: Identity | None = Dep
 @router.get("/session")
 def session(identity: Identity | None = Depends(optional_identity)):
     if not identity:
-        return {"authenticated": False}
+        return {"authenticated": False, "emailSignIn": get_settings().email_enabled}  # what the sign-in screen offers
     body = {**identity.public(), **_mfa_state(identity.user)}
     if identity.session.mfa_verified:
         body.update(mfaRequired=False, mfaEnrollmentRequired=False)

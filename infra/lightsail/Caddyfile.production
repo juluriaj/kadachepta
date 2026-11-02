@@ -2,7 +2,8 @@
 	email ops@kathachepta.com
 }
 
-kathachepta.com, www.kathachepta.com, app.kathachepta.com, api.kathachepta.com {
+# The web app lives at app.; native apps call api. (same server, same routes).
+app.kathachepta.com, api.kathachepta.com {
 	encode zstd gzip
 	request_body {
 		max_size 520MB
@@ -10,9 +11,23 @@ kathachepta.com, www.kathachepta.com, app.kathachepta.com, api.kathachepta.com {
 	header {
 		-Server
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
 		Permissions-Policy "camera=(), geolocation=(), microphone=(self)"
 	}
-	reverse_proxy api:8000
+	reverse_proxy api:8000 {
+		transport http {
+			read_timeout 10m
+			write_timeout 10m
+		}
+	}
+}
+
+# The bare domain opens the web app until a landing page exists (temporary, so browsers don't cache it).
+# It goes to the app's home page, not the same path: links into the old WordPress site
+# (/2020/05/<post>/, /feed/, /wp-login.php) have no page in the app.
+kathachepta.com, www.kathachepta.com {
+	redir https://app.kathachepta.com/ 302
 }
 
 # The common misspelling redirects permanently to the canonical domain.
