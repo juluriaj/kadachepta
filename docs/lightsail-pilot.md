@@ -22,7 +22,7 @@ stack stays as the development environment, but after cutover it no longer holds
 |---|---|---|
 | Instance | Lightsail Micro (`micro_3_1`), 1 GB RAM / 2 vCPU / 40 GB SSD, Mumbai (`ap-south-1`): $7/month (your choice, 2026-11-02) | Enough for a small pilot: 2 API workers and 1 media worker, 13 GB of media today, about 13 GB free. Deploys build on the server and take longer there, and the site is slow while they run. Move to the 4 GB plan ($24) when needed: see "Moving to a bigger plan" |
 | Media | Stays on the VM disk, with daily automatic snapshots (about $0.05 per GB per month) | The bucket + CDN storage backend isn't built yet. It's worth building once media nears ~50 GB or listeners abroad notice slow starts |
-| Domains | Web app at `app.kathachepta.com`, native apps call `api.kathachepta.com`; `kathachepta.com` and `www.` redirect to `app.` (temporary, until a landing page exists); `kadachepta.com` redirects permanently | Decision D3 |
+| Domains | Web app at `app.kathachepta.com`, native apps call `api.kathachepta.com`; `kathachepta.com` and `www.` redirect to `app.` (temporary, until a landing page exists); `kadachepta.com`, `kathacheptha.com` and `kadacheptha.com` redirect permanently to `kathachepta.com`; `audibles.in` and `telugustories.org` redirect to `app.` (temporary). Each needs only its `@` record on the server's IP (`www` is a CNAME to `@`) | Decision D3 |
 | Environments | One instance, which is production from the start. No staging yet | A pilot doesn't need two servers. `deploy.sh` rolls back on its own if a release fails its health check |
 | Secrets | New ones made on the server (database password, media-link signing key, worker tokens) | Desktop secrets have lived on a development machine. Accounts, passwords and staff authenticator codes move with the database; only media links older than 6 hours stop working |
 | Sign-up | Open: anyone can create a listener account with a username and password. The site isn't advertised | Ask me if you want an invite list during the pilot |
@@ -69,6 +69,11 @@ stack stays as the development environment, but after cutover it no longer holds
    `kadachepta.com` and their `www` names alone for now: they serve the old WordPress site (Lightsail
    instance `kadachepta.com`, 13.233.18.234) until the swap in step 9. Until then Caddy logs failed
    certificate attempts for those four names and keeps retrying; that's expected.
+   kathachepta.com's DNS is at Squarespace, which adds `.kathachepta.com` to every name itself: enter `app`,
+   `api`, `_dmarc` and `<token>._domainkey`, not the full names. Caddy backs off after failed certificate
+   attempts; once DNS is right, `bash infra/lightsail/compose.sh restart caddy` makes it try again at once.
+   (2026-11-02: done, and kathachepta.com and `www` were moved to the new server the same day, ahead of step 9,
+   because the WordPress site no longer worked.)
 3. **SSH key on the desktop:** Lightsail console > Account > SSH keys > download the default key for Mumbai into
    `C:\Users\<you>\.ssh\` (or create the server with `KEY_PAIR=<a key you imported>`; the pilot server uses
    `kathachepta-desktop`, private key `C:\Users\julur\.ssh\kathachepta_lightsail`). Add two lines to the

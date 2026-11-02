@@ -30,7 +30,15 @@ kathachepta.com, www.kathachepta.com {
 	redir https://app.kathachepta.com/ 302
 }
 
-# The common misspelling redirects permanently to the canonical domain.
-kadachepta.com, www.kadachepta.com {
+# The common misspellings redirect permanently to the canonical domain.
+kadachepta.com, www.kadachepta.com,
+kathacheptha.com, www.kathacheptha.com,
+kadacheptha.com, www.kadacheptha.com {
 	redir https://kathachepta.com{uri} permanent
+}
+
+# Other names of the old WordPress site open the app too. Temporary, so they can get a site of their own later.
+audibles.in, www.audibles.in,
+telugustories.org, www.telugustories.org {
+	redir https://app.kathachepta.com/ 302
 }
