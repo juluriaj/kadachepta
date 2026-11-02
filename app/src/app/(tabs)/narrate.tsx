@@ -50,6 +50,10 @@ export default function NarratorStudio() {
           onPress={() => router.push('/narrate/new')} />
         <Button kind="secondary" title={t('narrate.reviews')} onPress={() => router.push('/narrate/reviews')}
           icon={<Ionicons name="star-outline" size={18} color={colors.text} />} />
+        <Button kind="secondary" title={t('narrate.page')} onPress={() => router.push('/narrate/profile')}
+          icon={<Ionicons name="person-outline" size={18} color={colors.text} />} />
+        <Button kind="secondary" title={t('narrate.notes')} onPress={() => router.push('/narrate/notes')}
+          icon={<Ionicons name="mail-outline" size={18} color={colors.text} />} />
         <Button kind="ghost" title={t('account.open')} onPress={() => router.push('/account')} />
         <Button kind="ghost" title={t('feedback.open')} onPress={() => router.push('/feedback?from=/narrate')} />
 

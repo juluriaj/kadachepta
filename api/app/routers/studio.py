@@ -10,18 +10,20 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
+from starlette.concurrency import run_in_threadpool
 
 from .. import jobs
 from ..auth import Identity, audit, require, require_identity, utcnow
 from ..db import get_db
 from ..models import (
-    AssetRights, AudioAsset, EditorialEvent, Job, NarratorProfile, Notification, TeaserDraft, Transcript, User, Worker,
+    AssetRights, AudioAsset, CreditedNarrator, EditorialEvent, Job, NarratorProfile, Notification, TeaserDraft, Transcript,
+    User, Worker,
 )
-from ..services import morals, pipeline, policy, ratings, titles
+from ..services import morals, pipeline, policy, ratings, threads, titles, voices
 from ..services import settings as app_settings
 from ..services.assets import (
     apply_metadata, asset_payload, clean_metadata, iso, mastering_payload, metadata_of, narrator_people, person_key,
@@ -123,6 +125,7 @@ def queue(view: str = "review", q: str | None = None, language: str | None = Non
     processing = set(db.scalars(select(Job.audio_asset_id).where(
         Job.audio_asset_id.in_(ids), Job.job_type == "media.process", Job.status.in_(("queued", "leased", "failed")))))
     sla = float(app_settings.get(db, "review.slaHours"))
+    unread = threads.unread_from_narrators(db, ids)
     now = utcnow()
     items = []
     for asset in assets:
@@ -146,6 +149,7 @@ def queue(view: str = "review", q: str | None = None, language: str | None = Non
                           "profile": ((asset.qc or {}).get("mastering") or {}).get("profile"),
                           "level": ((asset.qc or {}).get("mastering") or {}).get("level"),
                           "processing": asset.id in processing},
+            "unreadMessages": unread.get(asset.id, 0),
         })
     if view in VIEWS:  # trusted narrators get expedited review: their stories go first
         items.sort(key=lambda item: (item["trustLevel"] != "trusted", -(item["waitingHours"] or 0)))
@@ -413,6 +417,8 @@ def request_changes(asset_id: str, payload: ChangesRequest, identity: Identity =
                                "by": identity.username, "at": iso(utcnow())}
     asset.pipeline_stage, asset.ready_for_review_at = "changes-requested", None
     _event(db, asset.id, "content:changes-requested", identity.username, "; ".join([*texts, payload.note]))
+    # The note starts (or continues) the conversation on the submission; the narrator was notified above.
+    threads.post(db, asset, identity.user, "editor", payload.note, notify_narrator=False)
     notify(db, asset.narrator_user_id, "changes-requested", f"“{asset.title}” needs a few changes",
            "\n".join([*texts, payload.note.strip()]).strip(), asset.id)
     db.commit()
@@ -431,6 +437,8 @@ def reject(asset_id: str, payload: RejectRequest, identity: Identity = Depends(r
         raise HTTPException(status_code=409, detail="Published stories can't be rejected; unpublish first.")
     asset.status, asset.pipeline_stage, asset.ready_for_review_at = "rejected", "rejected", None
     _event(db, asset.id, "content:rejected", identity.username, payload.note)
+    if asset.narrator_user_id:
+        threads.post(db, asset, identity.user, "editor", payload.note, notify_narrator=False)
     notify(db, asset.narrator_user_id, "rejected", f"“{asset.title}” wasn't accepted", payload.note, asset.id)
     db.commit()
     return {"ok": True}
@@ -685,7 +693,11 @@ def narrators(identity: Identity = Depends(require("content.publish")), db: Sess
                        "published": counts.get(user.id, {}).get("published", 0),
                        "rejected": counts.get(user.id, {}).get("rejected", 0),
                        "inReview": sum(v for k, v in counts.get(user.id, {}).items() if k not in ("published", "rejected")),
-                       "suggestTrust": profile.trust_level == "new" and counts.get(user.id, {}).get("published", 0) >= needed}
+                       "suggestTrust": profile.trust_level == "new" and counts.get(user.id, {}).get("published", 0) >= needed,
+                       "biography": profile.biography,
+                       "photoUrl": voices.photo_url(profile.photo_key, profile.photo_updated_at),
+                       "pendingPhotoUrl": voices.photo_url(profile.photo_pending_key, profile.photo_updated_at),
+                       "acceptsNotes": profile.accepts_messages}
                       for user, profile in rows],
             "catalog": _catalog_narrators(db)}
 
@@ -708,6 +720,12 @@ def _catalog_narrators(db: Session) -> list[dict[str, Any]]:
         rejected = sum(story["status"] == "rejected" for story in entry["stories"])
         entry.update(published=len(published[key]), rejected=rejected,
                      notPublished=len(entry["stories"]) - len(published[key]) - rejected, narration=scores.get(key))
+    extras = {row.narrator_key: row for row in db.scalars(select(CreditedNarrator).where(
+        CreditedNarrator.narrator_key.in_(list(people))))}
+    for key, entry in people.items():
+        extra = extras.get(key)
+        entry.update(key=key, biography=extra.biography if extra else None,
+                     photoUrl=voices.photo_url(extra.photo_key, extra.photo_updated_at) if extra else None)
     return sorted(people.values(), key=lambda p: (-p["published"], -len(p["stories"]), p["name"].casefold()))
 
 
@@ -903,3 +921,129 @@ def save_titles(asset_id: str, payload: TitleEdit, identity: Identity = Depends(
     _event(db, asset.id, "titles:confirmed", identity.username, ", ".join(sorted(payload.titles)))
     db.commit()
     return {"titles": titles.confirmed_titles(asset)}
+
+
+# --- The conversation with the narrator on each submission (P3-11) ---
+
+class ThreadMessage(BaseModel):
+    text: str = Field(min_length=1, max_length=threads.MAX_CHARS)
+
+
+def _submission(db: Session, asset_id: str) -> AudioAsset:
+    asset = _asset(db, asset_id)
+    if not asset.narrator_user_id:
+        raise HTTPException(status_code=409, detail="Catalog stories have no narrator to write to.")
+    return asset
+
+
+@router.get("/review/{asset_id}/messages")
+def submission_messages(asset_id: str, identity: Identity = Depends(require("content.publish")),
+                        db: Session = Depends(get_db)):
+    asset = _submission(db, asset_id)
+    items = threads.thread(db, asset.id, "editor")
+    db.commit()  # the narrator's messages are read now
+    return {"items": items}
+
+
+@router.post("/review/{asset_id}/messages", status_code=201)
+def write_to_narrator(asset_id: str, payload: ThreadMessage, identity: Identity = Depends(require("content.publish")),
+                      db: Session = Depends(get_db)):
+    asset = _submission(db, asset_id)
+    threads.post(db, asset, identity.user, "editor", payload.text)
+    _event(db, asset.id, "content:message", identity.username, payload.text[:300])
+    db.commit()
+    return {"items": threads.thread(db, asset.id, "editor")}
+
+
+# --- Narrator photos and bios (P3-10) ---
+
+class PhotoDecision(BaseModel):
+    approve: bool
+
+
+@router.post("/narrators/{user_id:int}/photo")
+def decide_photo(user_id: int, payload: PhotoDecision, request: Request,
+                 identity: Identity = Depends(require("content.publish")), db: Session = Depends(get_db)):
+    """Approve the photo a narrator uploaded (families see it from now on), or turn it down."""
+    profile = db.get(NarratorProfile, user_id)
+    if not profile or not profile.photo_pending_key:
+        raise HTTPException(status_code=404, detail="No photo is waiting for this narrator.")
+    if payload.approve:
+        profile.photo_key = profile.photo_pending_key
+        notify(db, user_id, "photo-approved", "Your photo is on your narrator page now")
+    else:
+        notify(db, user_id, "photo-declined", "Your photo wasn't approved",
+               "Please upload a clear photo of yourself (no children, no text or logos).")
+    profile.photo_pending_key, profile.photo_updated_at = None, utcnow()
+    audit(db, "narrator:photo-approved" if payload.approve else "narrator:photo-declined", request, identity.user.id,
+          narrator=user_id)
+    db.commit()
+    return {"ok": True, "photoUrl": voices.photo_url(profile.photo_key, profile.photo_updated_at)}
+
+
+@router.put("/narrators/{user_id:int}/photo")
+async def set_photo(user_id: int, request: Request, identity: Identity = Depends(require("content.publish")),
+                    db: Session = Depends(get_db)):
+    """An editor sets a narrator's photo directly (the request body is the image): no approval step."""
+    data = await request.body()
+
+    def store() -> dict[str, Any]:
+        profile = db.get(NarratorProfile, user_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="Narrator not found.")
+        try:
+            profile.photo_key = voices.save_photo(data, str(user_id))
+        except voices.CoverError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from None
+        profile.photo_pending_key, profile.photo_updated_at = None, utcnow()
+        audit(db, "narrator:photo-set", request, identity.user.id, narrator=user_id)
+        db.commit()
+        return {"ok": True, "photoUrl": voices.photo_url(profile.photo_key, profile.photo_updated_at)}
+
+    return await run_in_threadpool(store)
+
+
+def _credited_key(db: Session, name: str) -> str:
+    key = person_key({"id": None, "name": name})
+    credited = db.scalars(select(AudioAsset).where(AudioAsset.narrator_user_id.is_(None),
+                                                   AudioAsset.narrator_name.ilike(f"%{name.strip()}%"))).all()
+    if not any(person_key(p) == key for asset in credited for p in narrator_people(asset)):
+        raise HTTPException(status_code=404, detail="No story credits a narrator by that name.")
+    return key
+
+
+class CreditedBio(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    biography: str = Field(default="", max_length=4000)
+
+
+@router.post("/narrators/credited")
+def set_credited_bio(payload: CreditedBio, identity: Identity = Depends(require("content.publish")),
+                     db: Session = Depends(get_db)):
+    """The bio of a narrator the catalog credits by name only (they have no account to write it themselves)."""
+    key = _credited_key(db, payload.name)
+    row = db.get(CreditedNarrator, key) or CreditedNarrator(narrator_key=key)
+    row.biography, row.updated_by = payload.biography.strip() or None, identity.username
+    db.add(row)
+    db.commit()
+    return {"ok": True, "key": key, "biography": row.biography}
+
+
+@router.put("/narrators/credited/photo")
+async def set_credited_photo(request: Request, name: str = Query(min_length=1, max_length=200),
+                             identity: Identity = Depends(require("content.publish")), db: Session = Depends(get_db)):
+    data = await request.body()
+
+    def store() -> dict[str, Any]:
+        key = _credited_key(db, name)
+        row = db.get(CreditedNarrator, key) or CreditedNarrator(narrator_key=key)
+        try:
+            row.photo_key = voices.save_photo(data, voices.name_folder(key))
+        except voices.CoverError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from None
+        row.photo_updated_at, row.updated_by = utcnow(), identity.username
+        db.add(row)
+        db.commit()
+        return {"ok": True, "key": key, "photoUrl": voices.photo_url(row.photo_key, row.photo_updated_at)}
+
+    return await run_in_threadpool(store)

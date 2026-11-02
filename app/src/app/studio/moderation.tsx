@@ -10,15 +10,20 @@ type StoryRef = { id: string; title: string; artworkUrl: string | null };
 type HeldReview = { id: number; text: string; author: string; createdAt: string; status: string; reports: number;
   reportReasons: string[]; waitingForCheck: boolean; story: StoryRef;
   moderation: { verdict?: string; reasons?: string[]; note?: string; by?: string; heldForReports?: number } };
-type RatingAlert = { id: number; windowStart: string; createdAt: string; story: StoryRef;
-  details: { recent: number; usualPer48h: number; recentMean: number; beforeMean: number | null; newAccounts: number } };
+type Burst = { recent: number; usualPer48h: number; recentMean: number; beforeMean: number | null; newAccounts: number };
+type RatingAlert = { id: number; windowStart: string; createdAt: string; story: StoryRef; details: Burst };
+type NarratorAlert = { id: number; windowStart: string; createdAt: string; narrator: string; details: Burst };
+// A thank-you note to a narrator that the automatic check doubted, or that the narrator reported.
+type HeldNote = { id: number; text: string; author: string; narrator: string; createdAt: string;
+  moderation: { verdict?: string; reasons?: string[]; note?: string; by?: string; reportedByNarrator?: boolean } };
 
 // Reviews the automatic check held or listeners reported, and bursts of ratings that look like a raid.
 export default function Moderation() {
   const colors = useColors();
   const [error, setError] = useState<string | null>(null);
   const query = useQuery({ queryKey: ['studio-moderation'],
-    queryFn: () => api<{ reviews: HeldReview[]; ratingFlags: RatingAlert[] }>('/api/studio/moderation', { profile: false }) });
+    queryFn: () => api<{ reviews: HeldReview[]; ratingFlags: RatingAlert[]; narratorFlags: NarratorAlert[]; notes: HeldNote[] }>(
+      '/api/studio/moderation', { profile: false }) });
 
   const act = async (path: string, body: unknown) => {
     setError(null);
@@ -32,13 +37,14 @@ export default function Moderation() {
 
   if (query.isLoading) return <Loading />;
   if (query.error || !query.data) return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
-  const { reviews, ratingFlags } = query.data;
+  const { reviews, ratingFlags, narratorFlags, notes } = query.data;
   return (
     <ScrollView contentContainerStyle={{ padding: space.xl, gap: space.md, maxWidth: 1100, width: '100%', alignSelf: 'center' }}>
       <Text variant="title">Moderation</Text>
       <Text muted>
         Reviews appear here when the automatic check isn’t sure, when it found personal details, when two families
         report one, or when the check hasn’t run for an hour (is the AI worker running?). Children never see reviews.
+        Thank-you notes to narrators wait here the same way, or when a narrator reports one.
       </Text>
       {error ? <Text color={colors.danger}>{error}</Text> : null}
 
@@ -59,6 +65,48 @@ export default function Moderation() {
             </View>
             <Button kind="secondary" title="Genuine: count them" onPress={() => void act(`/api/studio/rating-flags/${flag.id}`, { decision: 'clear' })} />
             <Button kind="danger" title="Raid: leave them out" onPress={() => void act(`/api/studio/rating-flags/${flag.id}`, { decision: 'confirm' })} />
+          </View>
+        </Card>
+      ))}
+
+      {narratorFlags.length ? <Text variant="heading">Narrator rating alerts ({narratorFlags.length})</Text> : null}
+      {narratorFlags.map((flag) => (
+        <Card key={flag.id}>
+          <View style={{ flexDirection: 'row', gap: space.md, alignItems: 'center', flexWrap: 'wrap' }}>
+            <View style={{ flex: 1, minWidth: 240, gap: 2 }}>
+              <Text variant="heading">{flag.narrator}</Text>
+              <Text variant="small">
+                {flag.details.recent} ratings of the narrator in 48 hours (usually {flag.details.usualPer48h}), average{' '}
+                {flag.details.recentMean}{flag.details.beforeMean != null ? ` against ${flag.details.beforeMean} before` : ''};{' '}
+                {flag.details.newAccounts} from new or barely-listening accounts.
+              </Text>
+              <Text variant="small" muted>These ratings are left out of the narrator’s score until you decide.</Text>
+            </View>
+            <Button kind="secondary" title="Genuine: count them" onPress={() => void act(`/api/studio/rating-flags/${flag.id}`, { decision: 'clear' })} />
+            <Button kind="danger" title="Raid: leave them out" onPress={() => void act(`/api/studio/rating-flags/${flag.id}`, { decision: 'confirm' })} />
+          </View>
+        </Card>
+      ))}
+
+      <Text variant="heading">Notes to narrators ({notes.length})</Text>
+      {!notes.length ? <Text variant="small" muted>Nothing waiting.</Text> : null}
+      {notes.map((note) => (
+        <Card key={note.id}>
+          <View style={{ flexDirection: 'row', gap: space.md, flexWrap: 'wrap' }}>
+            <View style={{ flex: 1, minWidth: 280, gap: space.xs }}>
+              <Text variant="small" muted>To {note.narrator} · from {note.author} · {new Date(note.createdAt).toLocaleString()}</Text>
+              <Text>{note.text}</Text>
+              <Text variant="small" color={colors.accent}>
+                {[note.moderation.reportedByNarrator ? 'Reported by the narrator' : null,
+                  note.moderation.verdict ? `Check: ${note.moderation.verdict} (${note.moderation.by ?? ''})` : null,
+                  note.moderation.reasons?.length ? note.moderation.reasons.join(', ') : null,
+                  note.moderation.note || null].filter(Boolean).join(' · ')}
+              </Text>
+            </View>
+            <View style={{ gap: space.sm, justifyContent: 'center' }}>
+              <Button title="Deliver" onPress={() => void act(`/api/studio/notes/${note.id}`, { decision: 'deliver' })} />
+              <Button kind="ghost" title="Reject" onPress={() => void act(`/api/studio/notes/${note.id}`, { decision: 'reject' })} />
+            </View>
           </View>
         </Card>
       ))}

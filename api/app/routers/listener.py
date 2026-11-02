@@ -18,7 +18,7 @@ from ..db import get_db
 from ..models import (
     AudioAsset, Collection, ListenerFavorite, ListeningDaily, ListeningProgress, Profile, TeaserDraft, Transcript,
 )
-from ..services import morals, pipeline, ratings, recommend, story_sets
+from ..services import morals, pipeline, ratings, recommend, story_sets, voices
 from ..services.assets import artwork_url, asset_payload, iso, narrator_people, person_key
 from ..services.households import MOMENTS, current_profile, suitable_for
 from ..services.transcripts import read_along
@@ -162,7 +162,7 @@ def home(profile: Profile = Depends(current_profile), db: Session = Depends(get_
     if books:
         listed = sorted(books.values(), key=lambda b: (b.series.title.casefold(), b.series.id))
         shelves.append({"id": "books", "items": [], "books": [story_sets.book_summary(b, progress) for b in listed]})
-    narrators = ratings.narrator_list(db, profile, [asset for asset, _ in stories])
+    narrators = voices.with_photos(db, ratings.narrator_list(db, profile, [asset for asset, _ in stories]), person_key)
     if narrators:  # the voices behind the stories, as a way in next to sets and books (search lists them all)
         shelves.append({"id": "narrators", "items": [], "narrators": narrators[:20]})
     household_moments = profile.household.moments or list(MOMENTS)

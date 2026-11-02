@@ -1,4 +1,5 @@
-"""Studio tools for Phase 3: review moderation and rating spikes, collections, conversation starters, and the
+"""Studio tools for Phase 3: review and thank-you note moderation, rating spikes (stories and narrators),
+collections, conversation starters, and the
 catalog refresh that queues recommendations and conversation starters for published stories.
 """
 
@@ -16,9 +17,10 @@ from .. import jobs
 from ..auth import Identity, require, utcnow
 from ..db import get_db
 from ..models import (
-    AudioAsset, Collection, CollectionItem, EditorialEvent, Job, RatingFlag, Review, ReviewReport, StoryEmbedding, StoryRating,
+    AudioAsset, Collection, CollectionItem, EditorialEvent, Job, NarratorMessage, NarratorProfile, NarratorRating, RatingFlag,
+    Review, ReviewReport, StoryEmbedding, StoryRating, User,
 )
-from ..services import community, ratings, titles
+from ..services import community, ratings, titles, voices
 from ..services.assets import artwork_url, iso
 from .studio import _approve_prompts  # the same rule as the review screen
 
@@ -52,11 +54,50 @@ def moderation(identity: Identity = Depends(EDITOR), db: Session = Depends(get_d
              or reports.get(review.id)]
     flags = db.execute(select(RatingFlag, AudioAsset).join(AudioAsset, AudioAsset.id == RatingFlag.audio_asset_id)
                        .where(RatingFlag.status == "open").order_by(RatingFlag.created_at)).all()
-    return {"reviews": items,
+    narrator_flags = db.scalars(select(RatingFlag).where(RatingFlag.status == "open", RatingFlag.narrator_key.is_not(None))
+                                .order_by(RatingFlag.created_at)).all()
+    return {"reviews": items, "notes": _held_notes(db),
             "ratingFlags": [{"id": flag.id, "details": flag.details, "windowStart": iso(flag.window_start),
                              "createdAt": iso(flag.created_at),
                              "story": {"id": asset.id, "title": asset.title, "artworkUrl": artwork_url(asset)}}
-                            for flag, asset in flags]}
+                            for flag, asset in flags],
+            "narratorFlags": [{"id": flag.id, "details": flag.details, "windowStart": iso(flag.window_start),
+                               "createdAt": iso(flag.created_at), "narrator": _narrator_name(db, flag.narrator_key)}
+                              for flag in narrator_flags]}
+
+
+def _narrator_name(db: Session, key: str) -> str:
+    if key.startswith("id:"):
+        profile, user = db.get(NarratorProfile, int(key[3:])), db.get(User, int(key[3:]))
+        return (profile.display_name if profile else None) or (user.handle if user else key)
+    return key[5:].title()
+
+
+def _held_notes(db: Session) -> list[dict[str, Any]]:
+    """Thank-you notes waiting for an editor: the automatic check doubted them, or the narrator reported one."""
+    rows = db.scalars(select(NarratorMessage).options(selectinload(NarratorMessage.profile))
+                      .where(NarratorMessage.status == "held").order_by(NarratorMessage.created_at)).all()
+    return [{**voices.note_payload(note, for_narrator=True), "moderation": note.moderation,
+             "narrator": _narrator_name(db, f"id:{note.narrator_user_id}")} for note in rows]
+
+
+class NoteDecision(BaseModel):
+    decision: Literal["deliver", "reject"]
+
+
+@router.post("/notes/{note_id}")
+def decide_note(note_id: int, payload: NoteDecision, identity: Identity = Depends(EDITOR), db: Session = Depends(get_db)):
+    note = db.get(NarratorMessage, note_id)
+    if not note or note.status != "held":
+        raise HTTPException(status_code=404, detail="Held note not found.")
+    if payload.decision == "deliver":
+        voices.deliver(db, note)
+    else:
+        note.status = "rejected"
+    note.moderation = {**(note.moderation or {}), "editor": identity.username, "editorDecision": payload.decision}
+    _event(db, str(note.id), f"note:{payload.decision}", identity.username)
+    db.commit()
+    return {"ok": True, "status": note.status}
 
 
 class ReviewDecision(BaseModel):
@@ -90,10 +131,13 @@ def decide_flag(flag_id: int, payload: FlagDecision, identity: Identity = Depend
         raise HTTPException(status_code=404, detail="Open rating alert not found.")
     flag.status = "cleared" if payload.decision == "clear" else "confirmed"
     flag.resolved_by, flag.resolved_at = identity.username, utcnow()
-    if payload.decision == "confirm":
+    if payload.decision == "confirm" and flag.narrator_key:
+        db.execute(update(NarratorRating).where(NarratorRating.narrator_key == flag.narrator_key,
+                                                NarratorRating.created_at >= flag.window_start).values(excluded=True))
+    elif payload.decision == "confirm":
         db.execute(update(StoryRating).where(StoryRating.audio_asset_id == flag.audio_asset_id,
                                              StoryRating.created_at >= flag.window_start).values(excluded=True))
-    _event(db, flag.audio_asset_id, f"ratings:{flag.status}", identity.username, str(flag.details))
+    _event(db, (flag.audio_asset_id or flag.narrator_key)[:64], f"ratings:{flag.status}", identity.username, str(flag.details))
     db.commit()
     return {"ok": True, "status": flag.status}
 

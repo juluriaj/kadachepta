@@ -23,9 +23,11 @@ from .. import jobs
 from ..auth import utcnow
 from ..config import get_settings
 from ..db import get_db
-from ..models import AudioAsset, EditorialEvent, Job, Review, Series, StoryEmbedding, TeaserDraft, Transcript, Worker
+from ..models import (
+    AudioAsset, EditorialEvent, Job, NarratorMessage, Review, Series, StoryEmbedding, TeaserDraft, Transcript, Worker,
+)
 from ..security import token_hash
-from ..services import community, covers, morals, pipeline, policy, recommend, titles
+from ..services import community, covers, morals, pipeline, policy, recommend, titles, voices
 from ..services import settings as app_settings
 from ..services.assets import as_list, normalize_language
 from ..storage import get_storage, media_url
@@ -113,7 +115,11 @@ def _inputs(db: Session, job: Job, request: Request) -> dict[str, Any]:
                     transcript=(transcript.text or "") if transcript else "")
     if job.job_type == "translate":
         base.update(text=job.payload.get("text") or "", languages=job.payload.get("languages") or [])
-    if job.job_type == "review.moderate":
+    if job.job_type == "review.moderate" and job.payload.get("messageId"):  # a thank-you note to the narrator
+        note = db.get(NarratorMessage, job.payload["messageId"])
+        base.update(reviewId=None, reviewText=note.text if note else "",
+                    title=titles.confirmed_titles(asset).get("en-IN") or asset.title)
+    elif job.job_type == "review.moderate":
         review = db.get(Review, job.payload.get("reviewId"))
         base.update(reviewId=review.id if review else None, reviewText=review.text if review else "",
                     title=titles.confirmed_titles(asset).get("en-IN") or asset.title)
@@ -396,6 +402,11 @@ def apply_translate(db: Session, job: Job, asset: AudioAsset, result: dict[str, 
 
 
 def apply_review_moderation(db: Session, job: Job, asset: AudioAsset, result: dict[str, Any]) -> None:
+    if job.payload.get("messageId"):
+        note = db.get(NarratorMessage, job.payload["messageId"])
+        if note is not None and note.status == "pending":  # not already decided by an editor
+            voices.apply_moderation(db, note, result)
+        return
     review = db.get(Review, job.payload.get("reviewId"))
     if review is None or review.status != "pending":
         return  # edited, withdrawn, or already decided by an editor

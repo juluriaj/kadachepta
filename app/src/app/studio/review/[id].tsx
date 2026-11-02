@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Linking, Platform, Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { QcList } from '@/components/narrator';
+import { Thread } from '@/components/Thread';
 import { MasteringCompare } from '@/components/MasteringCompare';
 import { StoryCollections } from '@/components/StudioCollections';
 import { Button, Card, Chip, ErrorState, Field, Loading, Text, useColors } from '@/components/ui';
@@ -201,6 +202,11 @@ function ReviewForm({ review, refetch }: { review: Review; refetch: () => void }
           <Text variant="heading">Text the narrator read from</Text>
           <Text numberOfLines={12}>{review.sourceText}</Text>
         </Card>
+      ) : null}
+      {asset.isSubmission ? (
+        <Thread path={`/api/studio/review/${asset.id}/messages`} labels={{ title: 'Messages with the narrator',
+          hint: 'Ask the narrator anything about this submission; they get a notification. Notes you add when asking for changes appear here too.',
+          empty: 'No messages yet.', field: 'Write to the narrator', send: 'Send' }} />
       ) : null}
       <Card>
         <Text variant="heading">History</Text>

@@ -1,4 +1,5 @@
-"""Narrator studio API: onboarding, submissions (upload or in-app recording), status, series, and stats."""
+"""Narrator studio API: onboarding, submissions (upload or in-app recording), status, series, stats, the profile
+photo, the conversation with editors on each submission, and thank-you notes from families."""
 
 from __future__ import annotations
 
@@ -9,7 +10,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 from starlette.concurrency import run_in_threadpool
 
@@ -18,10 +19,10 @@ from ..auth import Identity, audit, require, require_identity, utcnow
 from ..config import get_settings
 from ..db import get_db
 from ..models import (
-    AssetRights, AudioAsset, EditorialEvent, ListenerFavorite, ListeningProgress, NarratorCredit, NarratorProfile,
-    Notification, Series, TeaserDraft, Transcript, Upload,
+    AssetRights, AudioAsset, EditorialEvent, ListenerFavorite, ListeningProgress, NarratorBlock, NarratorCredit,
+    NarratorMessage, NarratorProfile, Notification, Series, TeaserDraft, Transcript, Upload,
 )
-from ..services import pipeline
+from ..services import pipeline, threads, voices
 from ..services import settings as app_settings
 from ..services.assets import (apply_metadata, asset_payload, clean_metadata, iso, mastering_payload,
                                normalize_language, rendition_keys)
@@ -76,7 +77,11 @@ def _profile_payload(profile: NarratorProfile | None, identity: Identity) -> dic
             "language": (profile.languages or ["te-IN"])[0], "languages": profile.languages,
             "trustLevel": profile.trust_level, "onboarded": bool(profile.onboarded_at),
             "agreementVersion": profile.agreement_version, "sampleUrl": media_url(profile.sample_key),
-            "updatedAt": iso(profile.updated_at)}
+            "updatedAt": iso(profile.updated_at),
+            "photoUrl": voices.photo_url(profile.photo_key, profile.photo_updated_at),
+            # Waiting for an editor: the narrator sees it, families don't yet.
+            "pendingPhotoUrl": voices.photo_url(profile.photo_pending_key, profile.photo_updated_at),
+            "acceptsNotes": profile.accepts_messages}
 
 
 # --- Onboarding (P2-01) ---
@@ -617,3 +622,139 @@ def submit_edit(payload: SubmitEdit, identity: Identity = Depends(require("narra
                           actor=identity.username, notes=payload.notes))
     db.commit()
     return {"ok": True}
+
+
+# --- Profile photo (P3-10) ---
+
+@router.put("/profile/photo")
+async def upload_photo(request: Request, identity: Identity = Depends(require("narrator.pipeline")),
+                       db: Session = Depends(get_db)):
+    """The request body is the image. Families see it once an editor approves it."""
+    data = await request.body()
+
+    def store() -> dict[str, Any]:
+        profile = db.get(NarratorProfile, identity.user.id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="Finish becoming a narrator first.")
+        try:
+            profile.photo_pending_key = voices.save_photo(data, str(identity.user.id))
+        except voices.CoverError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from None
+        profile.photo_updated_at = utcnow()
+        db.commit()
+        return _profile_payload(profile, identity)
+
+    return await run_in_threadpool(store)
+
+
+# --- The conversation with editors on each submission (P3-11) ---
+
+class ThreadMessage(BaseModel):
+    text: str = Field(min_length=1, max_length=threads.MAX_CHARS)
+
+
+@router.get("/submissions/{asset_id}/messages")
+def submission_messages(asset_id: str, identity: Identity = Depends(require("narrator.pipeline")),
+                        db: Session = Depends(get_db)):
+    asset = _own_asset(db, identity, asset_id)
+    items = threads.thread(db, asset.id, "narrator")
+    db.commit()  # the editors' messages are read now
+    return {"items": items}
+
+
+@router.post("/submissions/{asset_id}/messages", status_code=201)
+def write_to_editors(asset_id: str, payload: ThreadMessage, identity: Identity = Depends(require("narrator.pipeline")),
+                     db: Session = Depends(get_db)):
+    asset = _own_asset(db, identity, asset_id)
+    threads.post(db, asset, identity.user, "narrator", payload.text)
+    db.commit()
+    return {"items": threads.thread(db, asset.id, "narrator")}
+
+
+# --- Thank-you notes from families (P3-12) ---
+
+def _notes_payload(db: Session, identity: Identity) -> dict[str, Any]:
+    profile = db.get(NarratorProfile, identity.user.id)
+    notes = db.scalars(select(NarratorMessage).options(selectinload(NarratorMessage.profile))
+                       .where(NarratorMessage.narrator_user_id == identity.user.id, NarratorMessage.status == "delivered")
+                       .order_by(NarratorMessage.id.desc()).limit(200)).all()
+    titles = dict(db.execute(select(AudioAsset.id, AudioAsset.title).where(
+        AudioAsset.id.in_([n.audio_asset_id for n in notes if n.audio_asset_id]))).all())
+    blocked = db.scalar(select(func.count()).select_from(NarratorBlock).where(
+        NarratorBlock.narrator_user_id == identity.user.id)) or 0
+    return {"accepting": bool(profile and profile.accepts_messages), "blockedFamilies": blocked,
+            "items": [{**voices.note_payload(note, for_narrator=True), "storyTitle": titles.get(note.audio_asset_id)}
+                      for note in notes]}
+
+
+@router.get("/notes")
+def notes(identity: Identity = Depends(require("narrator.pipeline")), db: Session = Depends(get_db)):
+    payload = _notes_payload(db, identity)
+    db.execute(update(NarratorMessage).where(NarratorMessage.narrator_user_id == identity.user.id,
+                                             NarratorMessage.status == "delivered", NarratorMessage.read_at.is_(None))
+               .values(read_at=utcnow()))
+    db.commit()
+    return payload
+
+
+class NoteSettings(BaseModel):
+    accepting: bool
+
+
+@router.post("/notes/settings")
+def note_settings(payload: NoteSettings, identity: Identity = Depends(require("narrator.pipeline")),
+                  db: Session = Depends(get_db)):
+    profile = db.get(NarratorProfile, identity.user.id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Finish becoming a narrator first.")
+    profile.accepts_messages = payload.accepting
+    db.commit()
+    return _notes_payload(db, identity)
+
+
+def _own_note(db: Session, identity: Identity, note_id: int) -> NarratorMessage:
+    note = db.get(NarratorMessage, note_id)
+    if not note or note.narrator_user_id != identity.user.id or note.status != "delivered":
+        raise HTTPException(status_code=404, detail="Note not found.")
+    return note
+
+
+class NoteReply(BaseModel):
+    text: str = Field(default="", max_length=voices.MAX_NOTE_CHARS)
+
+
+@router.post("/notes/{note_id}/reply")
+def reply_to_note(note_id: int, payload: NoteReply, identity: Identity = Depends(require("narrator.pipeline")),
+                  db: Session = Depends(get_db)):
+    note = _own_note(db, identity, note_id)
+    profile = db.get(NarratorProfile, identity.user.id)
+    try:
+        voices.reply(db, note, payload.text, (profile.display_name if profile else None) or identity.user.handle)
+    except voices.NoteRefused as refused:
+        raise HTTPException(status_code=422, detail=str(refused)) from None
+    db.commit()
+    return _notes_payload(db, identity)
+
+
+@router.post("/notes/{note_id}/block")
+def block_family(note_id: int, identity: Identity = Depends(require("narrator.pipeline")), db: Session = Depends(get_db)):
+    """No more notes from this family. Their notes so far leave the list; the family isn't told."""
+    note = _own_note(db, identity, note_id)
+    if not voices.blocked(db, identity.user.id, note.household_id):
+        db.add(NarratorBlock(narrator_user_id=identity.user.id, household_id=note.household_id))
+    db.execute(update(NarratorMessage).where(NarratorMessage.narrator_user_id == identity.user.id,
+                                             NarratorMessage.household_id == note.household_id,
+                                             NarratorMessage.status == "delivered").values(status="hidden"))
+    audit(db, "note.family-blocked", None, identity.user.id, note=note.id)
+    db.commit()
+    return _notes_payload(db, identity)
+
+
+@router.post("/notes/{note_id}/report")
+def report_note(note_id: int, identity: Identity = Depends(require("narrator.pipeline")), db: Session = Depends(get_db)):
+    """Send a note to the editors: it leaves the narrator's list and waits in Moderation."""
+    note = _own_note(db, identity, note_id)
+    note.status = "held"
+    note.moderation = {**(note.moderation or {}), "reportedByNarrator": True}
+    db.commit()
+    return _notes_payload(db, identity)

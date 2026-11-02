@@ -199,6 +199,10 @@ class NarratorProfile(Base):
     agreement_accepted_at: Mapped[datetime | None] = mapped_column(Timestamp)
     onboarded_at: Mapped[datetime | None] = mapped_column(Timestamp)
     sample_key: Mapped[str | None] = mapped_column(Text)  # short sample recording editors hear first
+    photo_key: Mapped[str | None] = mapped_column(Text)  # approved: what listeners see
+    photo_pending_key: Mapped[str | None] = mapped_column(Text)  # uploaded, waiting for an editor
+    photo_updated_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    accepts_messages: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
 
 
 class NarratorCredit(Base):
@@ -536,10 +540,13 @@ class NarratorRating(Base):
 
 
 class RatingFlag(Base):
+    """A burst of ratings held out of the scores until an editor looks: for a story, or for a narrator (narrator_key)."""
+
     __tablename__ = "rating_flags"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    audio_asset_id: Mapped[str] = mapped_column(ForeignKey("audio_assets.id", ondelete="CASCADE"), nullable=False, index=True)
+    audio_asset_id: Mapped[str | None] = mapped_column(ForeignKey("audio_assets.id", ondelete="CASCADE"), index=True)
+    narrator_key: Mapped[str | None] = mapped_column(String(300), index=True)
     window_start: Mapped[datetime] = mapped_column(Timestamp, nullable=False)
     details: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="open")  # open | cleared | confirmed
@@ -667,3 +674,63 @@ class Feedback(Base):
     created_at: Mapped[datetime] = now_column()
     resolved_at: Mapped[datetime | None] = mapped_column(Timestamp)
     resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+
+
+class CreditedNarrator(Base):
+    """The bio and photo editors add for a narrator the catalog credits by name only (no account)."""
+
+    __tablename__ = "credited_narrators"
+
+    narrator_key: Mapped[str] = mapped_column(String(300), primary_key=True)  # "name:<name>", as in follows
+    biography: Mapped[str | None] = mapped_column(Text)
+    photo_key: Mapped[str | None] = mapped_column(Text)
+    photo_updated_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    updated_by: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = now_column(onupdate=func.now())
+
+
+class SubmissionMessage(Base):
+    """One message in the thread between editors and a submission's narrator."""
+
+    __tablename__ = "submission_messages"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    audio_asset_id: Mapped[str] = mapped_column(ForeignKey("audio_assets.id", ondelete="CASCADE"), nullable=False,
+                                                index=True)
+    author_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    author_role: Mapped[str] = mapped_column(String(16), nullable=False)  # narrator | editor
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    read_at: Mapped[datetime | None] = mapped_column(Timestamp)  # when the other side opened the thread
+    created_at: Mapped[datetime] = now_column()
+
+
+class NarratorMessage(Base):
+    """A grown-up's thank-you note to a narrator, checked like a review before the narrator sees it."""
+
+    __tablename__ = "narrator_messages"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    narrator_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    household_id: Mapped[int] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), nullable=False, index=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
+    audio_asset_id: Mapped[str | None] = mapped_column(ForeignKey("audio_assets.id", ondelete="SET NULL"))
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    # pending (automatic check) | delivered | held (an editor decides) | rejected
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="pending", index=True)
+    moderation: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    reply: Mapped[str | None] = mapped_column(Text)
+    reply_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    read_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    created_at: Mapped[datetime] = now_column()
+
+    profile: Mapped[Profile] = relationship()
+
+
+class NarratorBlock(Base):
+    """A household a narrator no longer takes notes from."""
+
+    __tablename__ = "narrator_blocks"
+
+    narrator_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    household_id: Mapped[int] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), primary_key=True)
+    created_at: Mapped[datetime] = now_column()

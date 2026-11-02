@@ -88,6 +88,7 @@ export default function Updates() {
             <Text variant="small" color={item.read ? colors.muted : colors.primary}>
               {t(`updates.${item.kind}` as TranslationKey)} · {new Date(item.createdAt).toLocaleDateString()}
             </Text>
+            {item.kind === 'narrator-reply' && item.body ? <Text>“{item.body}”</Text> : null}
             <StoryRow story={item.story} />
           </View>
         ))}

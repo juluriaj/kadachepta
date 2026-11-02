@@ -332,10 +332,13 @@ export function NarratorRow({ person }: { person: NarratorSummary }) {
   return (
     <Pressable onPress={() => router.push(narratorHref(person))} accessibilityRole="link"
       style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 56, opacity: pressed ? 0.8 : 1 })}>
-      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceAlt, alignItems: 'center',
-        justifyContent: 'center' }}>
-        <Ionicons name="mic" size={20} color={colors.primary} />
-      </View>
+      {person.photoUrl ? <Cover id={`narrator-${person.id ?? person.name}`} title={person.name} artworkUrl={person.photoUrl}
+        size={40} rounded={20} /> : (
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceAlt, alignItems: 'center',
+          justifyContent: 'center' }}>
+          <Ionicons name="mic" size={20} color={colors.primary} />
+        </View>
+      )}
       <View style={{ flex: 1, gap: 2 }}>
         <Text variant="heading" numberOfLines={1} style={{ fontSize: 15 }}>{person.name}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
@@ -348,7 +351,7 @@ export function NarratorRow({ person }: { person: NarratorSummary }) {
   );
 }
 
-// A narrator on the home shelf: a round tile with their initial, so voices read differently from story covers.
+// A narrator on the home shelf: a round tile with their photo or initial, so voices read differently from story covers.
 export function NarratorTile({ person, width = 110 }: { person: NarratorSummary; width?: number }) {
   const { t } = useI18n();
   return (
@@ -356,7 +359,8 @@ export function NarratorTile({ person, width = 110 }: { person: NarratorSummary;
       accessibilityLabel={[person.name, t('narrator.storyCount', { n: person.stories }),
         person.narration?.score != null ? `${t('narrator.score')} ${person.narration.score.toFixed(1)}` : null].filter(Boolean).join(', ')}
       style={({ pressed }) => ({ width, alignItems: 'center', gap: space.sm, opacity: pressed ? 0.8 : 1 })}>
-      <Cover id={`narrator-${person.id ?? person.name}`} title={person.name} artworkUrl={null} size={width} rounded={width / 2} />
+      <Cover id={`narrator-${person.id ?? person.name}`} title={person.name} artworkUrl={person.photoUrl ?? null} size={width}
+        rounded={width / 2} />
       <Text variant="heading" numberOfLines={2} style={{ fontSize: 15, lineHeight: 21, textAlign: 'center' }}>{person.name}</Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
         <Text variant="small" muted>{t('narrator.storyCount', { n: person.stories })}</Text>

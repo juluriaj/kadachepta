@@ -7,7 +7,8 @@
 - Each rating carries the rater's trust weight (account age, how much the household actually listens).
 - Displayed scores are Bayesian averages: a story with two 5-star ratings doesn't outrank one with two hundred
   4.6s, and a handful of fake accounts can't move an established score far.
-- A sudden burst of ratings is held out of the scores until an editor looks (rating_flags).
+- A sudden burst of ratings is held out of the scores until an editor looks (rating_flags), for a story's ratings
+  and for ratings of a narrator alike.
 - Narrators and staff can't rate their own work.
 - Grown-ups can also rate a narrator as a whole, once they (or a child) have heard one of their stories. Those
   ratings join the narration stars from each story in the narrator's one score.
@@ -166,9 +167,14 @@ def people_scores(db: Session, credits: dict[str, list[str]]) -> dict[str, dict[
         if rating.narration_rating:
             by_story.setdefault(rating.audio_asset_id, []).append((rating.narration_rating, rating.weight))
     direct: dict[str, list[tuple[int, float]]] = {}
+    held = dict(db.execute(select(RatingFlag.narrator_key, func.min(RatingFlag.window_start))
+                           .where(RatingFlag.narrator_key.in_(list(credits)), RatingFlag.status == "open")
+                           .group_by(RatingFlag.narrator_key)).all())
     for row in db.scalars(select(NarratorRating).where(NarratorRating.narrator_key.in_(list(credits)),
                                                        NarratorRating.excluded.is_(False))):
-        direct.setdefault(row.narrator_key, []).append((row.rating, row.weight))
+        since = held.get(row.narrator_key)
+        if since is None or row.created_at < since:
+            direct.setdefault(row.narrator_key, []).append((row.rating, row.weight))
     return {key: _score([r for asset_id in ids for r in by_story.get(asset_id, [])] + direct.get(key, []), prior)
             for key, ids in credits.items()}
 
@@ -201,6 +207,8 @@ def rate_narrator(db: Session, profile: Profile, narrator_key: str, value: int) 
         db.add(rating)
     rating.rating = value
     rating.weight = rater_weight(db, profile)
+    db.flush()
+    check_narrator_spike(db, narrator_key)
 
 
 def my_narrator_rating(db: Session, profile: Profile, narrator_key: str) -> int | None:
@@ -208,29 +216,52 @@ def my_narrator_rating(db: Session, profile: Profile, narrator_key: str) -> int 
                                                          NarratorRating.narrator_key == narrator_key))
 
 
-def check_spike(db: Session, asset_id: str) -> RatingFlag | None:
-    """Flag a burst: many ratings in 48 hours, far above the story's usual pace, that shift its average."""
-    now = utcnow()
-    window_start = now - SPIKE_WINDOW
-    if db.scalar(select(RatingFlag.id).where(RatingFlag.audio_asset_id == asset_id, RatingFlag.status == "open")):
-        return None
-    ratings = list(db.scalars(select(StoryRating).where(
-        StoryRating.audio_asset_id == asset_id, StoryRating.excluded.is_(False),
-        StoryRating.created_at >= now - timedelta(days=30), StoryRating.story_rating.is_not(None))))
-    recent = [r for r in ratings if r.created_at >= window_start]
-    before = [r for r in ratings if r.created_at < window_start]
+def _burst(rated: list[tuple[int, float, Any]], window_start) -> dict[str, Any] | None:
+    """Many ratings in 48 hours, far above the usual pace, that shift the average: the details for an alert.
+    ``rated`` is (rating, weight, created_at) for the last 30 days."""
+    recent = [(r, w) for r, w, at in rated if at >= window_start]
+    before = [r for r, _, at in rated if at < window_start]
     if len(recent) < SPIKE_MIN_COUNT:
         return None
     usual = len(before) / 14  # ratings per 48 hours over the previous 28 days
     if len(recent) < 3 * usual + 5:
         return None
-    recent_mean = sum(r.story_rating for r in recent) / len(recent)
-    before_mean = sum(r.story_rating for r in before) / len(before) if before else None
-    new_accounts = sum(1 for r in recent if r.weight <= 0.45)
+    recent_mean = sum(r for r, _ in recent) / len(recent)
+    before_mean = sum(before) / len(before) if before else None
+    new_accounts = sum(1 for _, w in recent if w <= 0.45)
     if before_mean is not None and abs(recent_mean - before_mean) < 0.75 and new_accounts < len(recent) / 2:
         return None  # busy but consistent with what listeners already said: a popular week, not a raid
-    flag = RatingFlag(audio_asset_id=asset_id, window_start=window_start, details={
-        "recent": len(recent), "usualPer48h": round(usual, 1), "recentMean": round(recent_mean, 2),
-        "beforeMean": round(before_mean, 2) if before_mean is not None else None, "newAccounts": new_accounts})
+    return {"recent": len(recent), "usualPer48h": round(usual, 1), "recentMean": round(recent_mean, 2),
+            "beforeMean": round(before_mean, 2) if before_mean is not None else None, "newAccounts": new_accounts}
+
+
+def check_spike(db: Session, asset_id: str) -> RatingFlag | None:
+    """Flag a burst of a story's ratings."""
+    now = utcnow()
+    if db.scalar(select(RatingFlag.id).where(RatingFlag.audio_asset_id == asset_id, RatingFlag.status == "open")):
+        return None
+    rated = [(r.story_rating, r.weight, r.created_at) for r in db.scalars(select(StoryRating).where(
+        StoryRating.audio_asset_id == asset_id, StoryRating.excluded.is_(False),
+        StoryRating.created_at >= now - timedelta(days=30), StoryRating.story_rating.is_not(None)))]
+    details = _burst(rated, now - SPIKE_WINDOW)
+    if not details:
+        return None
+    flag = RatingFlag(audio_asset_id=asset_id, window_start=now - SPIKE_WINDOW, details=details)
+    db.add(flag)
+    return flag
+
+
+def check_narrator_spike(db: Session, narrator_key: str) -> RatingFlag | None:
+    """Flag a burst of ratings of a narrator from their page (P3-13): the same test as for stories."""
+    now = utcnow()
+    if db.scalar(select(RatingFlag.id).where(RatingFlag.narrator_key == narrator_key, RatingFlag.status == "open")):
+        return None
+    rated = [(r.rating, r.weight, r.created_at) for r in db.scalars(select(NarratorRating).where(
+        NarratorRating.narrator_key == narrator_key, NarratorRating.excluded.is_(False),
+        NarratorRating.created_at >= now - timedelta(days=30)))]
+    details = _burst(rated, now - SPIKE_WINDOW)
+    if not details:
+        return None
+    flag = RatingFlag(narrator_key=narrator_key, window_start=now - SPIKE_WINDOW, details=details)
     db.add(flag)
     return flag

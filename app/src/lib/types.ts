@@ -86,16 +86,30 @@ export type Community = {
 export type NarratorCredit = { name: string; id: number | null };
 
 // ``narration`` (grown-ups only) pools the narration stars on their stories with ratings of the narrator.
-export type NarratorSummary = NarratorCredit & { stories: number; languages: string[]; narration?: Score };
+export type NarratorSummary = NarratorCredit & { stories: number; languages: string[]; narration?: Score;
+  photoUrl?: string | null };
 
 export type NarratorPage = { id: number | null; name: string; biography: string | null; languages: string[]; since: string | null;
   stories: Story[]; narration: Score | null; followers: number; following: boolean; canFollow: boolean;
-  rating: NarratorRating | null };
+  rating: NarratorRating | null; photoUrl: string | null;
+  // Thank-you notes (grown-ups, narrators with an account): whether one can be sent now, and the family's notes so far.
+  notes: { accepting: boolean; leftToday: number; sent: SentNote[] } | null };
+
+export type SentNote = { id: number; text: string; storyId: string | null; status: 'pending' | 'delivered' | 'held';
+  reply: string | null; replyAt: string | null; createdAt: string };
+
+// A note as the narrator sees it: a first name only.
+export type ReceivedNote = SentNote & { author: string; read: boolean; storyTitle: string | null };
+
+// The conversation on a submission between editors and its narrator.
+export type ThreadMessage = { id: number; role: 'narrator' | 'editor'; text: string; createdAt: string; read: boolean;
+  mine: boolean; author: string };
 
 // Rating the narrator from their page (grown-ups who heard one of their stories; never the narrator themselves).
 export type NarratorRating = { eligible: boolean; mine: number | null };
 
-export type Updates = { items: { id: number; kind: string; read: boolean; createdAt: string; story: Story }[]; unread: number;
+export type Updates = { items: { id: number; kind: string; read: boolean; createdAt: string; story: Story; title: string;
+  body: string | null }[]; unread: number;
   settings: { followed: boolean; series: boolean } | null;
   // Narrators (with an account: narratorId) and series this account follows; absent for children.
   following?: { kind: 'narrator' | 'series'; key: string; name: string; narratorId?: number }[] };
@@ -154,6 +168,7 @@ export type SubmissionDetail = Submission & {
 export type NarratorProfile = {
   displayName: string | null; biography: string | null; languages: string[]; trustLevel: 'new' | 'trusted';
   onboarded: boolean; sampleUrl: string | null;
+  photoUrl: string | null; pendingPhotoUrl: string | null; acceptsNotes: boolean;
 };
 
 export type SeriesSummary = { id: number; title: string; description: string | null; language: string; chapters: number };

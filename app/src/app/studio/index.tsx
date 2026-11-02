@@ -337,6 +337,8 @@ function Row({ item, focused, selected, showBlockers, collections, onToggle }: {
         <View style={{ alignItems: 'flex-end', gap: 4, maxWidth: 320 }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end' }}>
             <Badge text={item.stageLabel ?? item.stage} color={colors.muted} />
+            {item.unreadMessages ? <Badge text={`${item.unreadMessages} new message${item.unreadMessages > 1 ? 's' : ''}`}
+              color={colors.primary} /> : null}
             {collections.map((name, index) => <Badge key={index} text={`in ${name}`} color={colors.primary} />)}
             {item.safetyRating ? <Badge text={item.safetyRating} color={safetyColor} /> : null}
             {item.qcVerdict && item.qcVerdict !== 'pass' ? <Badge text={`sound ${item.qcVerdict}`} color={colors.accent} /> : null}

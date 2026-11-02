@@ -1,4 +1,5 @@
-"""Listener community API (Phase 3): ratings, reviews, narrator pages and follows, search, and updates.
+"""Listener community API (Phase 3): ratings, reviews, narrator pages and follows, thank-you notes to narrators,
+search, and updates.
 
 Child profiles only ever see and send an emoji reaction: no reviews, no follows, no updates (Epic S).
 """
@@ -16,9 +17,9 @@ from sqlalchemy.orm import Session, selectinload
 from ..auth import Identity, require, utcnow
 from ..db import get_db
 from ..models import (
-    AudioAsset, NarratorFollow, NarratorProfile, Notification, Profile, Review, StoryRating, User,
+    AudioAsset, NarratorFollow, NarratorMessage, NarratorProfile, Notification, Profile, Review, StoryRating, User,
 )
-from ..services import community, follows, ratings, search, story_sets
+from ..services import community, follows, ratings, search, story_sets, voices
 from ..services.assets import iso, narrator_people, person_key
 from ..services.households import current_profile
 from .listener import _favorite_set, _progress_map, published_stories, story_card
@@ -159,7 +160,8 @@ def report(review_id: int, payload: ReportIn, profile: Profile = Depends(current
 @router.get("/api/narrators")
 def narrators(profile: Profile = Depends(current_profile), db: Session = Depends(get_db)):
     """Everyone who narrated a story this profile can hear, most stories first: a way to find a voice you like."""
-    return {"items": ratings.narrator_list(db, profile, [asset for asset, _ in published_stories(db, profile)])}
+    people = ratings.narrator_list(db, profile, [asset for asset, _ in published_stories(db, profile)])
+    return {"items": voices.with_photos(db, people, person_key)}
 
 
 class FollowIn(BaseModel):
@@ -208,8 +210,10 @@ def named_narrator_page(name: str, profile: Profile = Depends(current_profile), 
     progress, favorites = _progress_map(db, profile), _favorite_set(db, profile)
     languages = [lang for lang, _ in Counter(a.language for a, _ in stories).most_common()]
     assets = [a for a, _ in stories]
+    extra = voices.credited(db, key)
     return {
-        "id": None, "name": shown, "biography": None, "languages": languages, "since": None,
+        "id": None, "name": shown, "biography": extra.biography if extra else None, "languages": languages, "since": None,
+        "photoUrl": voices.photo_url(extra.photo_key, extra.photo_updated_at) if extra else None, "notes": None,
         "stories": [story_card(a, t, profile, progress.get(a.id), a.id in favorites) for a, t in stories],
         "narration": _named_score(db, key, assets) if profile.kind == "adult" else None,
         "rating": _narrator_rating(db, profile, key, assets),
@@ -283,11 +287,51 @@ def narrator_page(user_id: int, profile: Profile = Depends(current_profile), db:
     return {
         "id": user_id, "name": narrator.display_name or user.display_name or user.username,
         "biography": narrator.biography, "languages": narrator.languages, "since": iso(narrator.onboarded_at),
+        "photoUrl": voices.photo_url(narrator.photo_key, narrator.photo_updated_at),
+        "notes": _notes(db, profile, user) if profile.kind == "adult" else None,
         "stories": [story_card(a, t, profile, progress.get(a.id), a.id in favorites) for a, t in stories],
         "narration": score if profile.kind == "adult" else None,
         "rating": _narrator_rating(db, profile, f"id:{user_id}", [a for a, _ in stories]),
         "followers": followers or 0, "following": following, "canFollow": profile.kind == "adult",
     }
+
+
+def _notes(db: Session, profile: Profile, narrator: User) -> dict[str, Any]:
+    """Thank-you notes (P3-12): whether this family can send one now, and the notes it sent with their replies."""
+    sent = db.scalars(select(NarratorMessage).where(NarratorMessage.narrator_user_id == narrator.id,
+                                                   NarratorMessage.household_id == profile.household_id)
+                      .order_by(NarratorMessage.id.desc()).limit(20)).all()
+    own = ratings.own_narration(_owner(db, profile), f"id:{narrator.id}")
+    return {"accepting": not own and voices.accepts_notes(db, narrator)
+            and not voices.blocked(db, narrator.id, profile.household_id),
+            "leftToday": max(voices.NOTES_PER_DAY - voices.notes_today(db, profile.household_id), 0),
+            "sent": [voices.note_payload(note) for note in sent if note.status != "rejected"]}
+
+
+class NoteIn(BaseModel):
+    text: str = Field(max_length=voices.MAX_NOTE_CHARS)
+    storyId: str | None = Field(default=None, max_length=32)
+
+
+@router.post("/api/narrators/{user_id}/notes", status_code=201)
+def send_note(user_id: int, payload: NoteIn, profile: Profile = Depends(current_profile), db: Session = Depends(get_db)):
+    _adult(profile)
+    narrator = db.get(User, user_id)
+    if not narrator or narrator.role != "narrator":
+        raise HTTPException(status_code=404, detail="Narrator not found.")
+    if ratings.own_narration(_owner(db, profile), f"id:{user_id}"):
+        raise HTTPException(status_code=403, detail="Notes are for families, not for your own page or the team.")
+    asset = None
+    if payload.storyId:
+        asset, _ = _story(db, profile, payload.storyId)
+        if asset.narrator_user_id != user_id:
+            raise HTTPException(status_code=422, detail="That story isn't one of this narrator's.")
+    try:
+        voices.send_note(db, profile, narrator, payload.text, asset)
+    except voices.NoteRefused as refused:
+        raise HTTPException(status_code=422, detail=str(refused)) from None
+    db.commit()
+    return _notes(db, profile, narrator)
 
 
 @router.post("/api/narrators/{user_id}/rating")
@@ -357,7 +401,7 @@ def find(q: str = "", language: str | None = None, profile: Profile = Depends(cu
 
 # --- Updates for listeners (P3-09): opt-in, never for children, never about streaks ---
 
-LISTENER_KINDS = ("new-from-followed", "series-next")
+LISTENER_KINDS = ("new-from-followed", "series-next", "narrator-reply")
 
 
 @router.get("/api/me/updates")
@@ -374,7 +418,7 @@ def updates(profile: Profile = Depends(current_profile), db: Session = Depends(g
             continue
         asset, teaser = available[row.audio_asset_id]
         items.append({"id": row.id, "kind": row.kind, "read": row.read_at is not None, "createdAt": iso(row.created_at),
-                      "story": story_card(asset, teaser, profile)})
+                      "story": story_card(asset, teaser, profile), "title": row.title, "body": row.body})
     user = db.get(User, account)
     narrators = db.execute(select(User.id, User.display_name, User.username, NarratorProfile.display_name)
                            .join(NarratorFollow, NarratorFollow.narrator_user_id == User.id)

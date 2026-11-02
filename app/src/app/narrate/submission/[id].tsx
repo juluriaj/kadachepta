@@ -6,6 +6,7 @@ import { Alert, Platform, RefreshControl, ScrollView, View } from 'react-native'
 
 import { MasteringCompare } from '@/components/MasteringCompare';
 import { QcList, StageBadge, StageGuide, Timeline } from '@/components/narrator';
+import { Thread } from '@/components/Thread';
 import { Button, Card, Cover, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
 import { formatClock, formatListening, useI18n, type TranslationKey } from '@/lib/i18n';
@@ -124,6 +125,9 @@ export default function SubmissionStatus() {
             </View>
           </Card>
         ) : null}
+
+        <Thread path={`/api/narrator/submissions/${s.id}/messages`} labels={{ title: t('thread.title'), hint: t('thread.hint'),
+          empty: t('thread.empty'), field: t('thread.field'), send: t('thread.send') }} />
 
         {error ? <Text color={colors.danger}>{error}</Text> : null}
         {s.stage === 'awaiting-submit' ? (

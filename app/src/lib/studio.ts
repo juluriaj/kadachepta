@@ -13,6 +13,7 @@ export type QueueItem = {
   safetyRating: string | null; teaser: string | null; hasTranscript: boolean; transcriptReviewRequired: boolean;
   artworkUrl: string | null; series: string | null; bulkEligible: boolean; bulkBlockers: string[]; publishedAt: string | null;
   mastering: { choice: Mastering['choice']; profile: string | null; level: Mastering['level']; processing: boolean };
+  unreadMessages: number;  // from the narrator, in the submission's thread
 };
 
 // An editorial shelf on Home (P3-08), or a story set (one character or series, always listed for listeners).

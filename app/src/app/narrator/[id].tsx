@@ -2,31 +2,32 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { FlatList, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Stars } from '@/components/community';
-import { StoryRow } from '@/components/stories';
-import { Button, ErrorState, Loading, Screen, Text, useColors } from '@/components/ui';
-import { api } from '@/lib/api';
+import { StoryList } from '@/components/stories';
+import { Button, Card, Cover, ErrorState, Field, Loading, Screen, Text, useColors } from '@/components/ui';
+import { api, ApiError } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { space } from '@/lib/theme';
-import type { NarratorPage } from '@/lib/types';
+import type { NarratorPage, SentNote } from '@/lib/types';
 
 const LANGUAGE_NAMES: Record<string, string> = { 'te-IN': 'తెలుగు', 'hi-IN': 'हिन्दी', 'en-IN': 'English' };
 
-// A narrator's public page (P3-04): who they are, what they've narrated, how families rate the narration.
+// A narrator's public page (P3-04, P3-10): who they are, what they've narrated, how families rate the narration.
 // The id is an account number, or for narrators the catalog credits by name only, their name. Grown-ups can
-// follow either kind.
+// follow either kind, and send a thank-you note to narrators with an account who take them (P3-12).
 export default function Narrator() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const colors = useColors();
   const { profile, session } = useSession();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [rateError, setRateError] = useState<string | null>(null);
-  const page = useQuery({ queryKey: ['narrator', id, profile?.id], enabled: !!id && session.authenticated,
+  const key = ['narrator', id, profile?.id];
+  const page = useQuery({ queryKey: key, enabled: !!id && session.authenticated,
     queryFn: () => api<NarratorPage>(/^\d+$/.test(id) ? `/api/narrators/${id}`
       : `/api/narrators/named/${encodeURIComponent(id)}`) });
 
@@ -52,7 +53,7 @@ export default function Narrator() {
     try {
       const result = await api<Pick<NarratorPage, 'narration' | 'rating'>>(n.id != null ? `/api/narrators/${n.id}/rating`
         : `/api/narrators/named/${encodeURIComponent(n.name)}/rating`, { method: 'POST', body: { rating: value } });
-      queryClient.setQueryData<NarratorPage>(['narrator', id, profile?.id], (old) => (old ? { ...old, ...result } : old));
+      queryClient.setQueryData<NarratorPage>(key, (old) => (old ? { ...old, ...result } : old));
       void queryClient.invalidateQueries({ queryKey: ['narrators'] });
       void queryClient.invalidateQueries({ queryKey: ['home'] });
     } catch (failure) {
@@ -60,19 +61,23 @@ export default function Narrator() {
     }
   };
 
+  const since = n.since ? new Date(n.since).toLocaleDateString(language === 'te' ? 'te-IN' : 'en-IN', { month: 'long', year: 'numeric' }) : null;
   const header = (
     <View style={{ gap: space.lg, paddingBottom: space.sm }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-        <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primary, alignItems: 'center',
-          justifyContent: 'center' }}>
-          <Ionicons name="mic" size={30} color={colors.onPrimary} />
-        </View>
+        {n.photoUrl ? <Cover id={`narrator-${n.id ?? n.name}`} title={n.name} artworkUrl={n.photoUrl} size={88} rounded={44} /> : (
+          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primary, alignItems: 'center',
+            justifyContent: 'center' }}>
+            <Ionicons name="mic" size={30} color={colors.onPrimary} />
+          </View>
+        )}
         <View style={{ flex: 1, gap: 2 }}>
           <Text variant="title" accessibilityRole="header">{n.name}</Text>
           <Text variant="small" muted>
             {[n.languages.map((code) => LANGUAGE_NAMES[code] ?? code).join(' · '),
               n.followers ? t('narrator.followers', { n: n.followers }) : null].filter(Boolean).join(' · ')}
           </Text>
+          {since ? <Text variant="small" muted>{t('narrator.since', { date: since })}</Text> : null}
         </View>
       </View>
       {n.canFollow ? (
@@ -103,15 +108,79 @@ export default function Narrator() {
           {rateError ? <Text variant="small" color={colors.danger}>{rateError}</Text> : null}
         </View>
       ) : <Text variant="small" muted>{t('narrator.listenFirst')}</Text> : null}
-      <Text variant="heading">{t('narrator.stories')} · {n.stories.length}</Text>
+      {n.id != null && n.notes ? (
+        <Notes narratorId={n.id} name={n.name} notes={n.notes}
+          onSent={(notes) => queryClient.setQueryData<NarratorPage>(key, (old) => (old ? { ...old, notes } : old))} />
+      ) : null}
     </View>
   );
 
   return (
     <Screen back>
-      <FlatList data={n.stories} keyExtractor={(story) => story.id} renderItem={({ item }) => <StoryRow story={item} />}
-        ListHeaderComponent={header} initialNumToRender={12}
+      <StoryList stories={n.stories} header={header} title={`${t('narrator.stories')} · ${n.stories.length}`}
+        initialNumToRender={12}
         contentContainerStyle={{ paddingVertical: space.lg, maxWidth: 640, width: '100%', alignSelf: 'center' }} />
     </Screen>
+  );
+}
+
+function Notes({ narratorId, name, notes, onSent }: { narratorId: number; name: string;
+  notes: NonNullable<NarratorPage['notes']>; onSent: (notes: NonNullable<NarratorPage['notes']>) => void }) {
+  const { t } = useI18n();
+  const colors = useColors();
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const send = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      onSent(await api<NonNullable<NarratorPage['notes']>>(`/api/narrators/${narratorId}/notes`,
+        { method: 'POST', body: { text: text.trim() } }));
+      setText('');
+    } catch (failure) {
+      setError(failure instanceof ApiError ? failure.message : String(failure));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!notes.accepting && !notes.sent.length) return null;
+  return (
+    <Card style={{ gap: space.sm }}>
+      <Text variant="heading">{t('notes.title')}</Text>
+      {notes.accepting ? (
+        <>
+          <Text variant="small" muted>{t('notes.hint', { name })}</Text>
+          <Field label={t('notes.field')} value={text} onChangeText={setText} multiline maxLength={1000}
+            style={{ minHeight: 80, paddingTop: space.md, textAlignVertical: 'top' }} />
+          {error ? <Text variant="small" color={colors.danger}>{error}</Text> : null}
+          <Button title={t('notes.send')} kind="secondary" loading={busy} disabled={text.trim().length < 3 || !notes.leftToday}
+            onPress={() => void send()} />
+          <Text variant="small" muted>{t('notes.left', { n: notes.leftToday })}</Text>
+        </>
+      ) : <Text variant="small" muted>{t('notes.closed', { name })}</Text>}
+      {notes.sent.length ? <Text variant="label" muted>{t('notes.yours')}</Text> : null}
+      {notes.sent.map((note) => <SentNoteView key={note.id} note={note} name={name} />)}
+    </Card>
+  );
+}
+
+function SentNoteView({ note, name }: { note: SentNote; name: string }) {
+  const { t } = useI18n();
+  const colors = useColors();
+  const status = { pending: t('notes.pending'), held: t('notes.held'), delivered: t('notes.delivered') }[note.status];
+  return (
+    <View style={{ gap: 2, paddingVertical: space.xs }}>
+      <Text>{note.text}</Text>
+      <Text variant="small" muted>{new Date(note.createdAt).toLocaleDateString()} · {status}</Text>
+      {note.reply ? (
+        <View style={{ marginTop: space.xs, paddingLeft: space.md, borderLeftWidth: 2, borderColor: colors.primary }}>
+          <Text variant="label" muted>{t('notes.reply', { name })}</Text>
+          <Text>{note.reply}</Text>
+        </View>
+      ) : null}
+    </View>
   );
 }
