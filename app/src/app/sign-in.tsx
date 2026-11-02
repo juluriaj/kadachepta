@@ -119,6 +119,7 @@ export default function SignIn() {
               <Field label={t('signin.repeatPassword')} value={repeat} onChangeText={setRepeat} secureTextEntry
                 autoComplete="password-new" textContentType="newPassword" onSubmitEditing={() => void create()} />
               {repeat && repeat !== password ? <Text variant="small" color={colors.danger}>{t('signin.passwordsDiffer')}</Text> : null}
+              <Text variant="small" muted>{t('legal.agree')}</Text>
               <Button title={t('signin.create')} loading={busy}
                 disabled={username.length < 3 || password.length < 8 || repeat !== password} onPress={() => void create()} />
               <Button title={t('signin.haveAccount')} kind="ghost" onPress={() => { setError(null); setStep('password'); }} />
@@ -145,6 +146,16 @@ export default function SignIn() {
 
           {step === 'email' || step === 'code' ? (
             <Button title={t('signin.staff')} kind="ghost" onPress={() => { setError(null); setStep('password'); }} />
+          ) : null}
+          {step !== 'mfa' ? (
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: space.lg }}>
+              <Pressable accessibilityRole="link" onPress={() => router.push('/privacy')} style={{ padding: space.xs }}>
+                <Text variant="small" color={colors.primary}>{t('legal.privacy')}</Text>
+              </Pressable>
+              <Pressable accessibilityRole="link" onPress={() => router.push('/terms')} style={{ padding: space.xs }}>
+                <Text variant="small" color={colors.primary}>{t('legal.terms')}</Text>
+              </Pressable>
+            </View>
           ) : null}
           {CAN_CHANGE_SERVER ? <ServerAddress onChanged={() => void refresh()} /> : null}
         </ScrollView>

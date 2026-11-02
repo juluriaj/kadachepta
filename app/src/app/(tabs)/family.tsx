@@ -179,6 +179,12 @@ export default function Family() {
         <Button kind="secondary" title={t('account.open')} onPress={() => router.push('/account')}
           icon={<Ionicons name="person-circle-outline" size={18} color={colors.text} />} />
         <Text variant="small" muted>{household.account.email ?? household.account.username}</Text>
+        <Button kind="secondary" title={t('feedback.open')} onPress={() => router.push('/feedback?from=/family')}
+          icon={<Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.text} />} />
+        <View style={{ flexDirection: 'row', gap: space.lg, flexWrap: 'wrap' }}>
+          <Button kind="ghost" title={t('legal.privacy')} onPress={() => router.push('/privacy')} />
+          <Button kind="ghost" title={t('legal.terms')} onPress={() => router.push('/terms')} />
+        </View>
         <Button title={t('family.export')} kind="secondary" onPress={() => void act(async () => {
           const data = await api('/api/me/export', { profile: false });
           const json = JSON.stringify(data, null, 2);

@@ -1,18 +1,20 @@
-"""Admin operations: job monitoring, retries, and bulk processing."""
+"""Admin operations: job monitoring, retries, bulk processing, and finding accounts to reset a forgotten password."""
 
 from __future__ import annotations
 
+import secrets
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from .. import jobs
-from ..auth import Identity, require, utcnow
+from ..auth import Identity, audit, require, utcnow
 from ..db import get_db
-from ..models import AudioAsset, Job, Worker
+from ..models import AudioAsset, AuthSession, Job, User, Worker
+from ..security import hash_password
 from ..services.assets import iso
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -71,3 +73,45 @@ def backfill(payload: Backfill, identity: Identity = Depends(require("jobs.manag
         created += 1
     db.commit()
     return {"queued": created}
+
+
+# --- Accounts (forgotten passwords while email is off) ---
+
+def _account(user: User) -> dict:
+    return {"userId": user.id, "username": user.username, "email": user.email, "displayName": user.display_name,
+            "phone": user.phone, "role": user.role, "createdAt": iso(user.created_at),
+            "lastLoginAt": iso(user.last_login_at), "disabled": bool(user.disabled_at),
+            "hasPassword": bool(user.password_hash)}
+
+
+@router.get("/users")
+def find_users(q: str = "", identity: Identity = Depends(require("users.manage")), db: Session = Depends(get_db)):
+    """Accounts whose username, email, name or phone contain q (at least 2 characters), newest sign-in first."""
+    text = q.strip().lower()
+    if len(text) < 2:
+        return {"items": []}
+    like = "%" + text.replace("%", "") + "%"  # "_" still matches any one character: harmless here
+    query = (select(User).where(User.disabled_at.is_(None), or_(
+        func.lower(User.username).like(like), func.lower(User.email).like(like),
+        func.lower(User.display_name).like(like), User.phone.like(like)))
+        .order_by(User.last_login_at.desc().nulls_last(), User.id.desc()).limit(25))
+    return {"items": [_account(user) for user in db.scalars(query)]}
+
+
+@router.post("/users/{user_id}/password")
+def reset_password(user_id: int, request: Request, identity: Identity = Depends(require("users.manage")),
+                   db: Session = Depends(get_db)):
+    """A new random password, shown once to the admin to pass on. The account is signed out everywhere; its owner
+    signs in with the new password and can change it in Account."""
+    user = db.get(User, user_id)
+    if not user or user.disabled_at:
+        raise HTTPException(status_code=404, detail="No such account.")
+    if user.id == identity.user.id:
+        raise HTTPException(status_code=409, detail="Change your own password in My details.")
+    password = secrets.token_urlsafe(9)  # 12 characters
+    user.password_hash = hash_password(password)
+    db.execute(update(AuthSession).where(AuthSession.user_id == user.id, AuthSession.revoked_at.is_(None))
+               .values(revoked_at=utcnow()))
+    audit(db, "password.reset-by-admin", request, identity.user.id, account=user.id)
+    db.commit()
+    return {"password": password, "account": _account(user)}

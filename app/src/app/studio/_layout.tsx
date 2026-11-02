@@ -15,6 +15,8 @@ const LINKS = [
   { href: '/studio/books', label: 'Books' },
   { href: '/studio/narrators', label: 'Narrators' },
   { href: '/studio/activity', label: 'Activity' },
+  { href: '/studio/feedback', label: 'Feedback', permission: 'feedback.manage' },
+  { href: '/studio/users', label: 'Users', permission: 'users.manage' },
   { href: '/studio/settings', label: 'AI & processing', permission: 'jobs.manage' },
 ] as const;
 

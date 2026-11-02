@@ -246,7 +246,7 @@ minutes of effort; an editor makes a publish decision in under 5 minutes.
 
 ## Phase 3 — Ratings, discovery, and community
 
-**Status (2026-09-29): built, awaiting your review** — checklist in
+**Status (2026-11-02): accepted** (reviewed by you; built 2026-09-29) — checklist in
 [docs/phase-3-review.md](docs/phase-3-review.md). All items P3-01 to P3-09 are in. Deviations: search runs in
 memory over one "loose Latin" form instead of PostgreSQL full-text (better for mixed Telugu/English titles);
 the local model drafts conversation starters in English only (its Telugu was ungrammatical) and never rejects

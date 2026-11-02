@@ -651,3 +651,19 @@ class PlaylistItem(Base):
     audio_asset_id: Mapped[str] = mapped_column(ForeignKey("audio_assets.id", ondelete="CASCADE"), primary_key=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     added_at: Mapped[datetime] = now_column()
+
+
+class Feedback(Base):
+    """A message from someone using the app ("Send feedback"), read and closed by editors in the studio."""
+
+    __tablename__ = "feedback"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    page: Mapped[str | None] = mapped_column(String(300))  # the screen it was sent from
+    platform: Mapped[str | None] = mapped_column(String(16))  # web | android | ios
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="new")  # new | done
+    created_at: Mapped[datetime] = now_column()
+    resolved_at: Mapped[datetime | None] = mapped_column(Timestamp)
+    resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))

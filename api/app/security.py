@@ -23,10 +23,11 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
                            "narrator.history"}),
     "editor": frozenset({
         "catalog.read", "transcript.review", "teaser.review", "content.publish", "rights.manage", "metadata.review",
+        "feedback.manage",
     }),
     "admin": frozenset({
         "catalog.read", "library.manage", "transcript.review", "teaser.review", "content.publish",
-        "users.manage", "rights.manage", "metadata.review", "jobs.manage",
+        "users.manage", "rights.manage", "metadata.review", "jobs.manage", "feedback.manage",
     }),
 }
 STAFF_ROLES = frozenset({"editor", "admin"})
