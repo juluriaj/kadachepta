@@ -3,6 +3,9 @@
 - Everyone: username/email + password, then TOTP for staff. Listeners create their own account with a username.
 - Listeners, when email is on (KC_EMAIL_ENABLED): passwordless email one-time code (creates the account on first use).
 - Web gets an httpOnly session cookie; mobile gets access + rotating refresh tokens.
+- Staff can tick "remember this device" at the code step: for 30 days that device needs only the password. Web keeps
+  the token in an httpOnly cookie, the apps in the keychain. Changing the password, an admin reset or an MFA reset
+  forgets every remembered device.
 """
 
 from __future__ import annotations
@@ -20,7 +23,8 @@ from sqlalchemy.orm import Session
 
 from .. import ratelimit
 from ..auth import (
-    SESSION_COOKIE, Identity, audit, create_session, optional_identity, require_identity, utcnow,
+    DEVICE_COOKIE, SESSION_COOKIE, Identity, audit, create_session, forget_devices, optional_identity,
+    remembered_device, require_identity, utcnow,
 )
 from ..config import get_settings
 from ..db import get_db
@@ -43,6 +47,7 @@ class PasswordLogin(BaseModel):
     username: str = Field(min_length=1, max_length=254)
     password: str = Field(min_length=1, max_length=512)
     client: Client = "web"
+    deviceToken: str | None = Field(default=None, max_length=128)  # apps: a remembered device (web uses a cookie)
 
 
 class Registration(BaseModel):
@@ -68,6 +73,7 @@ class OtpVerify(BaseModel):
 
 class TotpCode(BaseModel):
     code: str = Field(min_length=6, max_length=8)
+    rememberDevice: bool = False
 
 
 class RefreshRequest(BaseModel):
@@ -92,6 +98,8 @@ def _session_response(db: Session, user: User, request: Request, response: Respo
         "uiLanguage": user.ui_language, "listeningLanguages": user.listening_languages,
         **_mfa_state(user),
     }
+    if mfa_verified:
+        body.update(mfaRequired=False, mfaEnrollmentRequired=False)
     if body["mfaRequired"] or body["mfaEnrollmentRequired"]:
         body["permissions"] = []
     if client == "mobile":
@@ -127,7 +135,13 @@ def password_login(payload: PasswordLogin, request: Request, response: Response,
     if needs_rehash:
         user.password_hash = hash_password(payload.password)
     audit(db, "login.password", request, user.id)
-    return _session_response(db, user, request, response, payload.client)
+    device = None
+    if user.role in STAFF_ROLES and user.totp_enabled:
+        device = remembered_device(db, user, payload.deviceToken or request.cookies.get(DEVICE_COOKIE))
+    if device:
+        device.last_used_at = utcnow()
+        audit(db, "mfa.remembered-device", request, user.id, device=device.id)
+    return _session_response(db, user, request, response, payload.client, mfa_verified=device is not None)
 
 
 @router.post("/auth/register")
@@ -257,12 +271,13 @@ def totp_setup(identity: Identity = Depends(require_identity), db: Session = Dep
     if user.totp_enabled:
         raise HTTPException(status_code=409, detail="Two-factor authentication is already enabled.")
     user.totp_secret = new_totp_secret()
+    forget_devices(db, user.id)  # remembered for the old authenticator
     db.commit()
     return {"secret": user.totp_secret, "otpauthUri": totp_uri(user.totp_secret, user.handle)}
 
 
 @router.post("/auth/totp/verify")
-def totp_verify(payload: TotpCode, request: Request, identity: Identity = Depends(require_identity),
+def totp_verify(payload: TotpCode, request: Request, response: Response, identity: Identity = Depends(require_identity),
                 db: Session = Depends(get_db)):
     ratelimit.check(f"totp:user:{identity.user.id}", 10, 15 * 60)
     user = identity.user
@@ -275,6 +290,36 @@ def totp_verify(payload: TotpCode, request: Request, identity: Identity = Depend
         audit(db, "mfa.enabled", request, user.id)
     identity.session.mfa_verified = True
     audit(db, "mfa.verified", request, user.id)
-    db.commit()
-    return {**identity.public(), "permissions": permissions_for(user.role), "mfaVerified": True,
+    body = {**identity.public(), "permissions": permissions_for(user.role), "mfaVerified": True,
             "mfaRequired": False, "mfaEnrollmentRequired": False}
+    if payload.rememberDevice:
+        token = create_session(db, user, "device", request)
+        audit(db, "mfa.device-remembered", request, user.id)
+        if identity.session.kind == "web":
+            settings = get_settings()
+            response.set_cookie(DEVICE_COOKIE, token, httponly=True, samesite="lax", secure=settings.cookie_secure,
+                                max_age=settings.trusted_device_days * 86400, path="/api")
+        else:
+            body["deviceToken"] = token
+    db.commit()
+    return body
+
+
+@router.get("/auth/devices")
+def list_devices(identity: Identity = Depends(require_identity), db: Session = Depends(get_db)):
+    rows = db.scalars(select(AuthSession).where(
+        AuthSession.user_id == identity.user.id, AuthSession.kind == "device", AuthSession.revoked_at.is_(None),
+        AuthSession.expires_at > utcnow()).order_by(AuthSession.created_at.desc())).all()
+    return {"days": get_settings().trusted_device_days, "devices": [
+        {"id": row.id, "createdAt": row.created_at, "lastUsedAt": row.last_used_at, "expiresAt": row.expires_at,
+         "userAgent": row.user_agent} for row in rows]}
+
+
+@router.post("/auth/devices/forget")
+def forget_all_devices(request: Request, response: Response, identity: Identity = Depends(require_identity),
+                       db: Session = Depends(get_db)):
+    count = forget_devices(db, identity.user.id)
+    audit(db, "mfa.devices-forgotten", request, identity.user.id, count=count)
+    db.commit()
+    response.delete_cookie(DEVICE_COOKIE, path="/api")
+    return {"ok": True, "forgotten": count}

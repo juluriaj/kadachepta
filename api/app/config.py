@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     session_ttl_hours: int = 12
     access_token_minutes: int = 15
     refresh_token_days: int = 60
+    trusted_device_days: int = 30  # "remember this device": staff skip the authenticator code there for this long
     otp_ttl_minutes: int = 10
     staff_mfa_required: bool = False  # forced on in production by validate()
     cookie_secure: bool = False

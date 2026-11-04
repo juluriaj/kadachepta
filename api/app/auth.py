@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from .config import get_settings
@@ -15,6 +15,8 @@ from .models import AuditLog, AuthSession, User
 from .security import STAFF_ROLES, new_token, permissions_for, token_hash
 
 SESSION_COOKIE = "kc_session"
+# A remembered device (web): lets its owner skip the authenticator code at sign-in. It is not a session itself.
+DEVICE_COOKIE = "kc_device"
 
 
 @dataclass
@@ -69,6 +71,7 @@ def create_session(db: Session, user: User, kind: str, request: Request | None, 
         "web": timedelta(hours=settings.session_ttl_hours),
         "access": timedelta(minutes=settings.access_token_minutes),
         "refresh": timedelta(days=settings.refresh_token_days),
+        "device": timedelta(days=settings.trusted_device_days),
     }[kind]
     token = new_token()
     db.add(AuthSession(
@@ -78,6 +81,19 @@ def create_session(db: Session, user: User, kind: str, request: Request | None, 
         ip=client_ip(request) if request else None,
     ))
     return token
+
+
+def remembered_device(db: Session, user: User, token: str | None) -> AuthSession | None:
+    """The user's live "remember this device" token, if this request carries one."""
+    row = _lookup(db, token, ("device",)) if token else None
+    return row if row and row.user_id == user.id else None
+
+
+def forget_devices(db: Session, user_id: int) -> int:
+    """Ends every "remember this device" token of the user. The caller commits."""
+    result = db.execute(update(AuthSession).where(AuthSession.user_id == user_id, AuthSession.kind == "device",
+                                                  AuthSession.revoked_at.is_(None)).values(revoked_at=utcnow()))
+    return result.rowcount or 0
 
 
 def _lookup(db: Session, token: str, kinds: tuple[str, ...]) -> AuthSession | None:

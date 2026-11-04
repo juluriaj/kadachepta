@@ -62,6 +62,96 @@ def test_staff_totp_enrollment_and_enforcement(client, db):
     assert client.get("/api/dashboard").status_code == 200
 
 
+def _enrolled_editor(client, db, username: str = "remember-me") -> str:
+    make_user(db, username, "editor")
+    login(client, username)
+    secret = client.post("/api/auth/totp/setup").json()["secret"]
+    assert client.post("/api/auth/totp/verify", json={"code": pyotp.TOTP(secret).now()}).status_code == 200
+    client.post("/api/logout")
+    return secret
+
+
+def test_remembered_browser_skips_the_code(client, db):
+    secret = _enrolled_editor(client, db)
+    assert login(client, "remember-me")["mfaRequired"]
+    verified = client.post("/api/auth/totp/verify", json={"code": pyotp.TOTP(secret).now(), "rememberDevice": True})
+    assert "kc_device" in verified.cookies and "deviceToken" not in verified.json()
+    client.post("/api/logout")
+    assert "kc_device" in client.cookies  # signing out keeps the device remembered
+
+    body = login(client, "remember-me")
+    assert not body["mfaRequired"] and "content.publish" in body["permissions"]
+    assert client.get("/api/dashboard").status_code == 200
+    assert client.get("/api/session").json()["mfaVerified"]
+    assert db.scalars(select(AuditLog).where(AuditLog.action == "mfa.remembered-device")).first()
+
+    # Still needs the password, and the token isn't a session by itself.
+    device = client.cookies.get("kc_device")
+    client.post("/api/logout")
+    assert client.post("/api/login", json={"username": "remember-me", "password": "wrong"}).status_code == 401
+    client.cookies.clear()
+    assert client.get("/api/session", headers={"Cookie": f"kc_session={device}"}).json()["authenticated"] is False
+    assert client.get("/api/session", headers={"Authorization": f"Bearer {device}"}).json()["authenticated"] is False
+    assert client.post("/api/auth/refresh", json={"refreshToken": device}).status_code == 401
+
+    # Another account on the same browser still needs its own code.
+    make_user(db, "other-editor", "editor", totp_enabled=True, totp_secret=pyotp.random_base32())
+    other = client.post("/api/login", json={"username": "other-editor", "password": "correct horse battery"},
+                        headers={"Cookie": f"kc_device={device}"})
+    assert other.json()["mfaRequired"]
+    # ...while the owner, with only that cookie, doesn't.
+    owner = client.post("/api/login", json={"username": "remember-me", "password": "correct horse battery"},
+                        headers={"Cookie": f"kc_device={device}"})
+    assert not owner.json()["mfaRequired"]
+
+
+def test_unticked_and_forgotten_devices_ask_again(client, db):
+    secret = _enrolled_editor(client, db)
+    login(client, "remember-me")
+    client.post("/api/auth/totp/verify", json={"code": pyotp.TOTP(secret).now()})
+    assert "kc_device" not in client.cookies
+    client.post("/api/logout")
+    assert login(client, "remember-me")["mfaRequired"]
+
+    client.post("/api/auth/totp/verify", json={"code": pyotp.TOTP(secret).now(), "rememberDevice": True})
+    listed = client.get("/api/auth/devices").json()
+    assert listed["days"] == 30 and len(listed["devices"]) == 1
+    forgotten = client.post("/api/auth/devices/forget", json={})
+    assert forgotten.json()["forgotten"] == 1 and not client.get("/api/auth/devices").json()["devices"]
+    client.post("/api/logout")
+    assert login(client, "remember-me")["mfaRequired"]
+
+
+def test_password_change_forgets_remembered_devices(client, db):
+    secret = _enrolled_editor(client, db)
+    login(client, "remember-me")
+    client.post("/api/auth/totp/verify", json={"code": pyotp.TOTP(secret).now(), "rememberDevice": True})
+    changed = client.post("/api/me/password", json={"currentPassword": "correct horse battery",
+                                                    "newPassword": "a new password"})
+    assert changed.status_code == 200, changed.text
+    client.post("/api/logout")
+    assert login(client, "remember-me", "a new password")["mfaRequired"]
+
+
+def test_remembered_phone_skips_the_code(client, db):
+    secret = _enrolled_editor(client, db)
+    client.cookies.clear()
+    mobile = {"username": "remember-me", "password": "correct horse battery", "client": "mobile"}
+    tokens = client.post("/api/login", json=mobile).json()
+    assert tokens["mfaRequired"]
+    verified = client.post("/api/auth/totp/verify", json={"code": pyotp.TOTP(secret).now(), "rememberDevice": True},
+                           headers={"Authorization": f"Bearer {tokens['accessToken']}"}).json()
+    assert verified["deviceToken"] and "kc_device" not in client.cookies
+    again = client.post("/api/login", json={**mobile, "deviceToken": verified["deviceToken"]}).json()
+    assert not again["mfaRequired"] and "content.publish" in again["permissions"]
+    headers = {"Authorization": f"Bearer {again['accessToken']}"}
+    assert client.get("/api/dashboard", headers=headers).status_code == 200
+    # The refreshed tokens keep the verification.
+    rotated = client.post("/api/auth/refresh", json={"refreshToken": again["refreshToken"]}).json()
+    assert client.get("/api/dashboard", headers={"Authorization": f"Bearer {rotated['accessToken']}"}).status_code == 200
+    assert client.post("/api/login", json={**mobile, "deviceToken": "made-up"}).json()["mfaRequired"]
+
+
 def test_email_otp_creates_listener_account(client, db):
     assert client.post("/api/auth/otp/request", json={"email": "Parent@Example.com"}).status_code == 202
     code = re.search(r"\b(\d{6})\b", mailer.sent_messages[-1]["Subject"]).group(1)

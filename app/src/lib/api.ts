@@ -16,9 +16,11 @@ const ACCESS = 'kc.access';
 const REFRESH = 'kc.refresh';
 const PROFILE = 'kc.profile';
 const SERVER = 'kc.server';
+const DEVICE = 'kc.device';  // "remember this device" (staff): skips the authenticator code; kept across sign-outs
 
 let accessToken: string | null = null;
 let refreshToken: string | null = null;
+let deviceToken: string | null = null;
 let profileId: string | null = null;
 let parentPin: { pin: string; until: number } | null = null;
 let refreshing: Promise<boolean> | null = null;
@@ -50,6 +52,16 @@ export async function loadStoredSession() {
   if (IS_WEB) return;
   accessToken = await SecureStore.getItemAsync(ACCESS);
   refreshToken = await SecureStore.getItemAsync(REFRESH);
+  deviceToken = await SecureStore.getItemAsync(DEVICE);
+}
+
+// Web keeps the remembered device in an httpOnly cookie instead, so these do nothing there.
+export const getDeviceToken = () => deviceToken;
+export async function storeDeviceToken(token: string | null) {
+  deviceToken = token;
+  if (IS_WEB) return;
+  if (token) await SecureStore.setItemAsync(DEVICE, token);
+  else await SecureStore.deleteItemAsync(DEVICE);
 }
 
 // Sets the server address (null goes back to the built-in one). Sign-in belongs to a server, so it's dropped.
@@ -61,6 +73,7 @@ export async function setApiBase(url: string | null) {
   if (next) await AsyncStorage.setItem(SERVER, next);
   else await AsyncStorage.removeItem(SERVER);
   await storeTokens(null, null);
+  await storeDeviceToken(null);
   await setProfileId(null);
   return apiBase;
 }

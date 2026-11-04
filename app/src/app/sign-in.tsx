@@ -1,10 +1,11 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { LanguageSwitch } from '@/components/LanguageSwitch';
 import { Button, Field, Logo, Screen, Text, useColors, Wordmark } from '@/components/ui';
-import { api, ApiError, CAN_CHANGE_SERVER, getApiBase, setApiBase } from '@/lib/api';
+import { api, ApiError, CAN_CHANGE_SERVER, getApiBase, setApiBase, storeDeviceToken } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { space } from '@/lib/theme';
@@ -25,6 +26,7 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [repeat, setRepeat] = useState('');
   const [secret, setSecret] = useState<string | null>(null);
+  const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -134,8 +136,18 @@ export default function SignIn() {
               ) : <Text muted>{t('signin.mfa')}</Text>}
               <Field label={t('signin.code')} value={code} onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
                 keyboardType="number-pad" autoComplete="one-time-code" maxLength={6} />
+              <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: remember }} onPress={() => setRemember(!remember)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 44 }}>
+                <Ionicons name={remember ? 'checkbox' : 'square-outline'} size={24} color={colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text>{t('signin.rememberDevice')}</Text>
+                  <Text variant="small" muted>{t('signin.rememberHint')}</Text>
+                </View>
+              </Pressable>
               <Button title={t('signin.verify')} loading={busy} disabled={code.length !== 6} onPress={() => run(async () => {
-                await api('/api/auth/totp/verify', { method: 'POST', body: { code }, profile: false });
+                const result = await api<{ deviceToken?: string }>('/api/auth/totp/verify',
+                  { method: 'POST', body: { code, rememberDevice: remember }, profile: false });
+                if (result.deviceToken) await storeDeviceToken(result.deviceToken);
                 await refresh();
                 router.replace('/');
               })} />

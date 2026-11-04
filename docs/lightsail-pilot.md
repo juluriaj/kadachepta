@@ -113,7 +113,8 @@ stack stays as the development environment, but after cutover it no longer holds
    - [ ] Create a listener account (username and password), sign out and back in; a story plays and seeking
          works
    - [ ] Studio: staff sign-in asks for the authenticator code (two-factor is enforced in production); the
-         review queue matches the desktop
+         review queue matches the desktop. With "Remember this device" ticked, the next sign-in on that browser
+         asks only for the password (for 30 days; Studio › My details › Forget all devices undoes it)
    - [ ] As a narrator, record and submit a short story: media processing, transcription and the teaser (GPU
          worker) all finish
    - [ ] `npm run server -- status` shows every container up and healthy, and enough free disk

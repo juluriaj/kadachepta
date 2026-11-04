@@ -64,7 +64,7 @@ class AuthSession(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
-    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # web | access | refresh
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # web | access | refresh | device (remembered)
     family_id: Mapped[str | None] = mapped_column(String(36), index=True)  # refresh-token rotation family
     expires_at: Mapped[datetime] = mapped_column(Timestamp, nullable=False)
     created_at: Mapped[datetime] = now_column()

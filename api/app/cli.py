@@ -19,6 +19,7 @@ from pathlib import Path
 
 from sqlalchemy import func, select
 
+from .auth import forget_devices
 from .config import get_settings
 from .db import get_sessionmaker
 from .models import NarratorProfile, User, Worker
@@ -93,8 +94,10 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "reset-mfa":
             user = _user(db, args.username)
             user.totp_enabled, user.totp_secret = False, None
+            forgotten = forget_devices(db, user.id)
             db.commit()
-            print("Two-factor authentication reset; the user enrolls again at next sign-in.")
+            print("Two-factor authentication reset; the user enrolls again at next sign-in."
+                  + (f" Forgot {forgotten} remembered device(s)." if forgotten else ""))
         elif args.command == "create-worker":
             token = new_token()
             row = db.scalars(select(Worker).where(Worker.name == args.name)).first() or Worker(name=args.name)

@@ -188,7 +188,8 @@ def change_password(payload: PasswordChange, request: Request, x_parent_pin: str
         raise HTTPException(status_code=400, detail="Your current password isn't right.")
     check_new_password(payload.newPassword)
     user.password_hash = hash_password(payload.newPassword)
-    # Sign out everywhere else. This device stays signed in (on a phone, with its refresh token).
+    # Sign out everywhere else and forget remembered devices (they're "device" rows, with no family).
+    # This device stays signed in (on a phone, with its refresh token).
     others = [AuthSession.user_id == user.id, AuthSession.id != identity.session.id, AuthSession.revoked_at.is_(None)]
     if identity.session.family_id:
         others.append(or_(AuthSession.family_id.is_(None), AuthSession.family_id != identity.session.family_id))

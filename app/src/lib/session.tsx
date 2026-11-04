@@ -3,7 +3,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Platform } from 'react-native';
 
 import {
-  api, clientKind, forgetParentPin, getProfileId, loadStoredSession, markSignedIn, onSignedOut, setProfileId, storeTokens,
+  api, clientKind, forgetParentPin, getDeviceToken, getProfileId, loadStoredSession, markSignedIn, onSignedOut, setProfileId,
+  storeTokens,
 } from './api';
 import { useI18n, type UiLanguage } from './i18n';
 import { getEngine } from './player/engine';
@@ -118,9 +119,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await queryClient.invalidateQueries({ predicate: (q) => !['session', 'household'].includes(String(q.queryKey[0])) });
     },
     signIn: async (body, path) => {
-      const result = await api<Session & { accessToken?: string; refreshToken?: string }>(
-        path ?? (body.code ? '/api/auth/otp/verify' : '/api/login'),
-        { method: 'POST', body: { ...body, client: clientKind }, profile: false });
+      const target = path ?? (body.code ? '/api/auth/otp/verify' : '/api/login');
+      const device = target === '/api/login' ? getDeviceToken() : null;  // a remembered device skips the code
+      const result = await api<Session & { accessToken?: string; refreshToken?: string }>(target,
+        { method: 'POST', body: { ...body, client: clientKind, ...(device ? { deviceToken: device } : {}) }, profile: false });
       if (result.accessToken && result.refreshToken) await storeTokens(result.accessToken, result.refreshToken);
       markSignedIn();
       const picked = pickedLanguage.current;
