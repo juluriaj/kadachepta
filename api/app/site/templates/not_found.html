@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% from "parts.html" import group_card %}
+{% block main %}
+<h1>ఈ పేజీ ఇక్కడ లేదు</h1>
+<p class="sub" lang="en">This page isn't here any more.</p>
+<p><a href="{{ site }}/stories">అన్ని కథలు</a> · <a href="{{ site }}/collections">సంపుటాలు</a> · <a href="{{ site }}/books">నవలలు</a></p>
+{% if books %}<div class="grid">{% for group in books %}{{ group_card(group, site, art) }}{% endfor %}</div>{% endif %}
+{% endblock %}

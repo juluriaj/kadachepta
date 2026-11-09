@@ -2,7 +2,8 @@
 	email ops@kathachepta.com
 }
 
-# The web app lives at app.; native apps call api. (same server, same routes).
+# The web app lives at app.; native apps call api. (same server, same routes). Neither belongs in search results:
+# the app is an empty page until JavaScript runs, and kathachepta.com is the address to index.
 app.kathachepta.com, api.kathachepta.com {
 	encode zstd gzip
 	request_body {
@@ -14,6 +15,7 @@ app.kathachepta.com, api.kathachepta.com {
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
 		Permissions-Policy "camera=(), geolocation=(), microphone=(self)"
+		X-Robots-Tag "noindex, nofollow"
 	}
 	reverse_proxy api:8000 {
 		transport http {
@@ -23,11 +25,22 @@ app.kathachepta.com, api.kathachepta.com {
 	}
 }
 
-# The bare domain opens the web app until a landing page exists (temporary, so browsers don't cache it).
-# It goes to the app's home page, not the same path: links into the old WordPress site
-# (/2020/05/<post>/, /feed/, /wp-login.php) have no page in the app.
-kathachepta.com, www.kathachepta.com {
-	redir https://app.kathachepta.com/ 302
+# The public website: real pages for search engines and first-time visitors (api/app/routers/public_site.py).
+# Links into the old WordPress site are redirected to their new pages there.
+kathachepta.com {
+	encode zstd gzip
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+	rewrite * /site{uri}
+	reverse_proxy api:8000
+}
+
+www.kathachepta.com {
+	redir https://kathachepta.com{uri} permanent
 }
 
 # The common misspellings redirect permanently to the canonical domain.
@@ -37,8 +50,8 @@ kadacheptha.com, www.kadacheptha.com {
 	redir https://kathachepta.com{uri} permanent
 }
 
-# Other names of the old WordPress site open the app too. Temporary, so they can get a site of their own later.
+# Other names of the old WordPress site open the public website too. Temporary, so they can get a site of their own later.
 audibles.in, www.audibles.in,
 telugustories.org, www.telugustories.org {
-	redir https://app.kathachepta.com/ 302
+	redir https://kathachepta.com{uri} 302
 }

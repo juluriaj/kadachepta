@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://kathachepta:kathachepta@localhost:5432/kathachepta"
     secret_key: str = "dev-only-secret-change-me"
     public_base_url: str = "http://localhost:8080"
+    public_site_url: str = "https://kathachepta.com"  # the public website, for canonical links and the sitemap
 
     # Storage: "local" keeps files under media_root (also on the Lightsail pilot); "s3" for a Lightsail bucket comes later.
     storage_backend: str = "local"

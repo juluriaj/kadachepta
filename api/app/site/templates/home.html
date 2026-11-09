@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "parts.html" import group_card, story_card %}
+{% block main %}
+<h1>తెలుగు కథలు వినండి</h1>
+<p class="sub" lang="en">Telugu audio stories for children and families</p>
+<p>నిద్రపోయే ముందు, ప్రయాణాల్లో, తీరిక సమయాల్లో వినడానికి {{ title_count }} తెలుగు కథలు, నవలలు. చందమామ, పంచతంత్రం, తెనాలి రామకృష్ణ, అక్బర్ బీర్బల్, నీతి కథలు: అన్నీ మనుషులు తమ గొంతుతో చెప్పినవే.</p>
+<p lang="en">{{ title_count }} Telugu stories and audiobooks to hear at bedtime, on journeys and in quiet hours: Chandamama, Panchatantra, Tenali Ramakrishna, Akbar Birbal and moral stories, all told by real people. Separate profiles for grown-ups and children, no ads, and free during our pilot.</p>
+<p><a class="btn" href="{{ app }}/">ఉచితంగా వినండి</a></p>
+
+{% if books %}
+<h2>నవలలు <span class="small" lang="en">Audiobooks</span></h2>
+<div class="grid">{% for group in books %}{{ group_card(group, site, art) }}{% endfor %}</div>
+{% endif %}
+
+<h2>కథల సంపుటాలు <span class="small" lang="en">Story collections</span></h2>
+<div class="grid">{% for group in sets %}{{ group_card(group, site, art) }}{% endfor %}</div>
+{% if more_sets %}<p><a href="{{ site }}/collections">అన్ని సంపుటాలు చూడండి</a></p>{% endif %}
+
+{% if newest %}
+<h2>కొత్త కథలు <span class="small" lang="en">New stories</span></h2>
+<div class="grid">{% for story in newest %}{{ story_card(story, site, art) }}{% endfor %}</div>
+<p><a href="{{ site }}/stories">అన్ని కథలు చూడండి</a></p>
+{% endif %}
+
+<section class="panel" id="narrators">
+<h2 style="margin-top:0">మీకు కథలు చెప్పడం ఇష్టమా?</h2>
+<p>KathaChepta కథకులుగా చేరండి. మీ ఫోన్‌లో రికార్డ్ చేయండి, మా ఎడిటర్లు సహాయం చేస్తారు. మీ గొంతు ఇక్కడి, విదేశాల్లోని కుటుంబాలకు చేరుతుంది.</p>
+<p lang="en">Love telling stories in Telugu? Record on your phone and our editors help polish it. Apply in the app: Family tab, then Become a narrator.</p>
+<p><a class="btn" href="{{ app }}/">కథకులుగా చేరండి</a></p>
+</section>
+{% endblock %}

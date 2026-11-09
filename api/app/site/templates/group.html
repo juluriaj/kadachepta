@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block main %}
+<p class="crumbs"><a href="{{ site }}/">Home</a> › <a href="{{ site }}{{ section[1] }}">{{ section[0] }}</a> › {{ group.title }}</p>
+<div class="cols">
+<div><img class="cover" src="{{ art(group.kind, group.id, group.art, 640) }}" alt="{{ group.title }}" width="640" height="640"></div>
+<div>
+<h1>{{ group.heading }}</h1>
+{% if group.subtitle %}<p class="sub" lang="en">{{ group.subtitle }}</p>{% endif %}
+<p class="small" lang="en">{{ kind_label }} · {{ group.stories|length }} {{ 'chapters' if group.kind == 'book' else 'stories' }} · {% if group.seconds >= 3600 %}{{ group.hours }} hours{% else %}{{ group.hours }}{% endif %} · {{ 'Narrated by' if group.kind == 'book' else 'Told by' }} {{ group.narrators|join(', ') }}</p>
+{% if group.about_te %}<p>{{ group.about_te }}</p>{% endif %}
+{% if group.about_en %}<p lang="en">{{ group.about_en }}</p>{% endif %}
+<p><a class="btn" href="{{ open_url }}">యాప్‌లో వినండి</a></p>
+<p class="small" lang="en">Listen free in the app during our pilot.</p>
+</div>
+</div>
+<h2>{{ 'అధ్యాయాలు' if group.kind == 'book' else 'ఈ సంపుటిలోని కథలు' }}</h2>
+<ol class="list">
+{% for story in group.stories %}<li>{% if group.kind == 'book' %}<strong>{{ story.chapter }}. {{ story.heading }}</strong>{% else %}<a href="{{ site }}{{ story.path }}">{{ story.heading }}</a>{% endif %}{% if story.subtitle %} <span class="small">{{ story.subtitle }}</span>{% endif %} <span class="small">· {{ story.minutes }} min</span><br>{% if story.short_te %}<span>{{ story.short_te }}</span><br>{% endif %}{% if story.short_en %}<span class="small" lang="en">{{ story.short_en }}</span>{% endif %}</li>
+{% endfor %}</ol>
+{% endblock %}

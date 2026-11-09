@@ -379,6 +379,7 @@ monitoring, and a documented restore.
 | P6-08 | Move hosting from the desktop to Lightsail (AWS details provided at this stage): staging + production, DNS for `kathachepta.com`, bucket + CDN, data migration from the desktop; blue/green deploys; mobile release pipeline via EAS Build/Submit and OTA updates | **Started 2026-10-21 as a staged pilot: web, then Android, then iPhone** ([runbook](docs/lightsail-pilot.md)). Ready: provisioning, health-gated deploy with rollback, desktop-to-server sync and cutover, restore, `pilot` APK profile. Later: bucket + CDN, CI deploys, staging |
 | P6-09 | Support tooling: in-app feedback, help center, refund handling | |
 | P6-10 | Email back on for listeners: an SMTP provider (Zoho or SES), `KC_EMAIL_ENABLED=true`, self-service password reset by email, and an admin page to reset a password (today: `cli set-password`) | The pilot runs with email off (2026-11-02): username and password sign-up and sign-in only |
+| P6-11 | Public website for search at `kathachepta.com`: server-rendered book, collection and story pages, sitemap, structured data, redirects from the old WordPress links, `noindex` on the app (built 2026-11-08) | Search Console setup is manual: docs/lightsail-pilot.md |
 
 ---
 

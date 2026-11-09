@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "parts.html" import story_card %}
+{% block main %}
+<p class="crumbs"><a href="{{ site }}/">Home</a> › {% if home_set %}<a href="{{ site }}{{ home_set.path }}">{{ home_set.title }}</a>{% else %}<a href="{{ site }}/stories">Stories</a>{% endif %} › {{ story.title }}</p>
+<div class="cols">
+<div><img class="cover" src="{{ art('story', story.id, story.art, 640) }}" alt="{{ story.title }}" width="640" height="640"></div>
+<div>
+<h1>{{ story.heading }}</h1>
+{% if story.subtitle %}<p class="sub" lang="en">{{ story.subtitle }}</p>{% endif %}
+<p class="small" lang="en">Telugu audio story · {{ story.minutes }} min{% if story.age %} · Ages {{ story.age }}{% endif %}{% if story.narrators %} · Told by {{ story.narrators|join(', ') }}{% endif %}</p>
+{% if story.long_te %}<p>{{ story.long_te }}</p>{% endif %}
+{% if story.long_en %}<p lang="en">{{ story.long_en }}</p>{% endif %}
+<p><a class="btn" href="{{ open_url }}">యాప్‌లో వినండి</a></p>
+<p class="small" lang="en">Listen free in the app during our pilot.</p>
+</div>
+</div>
+{% if related %}
+<h2>ఇలాంటి మరిన్ని కథలు <span class="small" lang="en">More from {{ home_set.title }}</span></h2>
+<div class="grid">{% for item in related %}{{ story_card(item, site, art) }}{% endfor %}</div>
+{% endif %}
+{% endblock %}

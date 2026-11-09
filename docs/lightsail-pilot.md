@@ -22,7 +22,7 @@ stack stays as the development environment, but after cutover it no longer holds
 |---|---|---|
 | Instance | Lightsail Micro (`micro_3_1`), 1 GB RAM / 2 vCPU / 40 GB SSD, Mumbai (`ap-south-1`): $7/month (your choice, 2026-11-02) | Enough for a small pilot: 2 API workers and 1 media worker, 13 GB of media today, about 13 GB free. Deploys build on the server and take longer there, and the site is slow while they run. Move to the 4 GB plan ($24) when needed: see "Moving to a bigger plan" |
 | Media | Stays on the VM disk, with daily automatic snapshots (about $0.05 per GB per month) | The bucket + CDN storage backend isn't built yet. It's worth building once media nears ~50 GB or listeners abroad notice slow starts |
-| Domains | Web app at `app.kathachepta.com`, native apps call `api.kathachepta.com`; `kathachepta.com` and `www.` redirect to `app.` (temporary, until a landing page exists); `kadachepta.com`, `kathacheptha.com` and `kadacheptha.com` redirect permanently to `kathachepta.com`; `audibles.in` and `telugustories.org` redirect to `app.` (temporary). Each needs only its `@` record on the server's IP (`www` is a CNAME to `@`) | Decision D3 |
+| Domains | Web app at `app.kathachepta.com`, native apps call `api.kathachepta.com`; `kathachepta.com` is the public website that search engines index (`www.` redirects to it); `kadachepta.com`, `kathacheptha.com` and `kadacheptha.com` redirect permanently to `kathachepta.com`; `audibles.in` and `telugustories.org` redirect to `kathachepta.com` (temporary). Each needs only its `@` record on the server's IP (`www` is a CNAME to `@`) | Decision D3 |
 | Environments | One instance, which is production from the start. No staging yet | A pilot doesn't need two servers. `deploy.sh` rolls back on its own if a release fails its health check |
 | Secrets | New ones made on the server (database password, media-link signing key, worker tokens) | Desktop secrets have lived on a development machine. Accounts, passwords and staff authenticator codes move with the database; only media links older than 6 hours stop working |
 | Sign-up | Open: anyone can create a listener account with a username and password. The site isn't advertised | Ask me if you want an invite list during the pilot |
@@ -275,6 +275,23 @@ or when deploys take more than about 20 minutes. It takes about 15 minutes of do
    `bash infra/lightsail/compose.sh up -d`.
 5. Delete the old instance a few days later. Steps 3 and 5 are yours, because the setup key can't detach or
    delete anything.
+
+## Public website and search
+
+`https://kathachepta.com` is the site search engines index: plain server-rendered pages for the home page, books,
+collections and stories, with a sitemap, `robots.txt` and structured data (`api/app/routers/public_site.py`). Caddy
+adds `/site` to every path on that host. `app.` and `api.` send `X-Robots-Tag: noindex`, because the app is an empty
+page until JavaScript runs. Pages show titles, teasers, narrators' names and artwork only; audio and transcripts stay
+behind sign-in. New published stories appear within 5 minutes.
+
+- **After changing the Caddyfile,** run `bash infra/lightsail/compose.sh restart caddy` once the deploy has finished.
+- **Links from the old WordPress site** are in `api/app/site/old_urls.json`. A link whose target isn't published yet
+  gets a temporary redirect to its section, and starts going to the right page as soon as it's published.
+- **Book and collection descriptions** are in `api/app/site/descriptions.json`, by English title. Add an entry when
+  a new book is published.
+- **Search Console (yours, once):** add `kathachepta.com` as a Domain property and verify it with the `TXT` record
+  Google gives you, submit `https://kathachepta.com/sitemap.xml`, then add `kadachepta.com` too and use Settings >
+  Change of Address to move it to `kathachepta.com`.
 
 ## After the pilot (tracked in BACKLOG.md P6-05 and P6-08)
 

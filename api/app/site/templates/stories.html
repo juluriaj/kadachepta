@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block main %}
+<p class="crumbs"><a href="{{ site }}/">Home</a> › Stories</p>
+<h1>అన్ని తెలుగు కథలు</h1>
+<p class="sub" lang="en">All Telugu audio stories, A to Z</p>
+<ul class="list">
+{% for story in stories %}<li><a href="{{ site }}{{ story.path }}">{{ story.heading }}</a>{% if story.subtitle %} <span class="small">{{ story.subtitle }}</span>{% endif %}<br><span class="small" lang="en">{{ story.short_en or '' }}</span></li>
+{% endfor %}</ul>
+{% endblock %}

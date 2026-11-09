@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% from "parts.html" import group_card %}
+{% block main %}
+<p class="crumbs"><a href="{{ site }}/">Home</a> › {{ breadcrumb }}</p>
+<h1>{{ heading }}</h1>
+<p class="sub" lang="en">{{ subheading }}</p>
+{% if groups %}<div class="grid">{% for group in groups %}{{ group_card(group, site, art) }}{% endfor %}</div>
+{% else %}<p>త్వరలో వస్తున్నాయి.</p>{% endif %}
+{% endblock %}
