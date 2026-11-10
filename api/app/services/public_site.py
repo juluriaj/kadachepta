@@ -112,6 +112,12 @@ class Group:
         return self.title if self.title_te else None
 
     @property
+    def count_label(self) -> str:
+        singular, plural = ("chapter", "chapters") if self.kind == "book" else ("story", "stories")
+        count = len(self.stories)
+        return f"{count} {singular if count == 1 else plural}"
+
+    @property
     def seconds(self) -> float:
         return sum(story.seconds for story in self.stories)
 

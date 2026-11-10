@@ -1,6 +1,6 @@
 {% macro group_card(group, site, art) -%}
 <a class="card" href="{{ site }}{{ group.path }}"><img src="{{ art(group.kind, group.id, group.art, 320) }}" alt="{{ group.title }}" width="320" height="320" loading="lazy">
-<div><strong>{{ group.heading }}</strong><span class="small">{{ group.stories|length }} {{ 'chapters' if group.kind == 'book' else 'stories' }}</span></div></a>
+<div><strong>{{ group.heading }}</strong><span class="small">{{ group.count_label }}</span></div></a>
 {%- endmacro %}
 
 {% macro story_card(story, site, art) -%}

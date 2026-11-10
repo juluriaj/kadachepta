@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
-import { resumeLabel } from '@/components/sets';
+import { chapterCount, resumeLabel } from '@/components/sets';
 import { minutes, NarratedBy, StoryList } from '@/components/stories';
 import { Button, Cover, ErrorState, Loading, ProgressBar, Screen, Text, useColors } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -46,7 +46,7 @@ export default function BookScreen() {
         <Text variant="display" style={{ textAlign: 'center' }} accessibilityRole="header">{book.title}</Text>
         <Text muted style={{ textAlign: 'center' }}><NarratedBy story={book} /></Text>
         <Text muted style={{ textAlign: 'center' }}>
-          {t('book.chapters', { n: book.chapterCount })} · {formatListening(t, book.duration)}
+          {chapterCount(t, book.chapterCount)} · {formatListening(t, book.duration)}
         </Text>
       </View>
       {book.finished ? (
@@ -64,7 +64,7 @@ export default function BookScreen() {
   // Tapping a chapter, row or tile, plays from there; the chapters after it follow on.
   return (
     <Screen back>
-      <StoryList stories={book.chapters} header={header} title={t('book.chapters', { n: book.chapterCount })} chapterView
+      <StoryList stories={book.chapters} header={header} title={chapterCount(t, book.chapterCount)} chapterView
         initialNumToRender={15} onPress={(_, index) => playFrom(index)}
         contentContainerStyle={{ paddingVertical: space.lg, maxWidth: 640, width: '100%', alignSelf: 'center' }}
         row={(chapter, index) => (

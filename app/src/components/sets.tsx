@@ -24,6 +24,11 @@ export function shuffled<T>(items: T[]): T[] {
   return copy;
 }
 
+// "14 chapters", or "1 chapter" for a single-file book.
+export function chapterCount(t: Translate, n: number) {
+  return n === 1 ? t('book.oneChapter') : t('book.chapters', { n });
+}
+
 // The one button on a book's page: "Start", "Continue · Chapter 12, 8 min left", or "Listen again".
 export function resumeLabel(t: Translate, book: BookSummary) {
   const { resume } = book;
@@ -69,7 +74,7 @@ export function BookTile({ book, width = 150 }: { book: BookSummary; width?: num
   const started = book.resume.state === 'continue' && !!book.lastListenedAt;
   return (
     <Pressable onPress={() => router.push(`/book/${book.id}`)} testID="story-card" accessibilityRole="button"
-      accessibilityLabel={`${book.title}, ${t('book.chapters', { n: book.chapterCount })}`}
+      accessibilityLabel={`${book.title}, ${chapterCount(t, book.chapterCount)}`}
       style={(state) => ({ width, gap: space.sm, opacity: state.pressed ? 0.8 : 1, borderRadius: radius.md,
         ...focusOutline(!!(state as { focused?: boolean }).focused, colors.primary) })}>
       <Cover id={`book-${book.id}`} title={book.title} artworkUrl={book.artworkUrl} size={width} />
@@ -79,7 +84,7 @@ export function BookTile({ book, width = 150 }: { book: BookSummary; width?: num
         <Ionicons name="book-outline" size={13} color={colors.muted} />
         <Text variant="small" muted numberOfLines={1} style={{ flexShrink: 1 }}>
           {started ? t('book.chShort', { n: book.resume.chapter, total: book.chapterCount })
-            : `${t('book.chapters', { n: book.chapterCount })} · ${formatListening(t, book.duration)}`}
+            : `${chapterCount(t, book.chapterCount)} · ${formatListening(t, book.duration)}`}
         </Text>
       </View>
     </Pressable>
@@ -119,7 +124,7 @@ export function BookRow({ book }: { book: BookSummary }) {
   const { t } = useI18n();
   return (
     <Row title={book.title} icon="book-outline" onPress={() => router.push(`/book/${book.id}`)}
-      detail={`${book.narrator} · ${t('book.chapters', { n: book.chapterCount })} · ${formatListening(t, book.duration)}`}
+      detail={`${book.narrator} · ${chapterCount(t, book.chapterCount)} · ${formatListening(t, book.duration)}`}
       cover={<Cover id={`book-${book.id}`} title={book.title} artworkUrl={book.artworkUrl} size={56} rounded={radius.sm} />} />
   );
 }

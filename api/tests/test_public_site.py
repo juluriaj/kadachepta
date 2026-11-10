@@ -105,6 +105,16 @@ def test_book_lists_chapters_in_order_and_chapters_have_no_page_of_their_own(cli
     assert CHAPTER_IDS[0] not in client.get("/site/stories").text
 
 
+def test_single_file_book_says_one_chapter(client, db, catalog):
+    single = Series(title="Marco Polo Sahasa Yatralu", cover_title="మార్కో పోలో సాహస యాత్రలు")
+    db.add(single)
+    db.flush()
+    story(db, "bb11".ljust(16, "0"), title="Marco Polo Sahasa Yatralu", series_id=single.id, series_position=1)
+    html = client.get(f"/site/books/marco-polo-sahasa-yatralu-{single.id}").text
+    assert "1 chapter ·" in html and "1 chapters" not in html and "in 1 chapter," in html
+    assert "1 chapters" not in client.get("/site/books").text
+
+
 def test_collection_page(client, catalog):
     html = client.get(f"/site/collections/neeti-kathalu-{catalog['set'].id}").text
     assert "CollectionPage" in types(html) and "Gadusu Nakka" in html

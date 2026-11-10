@@ -6,7 +6,7 @@
 <div>
 <h1>{{ group.heading }}</h1>
 {% if group.subtitle %}<p class="sub" lang="en">{{ group.subtitle }}</p>{% endif %}
-<p class="small" lang="en">{{ kind_label }} · {{ group.stories|length }} {{ 'chapters' if group.kind == 'book' else 'stories' }} · {% if group.seconds >= 3600 %}{{ group.hours }} hours{% else %}{{ group.hours }}{% endif %} · {{ 'Narrated by' if group.kind == 'book' else 'Told by' }} {{ group.narrators|join(', ') }}</p>
+<p class="small" lang="en">{{ kind_label }} · {{ group.count_label }} · {% if group.seconds >= 3600 %}{{ group.hours }} hours{% else %}{{ group.hours }}{% endif %} · {{ 'Narrated by' if group.kind == 'book' else 'Told by' }} {{ group.narrators|join(', ') }}</p>
 {% if group.about_te %}<p>{{ group.about_te }}</p>{% endif %}
 {% if group.about_en %}<p lang="en">{{ group.about_en }}</p>{% endif %}
 <p><a class="btn" href="{{ open_url }}">యాప్‌లో వినండి</a></p>

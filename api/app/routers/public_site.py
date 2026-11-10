@@ -227,7 +227,7 @@ def _group_page(catalog: Catalog, group: Group, section: tuple[str, str]) -> HTM
     about = group.about_en or group.title
     if group.kind == "book":
         kind_label = "Telugu audiobook"
-        description = f"{about.rstrip('.')}. A Telugu audiobook in {count} chapters, narrated by {narrated}."
+        description = f"{about.rstrip('.')}. A Telugu audiobook in {group.count_label}, narrated by {narrated}."
         work: dict[str, Any] = {"@type": "Audiobook", "readBy": _people(group.narrators), "duration": _duration(group.seconds)}
     else:
         kind_label = "Telugu audio stories"
