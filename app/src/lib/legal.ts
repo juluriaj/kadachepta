@@ -21,6 +21,8 @@ export const PRIVACY: LegalDocument = {
     { heading: 'What we collect', paragraphs: [
       'Your account: a username and password (the password is stored only as a one-way hash), and, if you add them, '
         + 'your name, email address, phone number and how you would like to be contacted.',
+      'If you continue with Google: Google tells us your name, your email address and an ID for your Google account. '
+        + 'We never see your Google password or anything else in your Google account.',
       'Your family: the profiles you create (a name, grown-up or child, an age band, an avatar and listening '
         + 'languages), your parental PIN (stored only as a hash) and the times of day you listen.',
       'Listening: what each profile played and how far, favorites, playlists, ratings, reviews (grown-ups only) and '
@@ -36,7 +38,7 @@ export const PRIVACY: LegalDocument = {
     ] },
     { heading: 'What we never do', paragraphs: [
       'We show no ads. We do not sell or rent personal data. We use no third-party analytics or advertising '
-        + 'trackers, and we never track children for advertising. On the web, one cookie keeps you signed in.',
+        + 'trackers, and we never track children for advertising. On the web, cookies are used only to sign you in and keep you signed in.',
     ] },
     { heading: 'How we use it', paragraphs: [
       'To run the app: signing in, playing stories, family profiles, and suggestions based on what your family has '

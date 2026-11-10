@@ -56,6 +56,23 @@ class User(Base):
         return self.username or self.email or f"user-{self.id}"
 
 
+class UserIdentity(Base):
+    """An account at another provider (Google) that signs in to this KathaChepta account."""
+
+    __tablename__ = "user_identities"
+    __table_args__ = (UniqueConstraint("provider", "subject", name="uq_user_identities_provider_subject"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(16), nullable=False)  # google
+    subject: Mapped[str] = mapped_column(String(255), nullable=False)  # the provider's stable account id ("sub")
+    email: Mapped[str | None] = mapped_column(String(254))  # as the provider last reported it
+    created_at: Mapped[datetime] = now_column()
+    last_used_at: Mapped[datetime | None] = mapped_column(Timestamp)
+
+    user: Mapped[User] = relationship()
+
+
 class AuthSession(Base):
     """Web sessions and mobile access/refresh tokens. Only SHA-256 hashes are stored."""
 

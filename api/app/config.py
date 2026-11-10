@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = "KathaChepta <no-reply@kathachepta.com>"
 
+    # "Continue with Google" (web): a Google Cloud OAuth client of type "Web application" whose redirect URI is
+    # <public_base_url>/api/auth/google/callback. Off while either is empty.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
     # "name:token:cap1,cap2;name2:token2:cap3" — registered or updated at startup.
     bootstrap_workers: str = ""
     job_lease_seconds: int = 900
@@ -54,6 +59,10 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
+
+    @property
+    def google_enabled(self) -> bool:
+        return bool(self.google_client_id and self.google_client_secret)
 
     def validate_for_runtime(self) -> list[str]:
         problems = []
@@ -76,6 +85,8 @@ class Settings(BaseSettings):
             warnings.append(f"Email can't be delivered through {self.smtp_host}:{self.smtp_port}, so email sign-in "
                             "codes fail. Set KC_SMTP_HOST, KC_SMTP_USERNAME and KC_SMTP_PASSWORD (Amazon SES or "
                             "Zoho), or KC_EMAIL_ENABLED=false.")
+        if bool(self.google_client_id) != bool(self.google_client_secret):
+            warnings.append("Google sign-in is off: set both KC_GOOGLE_CLIENT_ID and KC_GOOGLE_CLIENT_SECRET.")
         return warnings
 
 

@@ -1,6 +1,7 @@
 """Sign-in flows.
 
 - Everyone: username/email + password, then TOTP for staff. Listeners create their own account with a username.
+- Web: "Continue with Google" when configured (routers/google_auth.py), then TOTP for staff the same way.
 - Listeners, when email is on (KC_EMAIL_ENABLED): passwordless email one-time code (creates the account on first use).
 - Web gets an httpOnly session cookie; mobile gets access + rotating refresh tokens.
 - Staff can tick "remember this device" at the code step: for 30 days that device needs only the password. Web keeps
@@ -89,7 +90,7 @@ def _mfa_state(user: User) -> dict:
     }
 
 
-def _session_response(db: Session, user: User, request: Request, response: Response, client: Client,
+def session_response(db: Session, user: User, request: Request, response: Response, client: Client,
                       *, mfa_verified: bool = False) -> dict:
     user.last_login_at = utcnow()
     body = {
@@ -114,6 +115,17 @@ def _session_response(db: Session, user: User, request: Request, response: Respo
     return body
 
 
+def remembered(db: Session, user: User, request: Request, token: str | None) -> bool:
+    """Whether this device was remembered at the code step, so a team member skips the authenticator code."""
+    if user.role not in STAFF_ROLES or not user.totp_enabled:
+        return False
+    device = remembered_device(db, user, token)
+    if device:
+        device.last_used_at = utcnow()
+        audit(db, "mfa.remembered-device", request, user.id, device=device.id)
+    return device is not None
+
+
 def _set_cookie(response: Response, token: str) -> None:
     settings = get_settings()
     response.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax", secure=settings.cookie_secure,
@@ -135,13 +147,8 @@ def password_login(payload: PasswordLogin, request: Request, response: Response,
     if needs_rehash:
         user.password_hash = hash_password(payload.password)
     audit(db, "login.password", request, user.id)
-    device = None
-    if user.role in STAFF_ROLES and user.totp_enabled:
-        device = remembered_device(db, user, payload.deviceToken or request.cookies.get(DEVICE_COOKIE))
-    if device:
-        device.last_used_at = utcnow()
-        audit(db, "mfa.remembered-device", request, user.id, device=device.id)
-    return _session_response(db, user, request, response, payload.client, mfa_verified=device is not None)
+    verified = remembered(db, user, request, payload.deviceToken or request.cookies.get(DEVICE_COOKIE))
+    return session_response(db, user, request, response, payload.client, mfa_verified=verified)
 
 
 @router.post("/auth/register")
@@ -163,7 +170,7 @@ def register(payload: Registration, request: Request, response: Response, db: Se
         db.rollback()
         raise taken from None
     audit(db, "account.created", request, user.id, method="password")
-    return _session_response(db, user, request, response, payload.client)
+    return session_response(db, user, request, response, payload.client)
 
 
 def _require_email() -> None:
@@ -213,7 +220,7 @@ def verify_otp(payload: OtpVerify, request: Request, response: Response, db: Ses
     if user.disabled_at:
         raise HTTPException(status_code=403, detail="This account is disabled.")
     audit(db, "login.otp", request, user.id)
-    return _session_response(db, user, request, response, payload.client)
+    return session_response(db, user, request, response, payload.client)
 
 
 @router.post("/auth/refresh")
@@ -258,7 +265,8 @@ def logout(request: Request, response: Response, identity: Identity | None = Dep
 @router.get("/session")
 def session(identity: Identity | None = Depends(optional_identity)):
     if not identity:
-        return {"authenticated": False, "emailSignIn": get_settings().email_enabled}  # what the sign-in screen offers
+        settings = get_settings()  # what the sign-in screen offers
+        return {"authenticated": False, "emailSignIn": settings.email_enabled, "googleSignIn": settings.google_enabled}
     body = {**identity.public(), **_mfa_state(identity.user)}
     if identity.session.mfa_verified:
         body.update(mfaRequired=False, mfaEnrollmentRequired=False)

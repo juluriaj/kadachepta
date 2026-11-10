@@ -20,6 +20,7 @@ export type Session = {
   mfaRequired?: boolean;
   mfaEnrollmentRequired?: boolean;
   emailSignIn?: boolean;  // signed out: whether the server sends email sign-in codes
+  googleSignIn?: boolean;  // signed out: whether "Continue with Google" is set up
 };
 
 export type Profile = {

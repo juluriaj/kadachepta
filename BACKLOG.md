@@ -182,7 +182,7 @@ with no help.
 | ID | Item | Notes |
 |---|---|---|
 | P1-01 | Expo (React Native, TypeScript) app with Expo Router; web build from the same codebase | One listener codebase for iOS, Android, and web |
-| P1-02 | Onboarding: pick languages → pick ages of children → pick listening moments → done. Email OTP, Sign in with Apple, Sign in with Google | Apple requires Sign in with Apple when other social logins are offered |
+| P1-02 | Onboarding: pick languages → pick ages of children → pick listening moments → done. Email OTP, Sign in with Apple, Sign in with Google | Apple requires Sign in with Apple when other social logins are offered Google on the web built 2026-11-09 (docs/lightsail-pilot.md); Apple and the phone apps later |
 | P1-03 | Households: parent account + child profiles (avatar, age band, languages); profile switch without login; PIN-protected parent area (parental gate) | Children never see settings, purchases, or external links |
 | P1-04 | Home organized by **listening moments**: Bedtime, Drive, Run/Walk, Work/Focus, Learn — each a filtered, ordered shelf with duration chips (5/15/30/60+ min) | Replaces the generic grid |
 | P1-05 | Player: background audio, lock-screen and headphone controls, speed 0.75–2×, ±15/30 s skip, chapters, queue, resume, sleep timer (end of chapter / minutes) with fade-out | `react-native-track-player` |

@@ -1,16 +1,17 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { LanguageSwitch } from '@/components/LanguageSwitch';
 import { Button, Field, Logo, Screen, Text, useColors, Wordmark } from '@/components/ui';
 import { api, ApiError, CAN_CHANGE_SERVER, getApiBase, setApiBase, storeDeviceToken } from '@/lib/api';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, type TranslationKey } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { space } from '@/lib/theme';
 
 type Step = 'email' | 'code' | 'password' | 'create' | 'mfa';
+const GOOGLE_PROBLEMS = ['cancelled', 'expired', 'failed', 'unverified', 'disabled'];
 
 export default function SignIn() {
   const { t } = useI18n();
@@ -18,6 +19,9 @@ export default function SignIn() {
   const { signIn, session, refresh } = useSession();
   // Email codes only when the server sends email (the pilot doesn't): otherwise everyone uses a password.
   const emailSignIn = session.emailSignIn === true;
+  // Google sign-in is a web round trip for now; the phone apps get it with their own builds.
+  const googleSignIn = session.googleSignIn === true && Platform.OS === 'web';
+  const { google } = useLocalSearchParams<{ google?: string }>();
   const [step, setStep] = useState<Step>(session.mfaRequired || session.mfaEnrollmentRequired ? 'mfa'
     : emailSignIn ? 'email' : 'password');
   const [email, setEmail] = useState('');
@@ -28,7 +32,8 @@ export default function SignIn() {
   const [secret, setSecret] = useState<string | null>(null);
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    google ? t(`signin.google.${GOOGLE_PROBLEMS.includes(google) ? google : 'failed'}` as TranslationKey) : null);
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -96,6 +101,7 @@ export default function SignIn() {
                   <Text muted>{t('signin.passwordSubtitle')}</Text>
                 </>
               )}
+              {googleSignIn ? <GoogleButton /> : null}
               <Field label={t('signin.username')} value={username} onChangeText={setUsername} autoCapitalize="none" autoCorrect={false}
                 autoComplete="username" />
               <Field label={t('signin.password')} value={password} onChangeText={setPassword} secureTextEntry autoComplete="password"
@@ -111,6 +117,7 @@ export default function SignIn() {
           {step === 'create' ? (
             <View style={{ gap: space.lg }}>
               <Text variant="display">{t('signin.createTitle')}</Text>
+              {googleSignIn ? <GoogleButton /> : null}
               <View style={{ gap: space.xs }}>
                 <Field label={t('signin.newUsername')} value={username} onChangeText={(v) => setUsername(v.trim().toLowerCase())}
                   autoCapitalize="none" autoCorrect={false} autoComplete="username-new" maxLength={30} />
@@ -186,6 +193,26 @@ export default function SignIn() {
     if (username.length < 3 || password.length < 8 || repeat !== password) return;
     await run(async () => finish(await signIn({ username, password }, '/api/auth/register')));
   }
+}
+
+// Google's own button style: white, a grey outline and the four-colour G (their branding rules).
+const GOOGLE_G = require('../../assets/images/google-g.png');
+
+function GoogleButton() {
+  const { t } = useI18n();
+  const colors = useColors();
+  return (
+    <View style={{ gap: space.md }}>
+      <Pressable accessibilityRole="button" onPress={() => window.location.assign(`${getApiBase()}/api/auth/google/start`)}
+        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.md,
+          minHeight: 48, borderRadius: 999, borderWidth: 1, borderColor: '#747775',
+          backgroundColor: pressed ? '#F2F2F2' : '#FFFFFF' })}>
+        <Image source={GOOGLE_G} style={{ width: 20, height: 20 }} accessibilityIgnoresInvertColors />
+        <Text style={{ color: '#1F1F1F', fontWeight: '600' }}>{t('signin.google')}</Text>
+      </Pressable>
+      <Text variant="small" muted style={{ textAlign: 'center', color: colors.muted }}>{t('signin.or')}</Text>
+    </View>
+  );
 }
 
 // Review builds only: which desktop the app talks to, changeable when the desktop's address changes.

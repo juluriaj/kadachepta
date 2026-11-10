@@ -19,7 +19,7 @@ def test_password_login_session_and_logout(client, db):
     session = client.get("/api/session").json()
     assert session["authenticated"] and session["username"] == "editor1"
     assert client.post("/api/logout").status_code == 200
-    assert client.get("/api/session").json() == {"authenticated": False, "emailSignIn": True}
+    assert client.get("/api/session").json() == {"authenticated": False, "emailSignIn": True, "googleSignIn": False}
 
 
 def test_legacy_pbkdf2_password_is_accepted_and_upgraded(client, db):
@@ -178,7 +178,7 @@ def test_listener_signs_up_with_a_username_and_password(client, db):
 
 def test_without_email_only_passwords_sign_in(client, monkeypatch):
     monkeypatch.setattr(get_settings(), "email_enabled", False)
-    assert client.get("/api/session").json() == {"authenticated": False, "emailSignIn": False}
+    assert client.get("/api/session").json() == {"authenticated": False, "emailSignIn": False, "googleSignIn": False}
     assert client.post("/api/auth/otp/request", json={"email": "a@example.com"}).status_code == 404
     assert client.post("/api/auth/otp/verify", json={"email": "a@example.com", "code": "123456"}).status_code == 404
     assert not mailer.sent_messages

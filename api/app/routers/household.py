@@ -13,7 +13,7 @@ from ..auth import SESSION_COOKIE, Identity, audit, require, utcnow
 from ..db import get_db
 from ..models import (
     AuthSession, Feedback, Household, ListenerFavorite, ListeningDaily, ListeningProgress, NarratorFollow, Playlist,
-    Profile, Review, StoryRating, User,
+    Profile, Review, StoryRating, User, UserIdentity,
 )
 from ..services.assets import iso, normalize_language
 from ..services.households import (
@@ -272,6 +272,7 @@ def delete_account(payload: DeleteAccount, request: Request, response: Response,
     for model in (ListenerFavorite, ListeningProgress, ListeningDaily):
         db.query(model).filter(model.profile_id.in_(ids)).delete()
     db.query(Feedback).filter(Feedback.user_id == user.id).delete()
+    db.query(UserIdentity).filter(UserIdentity.user_id == user.id).delete()  # Google can make a fresh account later
     db.delete(household)
     db.execute(update(AuthSession).where(AuthSession.user_id == user.id, AuthSession.revoked_at.is_(None))
                .values(revoked_at=now))

@@ -293,6 +293,37 @@ behind sign-in. New published stories appear within 5 minutes.
   Google gives you, submit `https://kathachepta.com/sitemap.xml`, then add `kadachepta.com` too and use Settings >
   Change of Address to move it to `kathachepta.com`.
 
+## Google sign-in ("Continue with Google")
+
+Off until the server has a Google OAuth client; then the web app's sign-in and create-account screens show
+"Continue with Google" (`api/app/routers/google_auth.py`). A Google account whose email matches an existing account,
+such as one imported from the old site, signs in to that account, so a forgotten password no longer matters. Any
+other Google account becomes a new listener account. Team accounts still need their authenticator code. The phone
+apps get the button with their own builds.
+
+Setting it up (once, about 15 minutes, in your Google account):
+
+1. In https://console.cloud.google.com, create a project called KathaChepta.
+2. **OAuth consent screen** (Google Auth Platform) › Branding: app name KathaChepta, your support email, home page
+   `https://kathachepta.com`, privacy policy `https://app.kathachepta.com/privacy`, terms
+   `https://app.kathachepta.com/terms`, authorised domain `kathachepta.com`. Leave the logo out: a logo needs
+   Google's brand check first.
+3. Audience: External, then **Publish app**. The app asks only for name and email (`openid email profile`), which
+   need no review by Google.
+4. Clients › Create client › **Web application**, with one authorised redirect URI:
+   `https://app.kathachepta.com/api/auth/google/callback`.
+5. Put the client ID and secret on the server; they never go into chat or a file on your PC. Run
+   `npm run server -- ssh`, then paste this line and answer its two questions (the secret isn't shown as you paste):
+
+   ```
+   cd /srv/kathachepta && read -rp "Google client ID: " id && read -rsp "Google client secret: " secret && echo && sed -i "/^KC_GOOGLE_CLIENT_\(ID\|SECRET\)=/d" .env && printf "KC_GOOGLE_CLIENT_ID=%s
+KC_GOOGLE_CLIENT_SECRET=%s
+" "$id" "$secret" >> .env && bash infra/lightsail/compose.sh up -d api
+   ```
+
+6. Open `https://app.kathachepta.com/sign-in`: the button is there. To turn it off, delete the two lines from `.env`
+   and run `bash infra/lightsail/compose.sh up -d api`.
+
 ## After the pilot (tracked in BACKLOG.md P6-05 and P6-08)
 
 - Bucket + CDN storage backend for media (`KC_STORAGE_BACKEND=s3`), and off-site copies of the nightly dumps.
